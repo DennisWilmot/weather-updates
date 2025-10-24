@@ -1,0 +1,194 @@
+{
+  "jamaica": {
+    "hospitals": {
+      "title": "HOSPITALS",
+      "icon": "hospital",
+      "color": "red",
+      "contacts": [
+        {
+          "name": "BELLEVUE",
+          "address": "16 ½ Windward Road, Kingston 2",
+          "phones": ["876-928-1380-9", "876-759-6531"]
+        },
+        {
+          "name": "BUSTAMANTE HOSPITAL FOR CHILDREN",
+          "address": "Arthur Wint Drive, Kingston 5",
+          "phones": ["876-926-5721", "876-968-0300", "876-968-0309"]
+        },
+        {
+          "name": "KINGSTON PUBLIC HOSPITAL",
+          "address": "North Street, Kingston",
+          "phones": ["876-922-0210-9", "876-922-0530", "876-922-0227", "876-922-0531", "876-922-1839"]
+        },
+        {
+          "name": "ST. JOSEPH HOSPITAL",
+          "address": "22 Deanery Road, Kingston 3",
+          "phones": ["876-928-4955", "876-928-4956"]
+        },
+        {
+          "name": "NATIONAL CHEST HOSPITAL",
+          "address": "36 ½ Barbican Road, Kingston 6",
+          "phones": ["876-927-0000", "876-702-3509", "876-977-7656", "876-970-0655", "876-977-7793"]
+        },
+        {
+          "name": "UNIVERSITY HOSPITAL OF THE WEST INDIES (UHWI)",
+          "address": "7 Mona Road, Kingston",
+          "phones": ["876-927-1620-9", "876-922-0210"]
+        },
+        {
+          "name": "VICTORIA JUBILEE (MATERNITY)",
+          "address": "2 North Street",
+          "phones": ["876-922-1700-4", "876-922-0210"]
+        }
+      ]
+    },
+    "emergencyNumbers": {
+      "title": "EMERGENCY NUMBERS",
+      "icon": "warning",
+      "color": "blue",
+      "contacts": [
+        {
+          "name": "CHILD PROTECTION AND FAMILY SERVICES AGENCY",
+          "office": "South East Region Office, 40 Duke Street",
+          "phones": ["876-948-1145", "876-948-0243", "876-948-6218"]
+        },
+        {
+          "name": "PARISH EMERGENCY OPERATION CENTRE",
+          "office": "65 Hanover Street",
+          "phones": ["876-967-3329"]
+        },
+        {
+          "name": "EARTHQUAKE UNIT",
+          "office": "2 Plymouth Crescent, University of the West Indies",
+          "phones": ["876-927-2586", "876-579-0215 (WhatsApp only)", "876-579-0216 (WhatsApp only)"]
+        },
+        {
+          "name": "ODPEM",
+          "office": "2-4 Haining Road, Kingston 5",
+          "phones": ["876-906-9674", "888 CALL ODP (888-225-5637)"]
+        }
+      ]
+    },
+    "welfare": {
+      "title": "WELFARE",
+      "icon": "family",
+      "color": "brown",
+      "contacts": [
+        {
+          "name": "POOR RELIEF DEPARTMENT",
+          "office": "65 Hanover Street",
+          "phones": ["876-922-6936-7"]
+        },
+        {
+          "name": "DISASTER MANAGEMENT UNIT",
+          "office": "65 Hanover Street",
+          "phones": ["876-967-3329"]
+        },
+        {
+          "name": "MINISTRY OF LABOUR & SOCIAL SECURITY PUBLIC ASSISTANCE DEPARTMENT",
+          "office": "108 Harbour Street, Kingston",
+          "phones": ["876-618-1290", "876-618-1296"]
+        }
+      ]
+    },
+    "fireBrigade": {
+      "title": "JAMAICA FIRE BRIGADE",
+      "icon": "fire",
+      "color": "red",
+      "contacts": [
+        {
+          "name": "FIRE BOAT STATION",
+          "address": "Newport West, Kingston Kingston",
+          "phones": ["876-857-5583"]
+        },
+        {
+          "name": "HALF-WAY-TREE FIRE STATION",
+          "address": "Maxfield Ave (10), Kingston, Kingston",
+          "phones": ["876-926-8166"]
+        },
+        {
+          "name": "KINGSTON & SAINT ANDREW FIRE PREVENTION",
+          "address": "85 Hagley Park, Kgn 10, Kingston, Kingston",
+          "phones": ["876-922-2523"]
+        },
+        {
+          "name": "PORT ROYAL FIRE STATION",
+          "address": "1 Queen Street, Port Royal, Kingston, Kingston",
+          "phones": ["876-967-8055"]
+        },
+        {
+          "name": "ROLLINGTON TOWN FIRE STATION",
+          "address": "14 Giltress St, Kingston, Kingston",
+          "phones": ["876-928-1041"]
+        },
+        {
+          "name": "STONY HILL FIRE STATION",
+          "address": "Seaview Rd (9), Kingston, Kingston",
+          "phones": ["876-942-3053"]
+        },
+        {
+          "name": "TRENCH TOWN FIRE STATION",
+          "address": "11 Spanish Twn Road, Kingston, Kingston",
+          "phones": ["876-923-4155"]
+        },
+        {
+          "name": "YORK PARK FIRE STATION",
+          "address": "167 Orange St, Kingston, Kingston",
+          "phones": ["876-922-2121", "876-922-2122", "876-922-2127"]
+        }
+      ]
+    },
+    "police": {
+      "title": "JAMAICA CONSTABULARY FORCE",
+      "icon": "police",
+      "color": "green",
+      "contacts": [
+        {
+          "name": "KINGSTON CENTRAL",
+          "address": "50 East Queen Street",
+          "generalOffice": "876-922-4089",
+          "guardRoom": "876-922-0308"
+        },
+        {
+          "name": "KINGSTON EASTERN DIVISION",
+          "address": "16 Lower Elletson Road",
+          "generalOffice": "876-759-1865, 876-928-1919",
+          "guardRoom": "876-928-1261"
+        },
+        {
+          "name": "KINGSTON WEST",
+          "address": "83 Spanish Town Road, Denham Town",
+          "generalOffice": "876-948-6624",
+          "guardRoom": "876-926-6441"
+        },
+        {
+          "name": "ST. ANDREW SOUTH",
+          "address": "236 Marcus Garvey Drive",
+          "generalOffice": "876-923-7112",
+          "guardRoom": "876-923-7111"
+        },
+        {
+          "name": "ST. ANDREW CENTRAL DIVISION",
+          "address": "142 Maxfield Ave",
+          "generalOffice": "876-906-3121",
+          "guardRoom": "876-926-8184"
+        },
+        {
+          "name": "ST. ANDREW NORTH",
+          "address": "2 Cassava Piece Road",
+          "generalOffice": "876-924-1826",
+          "guardRoom": "876-924-1421"
+        },
+        {
+          "name": "CRIME STOP",
+          "phones": ["311", "888-991-4000"]
+        }
+      ]
+    },
+    "coordinates": {
+      "latitude": 18.1096,
+      "longitude": -77.2975,
+      "name": "Kingston, Jamaica"
+    }
+  }
+}
