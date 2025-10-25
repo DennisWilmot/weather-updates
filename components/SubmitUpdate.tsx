@@ -15,10 +15,14 @@ import {
   Box,
   Combobox,
   TextInput,
-  useCombobox
+  useCombobox,
+  FileInput,
+  Image
 } from '@mantine/core';
+import { IconPhoto } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../lib/supabase';
 import jamaicaLocations from '../data/jamaica-locations.json';
 
 export default function SubmitUpdate() {
@@ -35,6 +39,8 @@ export default function SubmitUpdate() {
   const [additionalInfo, setAdditionalInfo] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [loadingCommunities, setLoadingCommunities] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
   
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
@@ -88,6 +94,38 @@ export default function SubmitUpdate() {
     try {
       setSubmitting(true);
       
+      // Upload image if provided
+      let uploadedImageUrl: string | null = null;
+      if (imageFile) {
+        try {
+          const fileName = `${Date.now()}-${imageFile.name}`;
+          const { data, error: uploadError } = await supabase.storage
+            .from('submission-photos')
+            .upload(fileName, imageFile, {
+              cacheControl: '3600',
+              upsert: false
+            });
+
+          if (uploadError) {
+            throw new Error(`Upload failed: ${uploadError.message}`);
+          }
+
+          // Get public URL
+          const { data: { publicUrl } } = supabase.storage
+            .from('submission-photos')
+            .getPublicUrl(fileName);
+          
+          uploadedImageUrl = publicUrl;
+        } catch (uploadErr) {
+          notifications.show({
+            title: 'Image Upload Error',
+            message: `Failed to upload image: ${uploadErr instanceof Error ? uploadErr.message : 'Unknown error'}`,
+            color: 'orange'
+          });
+          // Continue without image rather than failing the entire submission
+        }
+      }
+      
       const response = await fetch('/api/submissions', {
         method: 'POST',
         headers: {
@@ -101,7 +139,8 @@ export default function SubmitUpdate() {
           needsHelp,
           helpType: needsHelp ? helpType : null,
           roadStatus,
-          additionalInfo: additionalInfo.trim() || undefined
+          additionalInfo: additionalInfo.trim() || undefined,
+          imageUrl: uploadedImageUrl
         }),
       });
 
@@ -152,6 +191,8 @@ export default function SubmitUpdate() {
         setHelpType('');
         setRoadStatus('clear');
         setAdditionalInfo('');
+        setImageFile(null);
+        setImageUrl(null);
       
     } catch (err) {
       console.error('Error submitting:', err);
@@ -315,6 +356,38 @@ export default function SubmitUpdate() {
               maxLength={500}
               minRows={3}
             />
+
+            <FileInput
+              label="Upload Photo (Optional)"
+              placeholder="Take or choose a photo"
+              accept="image/*"
+              capture="environment"
+              onChange={(file) => {
+                setImageFile(file);
+                if (file) {
+                  const url = URL.createObjectURL(file);
+                  setImageUrl(url);
+                } else {
+                  setImageUrl(null);
+                }
+              }}
+              clearable
+              leftSection={<IconPhoto size={16} />}
+            />
+
+            {imageUrl && (
+              <Box>
+                <Image
+                  src={imageUrl}
+                  alt="Preview"
+                  style={{
+                    maxHeight: '300px',
+                    objectFit: 'cover',
+                    borderRadius: '8px'
+                  }}
+                />
+              </Box>
+            )}
 
             <Button
               type="submit"

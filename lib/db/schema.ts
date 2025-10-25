@@ -24,5 +24,6 @@ export const submissions = pgTable('submissions', {
     enum: ['clear', 'flooded', 'blocked', 'mudslide'] 
   }).notNull(),
   additionalInfo: text('additional_info'),
+  imageUrl: text('image_url'),
   createdAt: timestamp('created_at').defaultNow().notNull()
 });

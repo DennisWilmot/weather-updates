@@ -131,7 +131,8 @@ export async function POST(request: Request) {
       needsHelp: Boolean(needsHelp),
       helpType: needsHelp ? helpType : null,
       roadStatus,
-      additionalInfo: body.additionalInfo || null
+      additionalInfo: body.additionalInfo || null,
+      imageUrl: body.imageUrl || null
     }).returning();
     
     return NextResponse.json(result[0], { status: 201 });

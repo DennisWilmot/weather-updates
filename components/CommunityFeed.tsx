@@ -40,6 +40,7 @@ interface Submission {
   helpType?: 'medical' | 'physical' | 'police' | 'firefighter' | 'other';
   roadStatus: 'clear' | 'flooded' | 'blocked' | 'mudslide';
   additionalInfo?: string;
+  imageUrl?: string;
   createdAt: string;
 }
 
@@ -283,10 +284,10 @@ export default function CommunityFeed() {
                         {submission.parish}, {submission.community}
                       </Text>
                       <Group gap="xs" align="center" mt="xs">
-                        <Text size="xs" c="dimmed" component="span">
+                        <Text size="xs" c="dimmed">
                           {formatTimeAgo(submission.createdAt)}
                         </Text>
-                        <Text size="xs" c="blue" fw={500} component="span">
+                        <Text size="xs" c="blue" fw={500}>
                           • As of {new Date(submission.createdAt).toLocaleString('en-US', {
                             month: 'short', 
                             day: 'numeric',
@@ -340,6 +341,24 @@ export default function CommunityFeed() {
                       <Text size="sm" c="dimmed">
                         {submission.additionalInfo}
                       </Text>
+                    </>
+                  )}
+
+                  {submission.imageUrl && (
+                    <>
+                      <Divider />
+                      <Box>
+                        <img 
+                          src={submission.imageUrl} 
+                          alt="Submission photo"
+                          style={{
+                            width: '100%',
+                            maxHeight: '400px',
+                            objectFit: 'cover',
+                            borderRadius: '8px'
+                          }}
+                        />
+                      </Box>
                     </>
                   )}
                 </Stack>
