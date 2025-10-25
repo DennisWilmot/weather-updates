@@ -108,14 +108,6 @@ export default function HomePage() {
 
   useEffect(() => {
     fetchData();
-    
-    // Set up auto-refresh every 2 minutes for testing
-    const interval = setInterval(() => {
-      console.log('Auto-refreshing data...');
-      fetchData();
-    }, 2 * 60 * 1000);
-    
-    return () => clearInterval(interval);
   }, []);
 
   const formatLastUpdated = (dateString: string) => {
@@ -607,7 +599,6 @@ export default function HomePage() {
             data={data} 
             loading={loading} 
             error={error} 
-            onRefresh={fetchData} 
           />
         )}
         {activeTab === 'contacts' && (
@@ -681,7 +672,6 @@ export default function HomePage() {
             data={data} 
             loading={loading} 
             error={error} 
-            onRefresh={fetchData} 
           />
         )}
         {activeTab === 'contacts' && (
