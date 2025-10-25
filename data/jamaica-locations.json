@@ -1,0 +1,16 @@
+{
+  "Kingston": ["Downtown", "Harbour View", "Red Hills", "Vineyard Town", "Tivoli Gardens", "Rae Town", "Allman Town"],
+  "St. Andrew": ["Half Way Tree", "Liguanea", "Mona", "Papine", "Constant Spring", "New Kingston", "Cross Roads", "Barbican", "Hope Pastures"],
+  "St. Catherine": ["Spanish Town", "Portmore", "Old Harbour", "Linstead", "Bog Walk", "Ewarton", "St. Jago Hills"],
+  "Clarendon": ["May Pen", "Chapelton", "Frankfield", "Rocky Point", "Hayes", "Alley", "Kellits"],
+  "Manchester": ["Mandeville", "Christiana", "Spaldings", "Porus", "Williamsfield", "Grove Place", "New Green"],
+  "St. Elizabeth": ["Black River", "Santa Cruz", "Junction", "Lacovia", "Maggotty", "Malvern", "Balaclava"],
+  "Westmoreland": ["Savanna-la-Mar", "Negril", "Frome", "Grange Hill", "Little London", "Whitehouse", "Bluefields"],
+  "Hanover": ["Lucea", "Green Island", "Hopewell", "Ramble", "Sandy Bay", "Cousins Cove", "Chester Castle"],
+  "St. James": ["Montego Bay", "Ironshore", "Reading", "Cambridge", "Rose Hall", "Bogue", "Coral Gardens"],
+  "Trelawny": ["Falmouth", "Duncans", "Martha Brae", "Clark's Town", "Albert Town", "Windsor", "Ulster Spring"],
+  "St. Ann": ["Ocho Rios", "St. Ann's Bay", "Brown's Town", "Runaway Bay", "Discovery Bay", "Claremont", "Moneague"],
+  "St. Mary": ["Port Maria", "Oracabessa", "Highgate", "Annotto Bay", "Gayle", "Islington", "Richmond"],
+  "Portland": ["Port Antonio", "Boston Bay", "Buff Bay", "Hope Bay", "Long Bay", "Manchioneal", "Moore Town"],
+  "St. Thomas": ["Morant Bay", "Yallahs", "Seaforth", "Golden Grove", "Bath", "Lyssons", "White Horses"]
+}

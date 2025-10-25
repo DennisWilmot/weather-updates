@@ -6,33 +6,27 @@ import {
   Stack,
   Title,
   Text,
-  Badge,
-  Alert,
-  Card,
-  Divider,
-  List,
-  Group,
+  Box,
   Center,
   Loader,
+  Group,
   Button,
-  ThemeIcon,
-  Anchor,
-  Box,
-  Image,
+  Burger,
+  Drawer,
   Flex,
-  Collapse
+  ActionIcon,
+  Affix,
+  Paper,
+  ThemeIcon,
+  Card,
+  Alert,
+  Badge
 } from '@mantine/core';
-import { 
-  IconAlertTriangle, 
-  IconPhone, 
-  IconGlobe, 
-  IconRefresh,
-  IconBuildingHospital,
-  IconExclamationMark,
-  IconUsers,
-  IconFlame,
-  IconShield
-} from '@tabler/icons-react';
+import { useDisclosure } from '@mantine/hooks';
+import StormUpdates from '../components/StormUpdates';
+import EmergencyContacts from '../components/EmergencyContacts';
+import CommunityFeed from '../components/CommunityFeed';
+import SubmitUpdate from '../components/SubmitUpdate';
 
 interface StormData {
   status: 'active' | 'not_found' | 'error';
@@ -70,13 +64,8 @@ export default function HomePage() {
   const [data, setData] = useState<StormData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    hospitals: false,
-    emergencyNumbers: false,
-    welfare: false,
-    fireBrigade: false,
-    police: false
-  });
+  const [activeTab, setActiveTab] = useState<'feed' | 'submit' | 'storm' | 'contacts' | 'news'>('feed');
+  const [opened, { open, close }] = useDisclosure(false);
 
   const fetchData = async () => {
     try {
@@ -115,12 +104,6 @@ export default function HomePage() {
     }
   };
 
-  const toggleSection = (section: string) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
 
   useEffect(() => {
     fetchData();
@@ -156,19 +139,81 @@ export default function HomePage() {
             padding: '1rem 0'
           }}
         >
-          <Container size="md">
-            <Flex align="center" justify="space-between" gap="md">
-              <Flex align="center" gap="md" style={{ flex: 1 }}>
-                <Image src="/white_logo.png" alt="Intellibus Logo" h={60} w="auto" />
-                <Title order={1} c="white" fw={800} size="2xl" style={{ flex: 1 }}>
-                  Tropical Storm Melissa
-                </Title>
-              </Flex>
-              <Stack align="flex-end" gap="xs">
-                <Text c="teal.0" size="sm" fw={600}>
-                  Powered by Intellibus
-                </Text>
-              </Stack>
+          <Container size="xl">
+            <Flex align="center" justify="space-between" gap="lg">
+              <Title order={1} c="white" fw={800} size="2xl">
+                Hurricane Melissa Updates
+              </Title>
+              
+              {/* Desktop Navigation Tabs */}
+              <Group gap="lg" visibleFrom="sm" style={{ flex: '1 1 auto', justifyContent: 'flex-end' }}>
+                <Button
+                  variant={activeTab === 'feed' ? 'filled' : 'outline'}
+                  color="teal"
+                  size="md"
+                  onClick={() => setActiveTab('feed')}
+                  leftSection="📋"
+                  style={{
+                    fontWeight: activeTab === 'feed' ? 700 : 500,
+                    transform: activeTab === 'feed' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Community Feed
+                </Button>
+                <Button
+                  variant={activeTab === 'submit' ? 'filled' : 'outline'}
+                  color="electricBlue"
+                  size="md"
+                  onClick={() => setActiveTab('submit')}
+                  leftSection="📝"
+                  style={{
+                    fontWeight: activeTab === 'submit' ? 700 : 500,
+                    transform: activeTab === 'submit' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Submit Update
+                </Button>
+                <Button
+                  variant={activeTab === 'storm' ? 'filled' : 'outline'}
+                  color="yellow"
+                  size="md"
+                  onClick={() => setActiveTab('storm')}
+                  leftSection="🌪️"
+                  style={{
+                    fontWeight: activeTab === 'storm' ? 700 : 500,
+                    transform: activeTab === 'storm' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Storm Updates
+                </Button>
+                <Button
+                  variant={activeTab === 'contacts' ? 'filled' : 'outline'}
+                  color="coral"
+                  size="md"
+                  onClick={() => setActiveTab('contacts')}
+                  leftSection="📞"
+                  style={{
+                    fontWeight: activeTab === 'contacts' ? 700 : 500,
+                    transform: activeTab === 'contacts' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Emergency Contacts
+                </Button>
+              </Group>
+
+              {/* Mobile Hamburger Menu */}
+              <Burger
+                opened={opened}
+                onClick={open}
+                color="white"
+                size="sm"
+                aria-label="Toggle navigation"
+                hiddenFrom="sm"
+              />
             </Flex>
           </Container>
         </Box>
@@ -196,19 +241,81 @@ export default function HomePage() {
             padding: '1rem 0'
           }}
         >
-          <Container size="md">
-            <Flex align="center" justify="space-between" gap="md">
-              <Flex align="center" gap="md" style={{ flex: 1 }}>
-                <Image src="/white_logo.png" alt="Intellibus Logo" h={60} w="auto" />
-                <Title order={1} c="white" fw={800} size="2xl" style={{ flex: 1 }}>
-                  Tropical Storm Melissa
-                </Title>
-              </Flex>
-              <Stack align="flex-end" gap="xs">
-                <Text c="teal.0" size="sm" fw={600}>
-                  Powered by Intellibus
-                </Text>
-              </Stack>
+          <Container size="xl">
+            <Flex align="center" justify="space-between" gap="lg">
+              <Title order={1} c="white" fw={800} size="2xl">
+                Hurricane Melissa Updates
+              </Title>
+              
+              {/* Desktop Navigation Tabs */}
+              <Group gap="lg" visibleFrom="sm" style={{ flex: '1 1 auto', justifyContent: 'flex-end' }}>
+                <Button
+                  variant={activeTab === 'feed' ? 'filled' : 'outline'}
+                  color="teal"
+                  size="md"
+                  onClick={() => setActiveTab('feed')}
+                  leftSection="📋"
+                  style={{
+                    fontWeight: activeTab === 'feed' ? 700 : 500,
+                    transform: activeTab === 'feed' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Community Feed
+                </Button>
+                <Button
+                  variant={activeTab === 'submit' ? 'filled' : 'outline'}
+                  color="electricBlue"
+                  size="md"
+                  onClick={() => setActiveTab('submit')}
+                  leftSection="📝"
+                  style={{
+                    fontWeight: activeTab === 'submit' ? 700 : 500,
+                    transform: activeTab === 'submit' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Submit Update
+                </Button>
+                <Button
+                  variant={activeTab === 'storm' ? 'filled' : 'outline'}
+                  color="yellow"
+                  size="md"
+                  onClick={() => setActiveTab('storm')}
+                  leftSection="🌪️"
+                  style={{
+                    fontWeight: activeTab === 'storm' ? 700 : 500,
+                    transform: activeTab === 'storm' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Storm Updates
+                </Button>
+                <Button
+                  variant={activeTab === 'contacts' ? 'filled' : 'outline'}
+                  color="coral"
+                  size="md"
+                  onClick={() => setActiveTab('contacts')}
+                  leftSection="📞"
+                  style={{
+                    fontWeight: activeTab === 'contacts' ? 700 : 500,
+                    transform: activeTab === 'contacts' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Emergency Contacts
+                </Button>
+              </Group>
+
+              {/* Mobile Hamburger Menu */}
+              <Burger
+                opened={opened}
+                onClick={open}
+                color="white"
+                size="sm"
+                aria-label="Toggle navigation"
+                hiddenFrom="sm"
+              />
             </Flex>
           </Container>
         </Box>
@@ -236,19 +343,81 @@ export default function HomePage() {
             padding: '1rem 0'
           }}
         >
-          <Container size="md">
-            <Flex align="center" justify="space-between" gap="md">
-              <Flex align="center" gap="md" style={{ flex: 1 }}>
-                <Image src="/white_logo.png" alt="Intellibus Logo" h={60} w="auto" />
-                <Title order={1} c="white" fw={800} size="2xl" style={{ flex: 1 }}>
-                  Tropical Storm Melissa
-                </Title>
-              </Flex>
-              <Stack align="flex-end" gap="xs">
-                <Text c="teal.0" size="sm" fw={600}>
-                  Powered by Intellibus
-                </Text>
-              </Stack>
+          <Container size="xl">
+            <Flex align="center" justify="space-between" gap="lg">
+              <Title order={1} c="white" fw={800} size="2xl">
+                Hurricane Melissa Updates
+              </Title>
+              
+              {/* Desktop Navigation Tabs */}
+              <Group gap="lg" visibleFrom="sm" style={{ flex: '1 1 auto', justifyContent: 'flex-end' }}>
+                <Button
+                  variant={activeTab === 'feed' ? 'filled' : 'outline'}
+                  color="teal"
+                  size="md"
+                  onClick={() => setActiveTab('feed')}
+                  leftSection="📋"
+                  style={{
+                    fontWeight: activeTab === 'feed' ? 700 : 500,
+                    transform: activeTab === 'feed' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Community Feed
+                </Button>
+                <Button
+                  variant={activeTab === 'submit' ? 'filled' : 'outline'}
+                  color="electricBlue"
+                  size="md"
+                  onClick={() => setActiveTab('submit')}
+                  leftSection="📝"
+                  style={{
+                    fontWeight: activeTab === 'submit' ? 700 : 500,
+                    transform: activeTab === 'submit' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Submit Update
+                </Button>
+                <Button
+                  variant={activeTab === 'storm' ? 'filled' : 'outline'}
+                  color="yellow"
+                  size="md"
+                  onClick={() => setActiveTab('storm')}
+                  leftSection="🌪️"
+                  style={{
+                    fontWeight: activeTab === 'storm' ? 700 : 500,
+                    transform: activeTab === 'storm' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Storm Updates
+                </Button>
+                <Button
+                  variant={activeTab === 'contacts' ? 'filled' : 'outline'}
+                  color="coral"
+                  size="md"
+                  onClick={() => setActiveTab('contacts')}
+                  leftSection="📞"
+                  style={{
+                    fontWeight: activeTab === 'contacts' ? 700 : 500,
+                    transform: activeTab === 'contacts' ? 'scale(1.05)' : 'scale(1)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  Emergency Contacts
+                </Button>
+              </Group>
+
+              {/* Mobile Hamburger Menu */}
+              <Burger
+                opened={opened}
+                onClick={open}
+                color="white"
+                size="sm"
+                aria-label="Toggle navigation"
+                hiddenFrom="sm"
+              />
             </Flex>
           </Container>
         </Box>
@@ -269,396 +438,508 @@ export default function HomePage() {
         style={{ 
           backgroundColor: '#0f0f23', 
           borderBottom: '2px solid #1478FF',
-          padding: '1rem 0'
+          height: '14.28vh', // 1/7 of viewport height
+          display: 'flex',
+          alignItems: 'center'
         }}
       >
-        <Container size="md">
-          <Flex align="center" justify="space-between" gap="md">
-            <Flex align="center" gap="md" style={{ flex: 1 }}>
-              <Image src="/white_logo.png" alt="Intellibus Logo" h={60} w="auto" />
-              <Title order={1} c="white" fw={800} size="3xl" style={{ flex: 1 }}>
-                Tropical Storm Melissa
-              </Title>
-            </Flex>
-            <Stack align="flex-end" gap="xs">
-              <Text c="teal.0" size="sm" fw={600}>
-                Powered by Intellibus
-              </Text>
-              <Text c="white" size="xs" opacity={0.8}>
-                Last updated: {formatLastUpdated(data.lastUpdated)}
-              </Text>
-            </Stack>
+        <Container size="xl">
+          <Flex align="center" justify="space-between" gap="lg">
+            {/* Mobile Hamburger Menu */}
+            <Burger
+              opened={opened}
+              onClick={open}
+              color="white"
+              size="sm"
+              aria-label="Toggle navigation"
+              hiddenFrom="sm"
+            />
+
+            <Title order={1} c="white" fw={800} size="xl" style={{ flex: '1 1 auto', textAlign: 'center' }}>
+              Hurricane Melissa Updates
+            </Title>
+            
+            {/* Desktop Navigation Tabs */}
+            <Group gap="xs" visibleFrom="sm">
+              <Button
+                variant={activeTab === 'feed' ? 'filled' : 'outline'}
+                color="teal"
+                size="sm"
+                onClick={() => setActiveTab('feed')}
+                leftSection="📋"
+              >
+                Community Feed
+              </Button>
+              <Button
+                variant={activeTab === 'submit' ? 'filled' : 'outline'}
+                color="electricBlue"
+                size="sm"
+                onClick={() => setActiveTab('submit')}
+                leftSection="📝"
+              >
+                Submit Update
+              </Button>
+              <Button
+                variant={activeTab === 'storm' ? 'filled' : 'outline'}
+                color="yellow"
+                size="sm"
+                onClick={() => setActiveTab('storm')}
+                leftSection="🌪️"
+              >
+                Storm Updates
+              </Button>
+              <Button
+                variant={activeTab === 'contacts' ? 'filled' : 'outline'}
+                color="coral"
+                size="sm"
+                onClick={() => setActiveTab('contacts')}
+                leftSection="📞"
+              >
+                Emergency Contacts
+              </Button>
+              <Button
+                variant={activeTab === 'news' ? 'filled' : 'outline'}
+                color="gray"
+                size="sm"
+                onClick={() => setActiveTab('news')}
+                leftSection="📰"
+              >
+                News Feed
+              </Button>
+            </Group>
           </Flex>
         </Container>
       </Box>
 
-      {/* Main Content */}
-      <Container size="md" py="xl">
-        <Stack gap="lg">
+      {/* Mobile Navigation Drawer */}
+      <Drawer
+        opened={opened}
+        onClose={close}
+        title="Navigation"
+        position="left"
+        size="sm"
+        hiddenFrom="sm"
+        styles={{
+          content: {
+            backgroundColor: '#0f0f23',
+            color: 'white'
+          },
+          header: {
+            backgroundColor: '#0f0f23',
+            borderBottom: '1px solid #1478FF'
+          },
+          title: {
+            color: 'white'
+          }
+        }}
+      >
+        <Stack gap="md" mt="md">
+          <Button
+            variant={activeTab === 'feed' ? 'filled' : 'subtle'}
+            color="teal"
+            fullWidth
+            onClick={() => {
+              setActiveTab('feed');
+              close();
+            }}
+            leftSection="📋"
+          >
+            Community Feed
+          </Button>
+          <Button
+            variant={activeTab === 'submit' ? 'filled' : 'subtle'}
+            color="electricBlue"
+            fullWidth
+            onClick={() => {
+              setActiveTab('submit');
+              close();
+            }}
+            leftSection="📝"
+          >
+            Submit Update
+          </Button>
+          <Button
+            variant={activeTab === 'storm' ? 'filled' : 'subtle'}
+            color="yellow"
+            fullWidth
+            onClick={() => {
+              setActiveTab('storm');
+              close();
+            }}
+            leftSection="🌪️"
+          >
+            Storm Updates
+          </Button>
+          <Button
+            variant={activeTab === 'contacts' ? 'filled' : 'subtle'}
+            color="coral"
+            fullWidth
+            onClick={() => {
+              setActiveTab('contacts');
+              close();
+            }}
+            leftSection="📞"
+          >
+            Emergency Contacts
+          </Button>
+          <Button
+            variant={activeTab === 'news' ? 'filled' : 'subtle'}
+            color="gray"
+            fullWidth
+            onClick={() => {
+              setActiveTab('news');
+              close();
+            }}
+            leftSection="📰"
+          >
+            News Feed
+          </Button>
+        </Stack>
+      </Drawer>
 
-        {/* Disclaimer */}
-        <Alert color="yellow" title="Important Disclaimer" c="yellow.0">
-          <Text size="sm">
-            This is <strong>not an official forecast</strong>. Always follow guidance from ODPEM and the National Hurricane Center (NHC) for official weather information and emergency instructions.
-          </Text>
-        </Alert>
-
-        {/* Storm Status */}
-        {data.status === 'active' && data.storm && (
-          <Card shadow="sm" padding="lg" radius="md" withBorder style={{ borderColor: '#1478FF' }}>
-            <Stack gap="md">
-              <Group justify="space-between" align="flex-start">
-                <div>
-                  <Title order={2} c="electricBlue.0">{data.storm.name}</Title>
-                  <Text size="lg" c="teal.0" fw={600}>{data.storm.type}</Text>
-                </div>
-                {data.storm.isCloseApproach && (
-                  <Badge color="coral" size="lg" leftSection={<IconAlertTriangle />}>
-                    Close Approach
+      {/* Main Content - Mobile */}
+      <Container size="md" py="xl" style={{ paddingBottom: '70px' }} hiddenFrom="sm">
+        {activeTab === 'feed' && <CommunityFeed />}
+        {activeTab === 'submit' && <SubmitUpdate />}
+        {activeTab === 'storm' && (
+          <StormUpdates 
+            data={data} 
+            loading={loading} 
+            error={error} 
+            onRefresh={fetchData} 
+          />
+        )}
+        {activeTab === 'contacts' && (
+          data?.emergencyContacts ? (
+            <EmergencyContacts emergencyContacts={data.emergencyContacts} />
+          ) : (
+            <Center py="xl">
+              <Text>Loading emergency contacts...</Text>
+            </Center>
+          )
+        )}
+        {activeTab === 'news' && (
+          <Stack gap="lg">
+            <Card shadow="sm" padding="lg" radius="md" withBorder>
+              <Stack gap="md">
+                <Group justify="space-between" align="center">
+                  <Title order={2} c="gray.6">📰 News Feed</Title>
+                  <Badge color="blue" variant="light" size="lg">
+                    As of {new Date().toLocaleString('en-US', {
+                      weekday: 'short',
+                      month: 'short', 
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: 'America/Jamaica'
+                    })}
                   </Badge>
-                )}
-              </Group>
-
-              <Divider />
-
-              <Group grow>
-                <div>
-                  <Text size="sm" c="dimmed">Wind Speed</Text>
-                  <Text size="xl" fw={700} c="electricBlue.0">{data.storm.windSpeed}</Text>
-                </div>
-                <div>
-                  <Text size="sm" c="dimmed">Distance from Jamaica</Text>
-                  <Text size="xl" fw={700} c="teal.0">{data.storm.position.distance} {data.storm.position.distanceUnit}</Text>
-                </div>
-              </Group>
-
-               {data.storm.movement && (
-                 <Group grow>
-                   <div>
-                     <Text size="sm" c="dimmed">Movement</Text>
-                     <Text size="lg" fw={600} c="coral.0">{data.storm.movement.direction} at {data.storm.movement.speed}</Text>
-                   </div>
-                 </Group>
-               )}
-
-              {data.storm.lastAdvisory && (
-                <Text size="sm" c="dimmed">
-                  Last Advisory: {formatLastUpdated(data.storm.lastAdvisory)}
+                </Group>
+                
+                <Text c="dimmed" ta="center" size="lg">
+                  Latest news and updates will appear here
                 </Text>
-              )}
-            </Stack>
-          </Card>
-        )}
-
-        {data.status === 'not_found' && (
-          <Card shadow="sm" padding="lg" radius="md" withBorder style={{ borderColor: '#11DDB0' }}>
-            <Stack gap="md" align="center">
-              <ThemeIcon size="xl" color="teal" variant="light">
-                <IconAlertTriangle />
-              </ThemeIcon>
-              <Title order={3} c="teal.0">No Active Storm</Title>
-              <Text ta="center" c="dimmed">
-                Tropical Storm Melissa is not currently active or has been downgraded.
-              </Text>
-            </Stack>
-          </Card>
-        )}
-
-        {data.status === 'error' && (
-          <Alert color="red" title="Data Error">
-            {data.message || 'Unable to fetch current storm data.'}
-          </Alert>
-        )}
-
-        {/* Emergency Contacts Directory - Accordion Style */}
-        <Stack gap="md">
-          <Title order={2} ta="center" c="electricBlue.0" mb="md">
-            Emergency Contacts Directory
-          </Title>
-          
-          {/* Hospitals Section */}
-          <Card 
-            shadow="sm" 
-            padding="md" 
-            radius="md" 
-            withBorder 
-            style={{ 
-              borderColor: '#FF686D',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-            onClick={() => toggleSection('hospitals')}
-          >
-            <Group gap="md" justify="space-between">
-              <Group gap="md">
-                <ThemeIcon size="lg" color="red" variant="light">
-                  <IconBuildingHospital size={20} />
-                </ThemeIcon>
-                <Title order={3} c="red">HOSPITALS</Title>
-                <Badge color="red" variant="light">{data.emergencyContacts.hospitals.contacts.length}</Badge>
-              </Group>
-              <Text c="dimmed" size="sm">
-                {expandedSections.hospitals ? '▼' : '▶'}
-              </Text>
-            </Group>
-            <Collapse in={expandedSections.hospitals}>
-              <Stack gap="sm" mt="md">
-                {data.emergencyContacts.hospitals.contacts.map((hospital: any, index: number) => (
-                  <Box key={index} p="sm" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-                    <Text fw={600} size="sm" mb="xs">{hospital.name}</Text>
-                    <Text size="xs" c="dimmed" mb="xs">{hospital.address}</Text>
-                    <Group gap="xs">
-                      {hospital.phones.map((phone: string, phoneIndex: number) => (
-                        <Anchor key={phoneIndex} href={`tel:${phone}`} c="red" size="xs">
-                          {phone}
-                        </Anchor>
-                      ))}
-                    </Group>
-                  </Box>
-                ))}
+                
+                <Alert color="blue" title="News Updates" icon="📰">
+                  <Text size="sm">
+                    This section will display real-time news updates, official announcements, 
+                    and emergency information related to Hurricane Melissa and Jamaica.
+                  </Text>
+                </Alert>
+                
+                <Card withBorder padding="md" style={{ backgroundColor: '#f8f9fa' }}>
+                  <Stack gap="xs">
+                    <Text fw={600} size="sm" c="blue">Sample News Item</Text>
+                    <Text size="xs" c="dimmed">
+                      Last updated: {new Date().toLocaleString('en-US', {
+                        month: 'short', 
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: 'America/Jamaica'
+                      })}
+                    </Text>
+                    <Text size="sm">
+                      This is where official news updates, weather advisories, 
+                      and emergency information will be displayed.
+                    </Text>
+                  </Stack>
+                </Card>
               </Stack>
-            </Collapse>
-          </Card>
-
-          {/* Emergency Numbers Section */}
-          <Card 
-            shadow="sm" 
-            padding="md" 
-            radius="md" 
-            withBorder 
-            style={{ 
-              borderColor: '#1478FF',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-            onClick={() => toggleSection('emergencyNumbers')}
-          >
-            <Group gap="md" justify="space-between">
-              <Group gap="md">
-                <ThemeIcon size="lg" color="blue" variant="light">
-                  <IconExclamationMark size={20} />
-                </ThemeIcon>
-                <Title order={3} c="blue">EMERGENCY NUMBERS</Title>
-                <Badge color="blue" variant="light">{data.emergencyContacts.emergencyNumbers.contacts.length}</Badge>
-              </Group>
-              <Text c="dimmed" size="sm">
-                {expandedSections.emergencyNumbers ? '▼' : '▶'}
-              </Text>
-            </Group>
-            <Collapse in={expandedSections.emergencyNumbers}>
-              <Stack gap="sm" mt="md">
-                {data.emergencyContacts.emergencyNumbers.contacts.map((contact: any, index: number) => (
-                  <Box key={index} p="sm" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-                    <Text fw={600} size="sm" mb="xs">{contact.name}</Text>
-                    <Text size="xs" c="dimmed" mb="xs">{contact.office}</Text>
-                    <Group gap="xs">
-                      {contact.phones.map((phone: string, phoneIndex: number) => (
-                        <Anchor key={phoneIndex} href={`tel:${phone}`} c="blue" size="xs">
-                          {phone}
-                        </Anchor>
-                      ))}
-                    </Group>
-                  </Box>
-                ))}
-              </Stack>
-            </Collapse>
-          </Card>
-
-          {/* Welfare Section */}
-          <Card 
-            shadow="sm" 
-            padding="md" 
-            radius="md" 
-            withBorder 
-            style={{ 
-              borderColor: '#8B4513',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-            onClick={() => toggleSection('welfare')}
-          >
-            <Group gap="md" justify="space-between">
-              <Group gap="md">
-                <ThemeIcon size="lg" color="orange" variant="light">
-                  <IconUsers size={20} />
-                </ThemeIcon>
-                <Title order={3} c="orange">WELFARE</Title>
-                <Badge color="orange" variant="light">{data.emergencyContacts.welfare.contacts.length}</Badge>
-              </Group>
-              <Text c="dimmed" size="sm">
-                {expandedSections.welfare ? '▼' : '▶'}
-              </Text>
-            </Group>
-            <Collapse in={expandedSections.welfare}>
-              <Stack gap="sm" mt="md">
-                {data.emergencyContacts.welfare.contacts.map((contact: any, index: number) => (
-                  <Box key={index} p="sm" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-                    <Text fw={600} size="sm" mb="xs">{contact.name}</Text>
-                    <Text size="xs" c="dimmed" mb="xs">{contact.office}</Text>
-                    <Group gap="xs">
-                      {contact.phones.map((phone: string, phoneIndex: number) => (
-                        <Anchor key={phoneIndex} href={`tel:${phone}`} c="orange" size="xs">
-                          {phone}
-                        </Anchor>
-                      ))}
-                    </Group>
-                  </Box>
-                ))}
-              </Stack>
-            </Collapse>
-          </Card>
-
-          {/* Fire Brigade Section */}
-          <Card 
-            shadow="sm" 
-            padding="md" 
-            radius="md" 
-            withBorder 
-            style={{ 
-              borderColor: '#FF686D',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-            onClick={() => toggleSection('fireBrigade')}
-          >
-            <Group gap="md" justify="space-between">
-              <Group gap="md">
-                <ThemeIcon size="lg" color="red" variant="light">
-                  <IconFlame size={20} />
-                </ThemeIcon>
-                <Title order={3} c="red">JAMAICA FIRE BRIGADE</Title>
-                <Badge color="red" variant="light">{data.emergencyContacts.fireBrigade.contacts.length}</Badge>
-              </Group>
-              <Text c="dimmed" size="sm">
-                {expandedSections.fireBrigade ? '▼' : '▶'}
-              </Text>
-            </Group>
-            <Collapse in={expandedSections.fireBrigade}>
-              <Stack gap="sm" mt="md">
-                {data.emergencyContacts.fireBrigade.contacts.map((station: any, index: number) => (
-                  <Box key={index} p="sm" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-                    <Text fw={600} size="sm" mb="xs">{station.name}</Text>
-                    <Text size="xs" c="dimmed" mb="xs">{station.address}</Text>
-                    <Group gap="xs">
-                      {station.phones.map((phone: string, phoneIndex: number) => (
-                        <Anchor key={phoneIndex} href={`tel:${phone}`} c="red" size="xs">
-                          {phone}
-                        </Anchor>
-                      ))}
-                    </Group>
-                  </Box>
-                ))}
-              </Stack>
-            </Collapse>
-          </Card>
-
-          {/* Police Section */}
-          <Card 
-            shadow="sm" 
-            padding="md" 
-            radius="md" 
-            withBorder 
-            style={{ 
-              borderColor: '#11DDB0',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-            onClick={() => toggleSection('police')}
-          >
-            <Group gap="md" justify="space-between">
-              <Group gap="md">
-                <ThemeIcon size="lg" color="green" variant="light">
-                  <IconShield size={20} />
-                </ThemeIcon>
-                <Title order={3} c="green">JAMAICA CONSTABULARY FORCE</Title>
-                <Badge color="green" variant="light">{data.emergencyContacts.police.contacts.length}</Badge>
-              </Group>
-              <Text c="dimmed" size="sm">
-                {expandedSections.police ? '▼' : '▶'}
-              </Text>
-            </Group>
-            <Collapse in={expandedSections.police}>
-              <Stack gap="sm" mt="md">
-                {data.emergencyContacts.police.contacts.map((division: any, index: number) => (
-                  <Box key={index} p="sm" style={{ backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
-                    <Text fw={600} size="sm" mb="xs">{division.name}</Text>
-                    {division.address && <Text size="xs" c="dimmed" mb="xs">{division.address}</Text>}
-                    <Stack gap="xs">
-                      {division.generalOffice && (
-                        <Group gap="xs">
-                          <Text size="xs" c="dimmed">General Office:</Text>
-                          <Anchor href={`tel:${division.generalOffice}`} c="green" size="xs">
-                            {division.generalOffice}
-                          </Anchor>
-                        </Group>
-                      )}
-                      {division.guardRoom && (
-                        <Group gap="xs">
-                          <Text size="xs" c="dimmed">Guard Room:</Text>
-                          <Anchor href={`tel:${division.guardRoom}`} c="green" size="xs">
-                            {division.guardRoom}
-                          </Anchor>
-                        </Group>
-                      )}
-                      {division.phones && (
-                        <Group gap="xs">
-                          {division.phones.map((phone: string, phoneIndex: number) => (
-                            <Anchor key={phoneIndex} href={`tel:${phone}`} c="green" size="xs">
-                              {phone}
-                            </Anchor>
-                          ))}
-                        </Group>
-                      )}
-                    </Stack>
-                  </Box>
-                ))}
-              </Stack>
-            </Collapse>
-          </Card>
-        </Stack>
-
-        {/* Refresh Button */}
-        <Card shadow="sm" padding="md" radius="md" withBorder style={{ borderColor: '#1478FF' }}>
-          <Group justify="space-between" align="center">
-            <Stack gap="xs">
-              <Text size="sm" c="dimmed">Last updated: {formatLastUpdated(data.lastUpdated)}</Text>
-              <Text size="xs" c="teal.0">Auto-refreshes every 2 minutes</Text>
-            </Stack>
-            <Button 
-              onClick={fetchData} 
-              leftSection={<IconRefresh />} 
-              variant="filled"
-              color="electricBlue"
-              size="md"
-            >
-              Refresh Now
-            </Button>
-          </Group>
-        </Card>
-
-        {/* Footer */}
-        <Card shadow="sm" padding="md" radius="md" withBorder style={{ borderColor: '#11DDB0' }}>
-          <Stack gap="xs" align="center">
-            <Text size="xs" c="dimmed" ta="center">
-              Prepared by: The Disaster Management Unit of the KSAMC
-            </Text>
-            <Group gap="md" justify="center">
-              <Text size="xs" c="teal.0" fw={600}>
-                KINGSTON & ST. ANDREW MUNICIPAL CORPORATION
-              </Text>
-            </Group>
-            <Group gap="md" justify="center">
-              <Anchor href="tel:876-967-3329" c="teal.0" size="xs">876-967-3329</Anchor>
-              <Anchor href="tel:876-967-9317" c="teal.0" size="xs">876-967-9317</Anchor>
-            </Group>
-            <Group gap="md" justify="center">
-              <Anchor href="https://www.ksame.gov.jm" target="_blank" c="teal.0" size="xs">www.ksame.gov.jm</Anchor>
-              <Anchor href="mailto:ksamcemergency@ksame.gov.jm" c="teal.0" size="xs">ksamcemergency@ksame.gov.jm</Anchor>
-            </Group>
+            </Card>
           </Stack>
-        </Card>
-        </Stack>
+        )}
       </Container>
+
+      {/* Main Content - Desktop */}
+      <Container size="md" py="xl" visibleFrom="sm">
+        {activeTab === 'feed' && <CommunityFeed />}
+        {activeTab === 'submit' && <SubmitUpdate />}
+        {activeTab === 'storm' && (
+          <StormUpdates 
+            data={data} 
+            loading={loading} 
+            error={error} 
+            onRefresh={fetchData} 
+          />
+        )}
+        {activeTab === 'contacts' && (
+          data?.emergencyContacts ? (
+            <EmergencyContacts emergencyContacts={data.emergencyContacts} />
+          ) : (
+            <Center py="xl">
+              <Text>Loading emergency contacts...</Text>
+            </Center>
+          )
+        )}
+        {activeTab === 'news' && (
+          <Stack gap="lg">
+            <Card shadow="sm" padding="lg" radius="md" withBorder>
+              <Stack gap="md">
+                <Group justify="space-between" align="center">
+                  <Title order={2} c="gray.6">📰 News Feed</Title>
+                  <Badge color="blue" variant="light" size="lg">
+                    As of {new Date().toLocaleString('en-US', {
+                      weekday: 'short',
+                      month: 'short', 
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      timeZone: 'America/Jamaica'
+                    })}
+                  </Badge>
+                </Group>
+                
+                <Text c="dimmed" ta="center" size="lg">
+                  Latest news and updates will appear here
+                </Text>
+                
+                <Alert color="blue" title="News Updates" icon="📰">
+                  <Text size="sm">
+                    This section will display real-time news updates, official announcements, 
+                    and emergency information related to Hurricane Melissa and Jamaica.
+                  </Text>
+                </Alert>
+                
+                <Card withBorder padding="md" style={{ backgroundColor: '#f8f9fa' }}>
+                  <Stack gap="xs">
+                    <Text fw={600} size="sm" c="blue">Sample News Item</Text>
+                    <Text size="xs" c="dimmed">
+                      Last updated: {new Date().toLocaleString('en-US', {
+                        month: 'short', 
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        timeZone: 'America/Jamaica'
+                      })}
+                    </Text>
+                    <Text size="sm">
+                      This is where official news updates, weather advisories, 
+                      and emergency information will be displayed.
+                    </Text>
+                  </Stack>
+                </Card>
+              </Stack>
+            </Card>
+          </Stack>
+        )}
+      </Container>
+
+      {/* Floating Action Button */}
+      <Affix position={{ bottom: 20, right: 20 }}>
+        <ActionIcon
+          size="xl"
+          radius="xl"
+          color="electricBlue"
+          variant="filled"
+          onClick={() => setActiveTab('submit')}
+          style={{
+            boxShadow: '0 4px 12px rgba(20, 120, 255, 0.3)',
+            transition: 'all 0.2s ease',
+            zIndex: 1000
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(20, 120, 255, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(20, 120, 255, 0.3)';
+          }}
+        >
+          <Text size="xl" fw={700}>+</Text>
+        </ActionIcon>
+      </Affix>
+
+      {/* Mobile Bottom Navigation */}
+      <Paper
+        hiddenFrom="sm"
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+          backgroundColor: 'rgba(15, 15, 35, 0.95)',
+          backdropFilter: 'blur(10px)',
+          borderTop: '1px solid rgba(20, 120, 255, 0.2)',
+          padding: '8px 16px 12px 16px',
+          borderRadius: '20px 20px 0 0',
+          boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.15)'
+        }}
+      >
+        <Group justify="space-around" gap="md">
+          <Button
+            variant="subtle"
+            color="gray"
+            size="sm"
+            onClick={() => setActiveTab('feed')}
+            style={{
+              flex: 1,
+              flexDirection: 'column',
+              height: 'auto',
+              padding: '8px 6px',
+              minHeight: '60px',
+              borderRadius: '16px',
+              backgroundColor: activeTab === 'feed' ? 'rgba(17, 221, 176, 0.15)' : 'transparent',
+              border: activeTab === 'feed' ? '1px solid rgba(17, 221, 176, 0.3)' : '1px solid transparent',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: activeTab === 'feed' ? 'translateY(-2px)' : 'translateY(0)',
+              boxShadow: activeTab === 'feed' ? '0 4px 12px rgba(17, 221, 176, 0.2)' : 'none'
+            }}
+          >
+            <Text size="lg" style={{ 
+              color: activeTab === 'feed' ? '#11DDB0' : '#8B8B8B',
+              transition: 'color 0.3s ease'
+            }}>📋</Text>
+            <Text size="xs" mt="2px" style={{ 
+              color: activeTab === 'feed' ? '#11DDB0' : '#8B8B8B',
+              fontWeight: activeTab === 'feed' ? 600 : 400,
+              transition: 'all 0.3s ease'
+            }}>Feed</Text>
+          </Button>
+          
+          <Button
+            variant="subtle"
+            color="gray"
+            size="sm"
+            onClick={() => setActiveTab('submit')}
+            style={{
+              flex: 1,
+              flexDirection: 'column',
+              height: 'auto',
+              padding: '8px 6px',
+              minHeight: '60px',
+              borderRadius: '16px',
+              backgroundColor: activeTab === 'submit' ? 'rgba(20, 120, 255, 0.15)' : 'transparent',
+              border: activeTab === 'submit' ? '1px solid rgba(20, 120, 255, 0.3)' : '1px solid transparent',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: activeTab === 'submit' ? 'translateY(-2px)' : 'translateY(0)',
+              boxShadow: activeTab === 'submit' ? '0 4px 12px rgba(20, 120, 255, 0.2)' : 'none'
+            }}
+          >
+            <Text size="lg" style={{ 
+              color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
+              transition: 'color 0.3s ease'
+            }}>📝</Text>
+            <Text size="xs" mt="2px" style={{ 
+              color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
+              fontWeight: activeTab === 'submit' ? 600 : 400,
+              transition: 'all 0.3s ease'
+            }}>Submit</Text>
+          </Button>
+          
+          <Button
+            variant="subtle"
+            color="gray"
+            size="sm"
+            onClick={() => setActiveTab('storm')}
+            style={{
+              flex: 1,
+              flexDirection: 'column',
+              height: 'auto',
+              padding: '8px 6px',
+              minHeight: '60px',
+              borderRadius: '16px',
+              backgroundColor: activeTab === 'storm' ? 'rgba(255, 230, 109, 0.15)' : 'transparent',
+              border: activeTab === 'storm' ? '1px solid rgba(255, 230, 109, 0.3)' : '1px solid transparent',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: activeTab === 'storm' ? 'translateY(-2px)' : 'translateY(0)',
+              boxShadow: activeTab === 'storm' ? '0 4px 12px rgba(255, 230, 109, 0.2)' : 'none'
+            }}
+          >
+            <Text size="lg" style={{ 
+              color: activeTab === 'storm' ? '#FFE66D' : '#8B8B8B',
+              transition: 'color 0.3s ease'
+            }}>🌪️</Text>
+            <Text size="xs" mt="2px" style={{ 
+              color: activeTab === 'storm' ? '#FFE66D' : '#8B8B8B',
+              fontWeight: activeTab === 'storm' ? 600 : 400,
+              transition: 'all 0.3s ease'
+            }}>Storm</Text>
+          </Button>
+          
+          <Button
+            variant="subtle"
+            color="gray"
+            size="sm"
+            onClick={() => setActiveTab('contacts')}
+            style={{
+              flex: 1,
+              flexDirection: 'column',
+              height: 'auto',
+              padding: '8px 6px',
+              minHeight: '60px',
+              borderRadius: '16px',
+              backgroundColor: activeTab === 'contacts' ? 'rgba(255, 104, 109, 0.15)' : 'transparent',
+              border: activeTab === 'contacts' ? '1px solid rgba(255, 104, 109, 0.3)' : '1px solid transparent',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: activeTab === 'contacts' ? 'translateY(-2px)' : 'translateY(0)',
+              boxShadow: activeTab === 'contacts' ? '0 4px 12px rgba(255, 104, 109, 0.2)' : 'none'
+            }}
+          >
+            <Text size="lg" style={{ 
+              color: activeTab === 'contacts' ? '#FF686D' : '#8B8B8B',
+              transition: 'color 0.3s ease'
+            }}>📞</Text>
+            <Text size="xs" mt="2px" style={{ 
+              color: activeTab === 'contacts' ? '#FF686D' : '#8B8B8B',
+              fontWeight: activeTab === 'contacts' ? 600 : 400,
+              transition: 'all 0.3s ease'
+            }}>Contacts</Text>
+          </Button>
+          
+          <Button
+            variant="subtle"
+            color="gray"
+            size="sm"
+            onClick={() => setActiveTab('news')}
+            style={{
+              flex: 1,
+              flexDirection: 'column',
+              height: 'auto',
+              padding: '8px 6px',
+              minHeight: '60px',
+              borderRadius: '16px',
+              backgroundColor: activeTab === 'news' ? 'rgba(128, 128, 128, 0.15)' : 'transparent',
+              border: activeTab === 'news' ? '1px solid rgba(128, 128, 128, 0.3)' : '1px solid transparent',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: activeTab === 'news' ? 'translateY(-2px)' : 'translateY(0)',
+              boxShadow: activeTab === 'news' ? '0 4px 12px rgba(128, 128, 128, 0.2)' : 'none'
+            }}
+          >
+            <Text size="lg" style={{ 
+              color: activeTab === 'news' ? '#808080' : '#8B8B8B',
+              transition: 'color 0.3s ease'
+            }}>📰</Text>
+            <Text size="xs" mt="2px" style={{ 
+              color: activeTab === 'news' ? '#808080' : '#8B8B8B',
+              fontWeight: activeTab === 'news' ? 600 : 400,
+              transition: 'all 0.3s ease'
+            }}>News</Text>
+          </Button>
+        </Group>
+      </Paper>
     </>
   );
 }
