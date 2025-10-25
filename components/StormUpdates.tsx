@@ -9,14 +9,13 @@ import {
   Card,
   Divider,
   Group,
-  Button,
   ThemeIcon,
   Box
 } from '@mantine/core';
 import { 
-  IconAlertTriangle, 
-  IconRefresh
+  IconAlertTriangle
 } from '@tabler/icons-react';
+import HurricaneMap from './HurricaneMap';
 
 interface StormData {
   status: 'active' | 'not_found' | 'error';
@@ -46,10 +45,9 @@ interface StormUpdatesProps {
   data: StormData | null;
   loading: boolean;
   error: string | null;
-  onRefresh: () => void;
 }
 
-export default function StormUpdates({ data, loading, error, onRefresh }: StormUpdatesProps) {
+export default function StormUpdates({ data, loading, error }: StormUpdatesProps) {
   const formatLastUpdated = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
       timeZone: 'America/Jamaica',
@@ -73,9 +71,6 @@ export default function StormUpdates({ data, loading, error, onRefresh }: StormU
     return (
       <Alert color="red" title="Error" icon={<IconAlertTriangle />}>
         {error}
-        <Button mt="sm" onClick={onRefresh} leftSection={<IconRefresh />}>
-          Retry
-        </Button>
       </Alert>
     );
   }
@@ -164,23 +159,21 @@ export default function StormUpdates({ data, loading, error, onRefresh }: StormU
         </Alert>
       )}
 
-      {/* Refresh Button */}
+      {/* Hurricane Tracking Map */}
+      <HurricaneMap
+        stormPosition={data.status === 'active' && data.storm ? {
+          lat: data.storm.position.lat,
+          lon: data.storm.position.lon,
+          name: data.storm.name,
+          windSpeed: data.storm.windSpeed,
+          movement: data.storm.movement
+        } : undefined}
+      />
+
+
+      {/* Last Updated Info */}
       <Card shadow="sm" padding="md" radius="md" withBorder style={{ borderColor: '#1478FF' }}>
-        <Group justify="space-between" align="center">
-          <Stack gap="xs">
-            <Text size="sm" c="dimmed">Last updated: {formatLastUpdated(data.lastUpdated)}</Text>
-            <Text size="xs" c="teal.0">Auto-refreshes every 2 minutes</Text>
-          </Stack>
-          <Button 
-            onClick={onRefresh} 
-            leftSection={<IconRefresh />} 
-            variant="filled"
-            color="electricBlue"
-            size="md"
-          >
-            Refresh Now
-          </Button>
-        </Group>
+        <Text size="sm" c="dimmed">Last updated: {formatLastUpdated(data.lastUpdated)}</Text>
       </Card>
     </Stack>
   );
