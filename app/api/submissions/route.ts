@@ -127,6 +127,7 @@ export async function POST(request: Request) {
       community,
       hasElectricity: Boolean(hasElectricity),
       hasWifi: Boolean(hasWifi),
+      hasPower: Boolean(hasElectricity), // Map hasElectricity to hasPower for database compatibility
       needsHelp: Boolean(needsHelp),
       helpType: needsHelp ? helpType : null,
       roadStatus,

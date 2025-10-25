@@ -15,6 +15,7 @@ export const submissions = pgTable('submissions', {
   community: text('community').notNull(),
   hasElectricity: boolean('has_electricity').notNull(),
   hasWifi: boolean('has_wifi').notNull(),
+  hasPower: boolean('has_power').notNull(),
   needsHelp: boolean('needs_help').notNull(),
   helpType: text('help_type', { 
     enum: ['medical', 'physical', 'police', 'firefighter', 'other'] 
