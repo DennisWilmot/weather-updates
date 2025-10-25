@@ -112,13 +112,36 @@ export default function SubmitUpdate() {
       const result = await response.json();
       
       notifications.show({
-        title: 'Success',
-        message: 'Your status update has been submitted!',
-        color: 'green'
+        title: '✅ Successfully Submitted!',
+        message: `Your status update for ${selectedCommunity}, ${selectedParish} has been submitted and is now visible in the community feed.`,
+        color: 'green',
+        autoClose: 5000,
+        withCloseButton: true,
+        position: 'top-center'
       });
 
-      // Invalidate submissions query to refresh the feed
-      queryClient.invalidateQueries({ queryKey: ['submissions'] });
+      // Invalidate and refetch all submissions queries to refresh the feed
+      await queryClient.invalidateQueries({ 
+        queryKey: ['submissions'],
+        exact: false 
+      });
+      
+      // Also try to refetch immediately
+      await queryClient.refetchQueries({ 
+        queryKey: ['submissions'],
+        exact: false 
+      });
+
+      // Show additional feedback that the feed has been updated
+      setTimeout(() => {
+        notifications.show({
+          title: '🔄 Feed Updated',
+          message: 'The community feed has been refreshed with your latest update.',
+          color: 'blue',
+          autoClose: 3000,
+          position: 'top-center'
+        });
+      }, 1000);
 
       // Reset form
         setSelectedParish('');

@@ -50,7 +50,7 @@ export default function EmergencyContacts({ emergencyContacts }: EmergencyContac
       {/* Hospitals Section */}
       <Card 
         shadow="sm" 
-        padding="md" 
+        padding="sm" 
         radius="md" 
         withBorder 
         style={{ 
@@ -60,15 +60,15 @@ export default function EmergencyContacts({ emergencyContacts }: EmergencyContac
         }}
         onClick={() => toggleSection('hospitals')}
       >
-        <Group gap="md" justify="space-between">
-          <Group gap="md">
-            <ThemeIcon size="lg" color="red" variant="light">
-              <IconBuildingHospital size={20} />
+        <Group gap="sm" justify="space-between" align="center">
+          <Group gap="sm" align="center">
+            <ThemeIcon size="md" color="red" variant="light">
+              <IconBuildingHospital size={16} />
             </ThemeIcon>
-            <Title order={3} c="red">HOSPITALS</Title>
-            <Badge color="red" variant="light">{emergencyContacts.hospitals.contacts.length}</Badge>
+            <Title order={4} c="red" size="sm">HOSPITALS</Title>
+            <Badge color="red" variant="light" size="sm">{emergencyContacts.hospitals.contacts.length}</Badge>
           </Group>
-          <Text c="dimmed" size="sm">
+          <Text c="dimmed" size="xs">
             {expandedSections.hospitals ? '▼' : '▶'}
           </Text>
         </Group>
@@ -94,7 +94,7 @@ export default function EmergencyContacts({ emergencyContacts }: EmergencyContac
       {/* Emergency Numbers Section */}
       <Card 
         shadow="sm" 
-        padding="md" 
+        padding="sm" 
         radius="md" 
         withBorder 
         style={{ 
@@ -104,15 +104,15 @@ export default function EmergencyContacts({ emergencyContacts }: EmergencyContac
         }}
         onClick={() => toggleSection('emergencyNumbers')}
       >
-        <Group gap="md" justify="space-between">
-          <Group gap="md">
-            <ThemeIcon size="lg" color="blue" variant="light">
-              <IconExclamationMark size={20} />
+        <Group gap="sm" justify="space-between" align="center">
+          <Group gap="sm" align="center">
+            <ThemeIcon size="md" color="blue" variant="light">
+              <IconExclamationMark size={16} />
             </ThemeIcon>
-            <Title order={3} c="blue">EMERGENCY NUMBERS</Title>
-            <Badge color="blue" variant="light">{emergencyContacts.emergencyNumbers.contacts.length}</Badge>
+            <Title order={4} c="blue" size="sm">EMERGENCY NUMBERS</Title>
+            <Badge color="blue" variant="light" size="sm">{emergencyContacts.emergencyNumbers.contacts.length}</Badge>
           </Group>
-          <Text c="dimmed" size="sm">
+          <Text c="dimmed" size="xs">
             {expandedSections.emergencyNumbers ? '▼' : '▶'}
           </Text>
         </Group>
@@ -138,7 +138,7 @@ export default function EmergencyContacts({ emergencyContacts }: EmergencyContac
       {/* Welfare Section */}
       <Card 
         shadow="sm" 
-        padding="md" 
+        padding="sm" 
         radius="md" 
         withBorder 
         style={{ 
@@ -148,15 +148,15 @@ export default function EmergencyContacts({ emergencyContacts }: EmergencyContac
         }}
         onClick={() => toggleSection('welfare')}
       >
-        <Group gap="md" justify="space-between">
-          <Group gap="md">
-            <ThemeIcon size="lg" color="orange" variant="light">
-              <IconUsers size={20} />
+        <Group gap="sm" justify="space-between" align="center">
+          <Group gap="sm" align="center">
+            <ThemeIcon size="md" color="orange" variant="light">
+              <IconUsers size={16} />
             </ThemeIcon>
-            <Title order={3} c="orange">WELFARE</Title>
-            <Badge color="orange" variant="light">{emergencyContacts.welfare.contacts.length}</Badge>
+            <Title order={4} c="orange" size="sm">WELFARE</Title>
+            <Badge color="orange" variant="light" size="sm">{emergencyContacts.welfare.contacts.length}</Badge>
           </Group>
-          <Text c="dimmed" size="sm">
+          <Text c="dimmed" size="xs">
             {expandedSections.welfare ? '▼' : '▶'}
           </Text>
         </Group>
@@ -182,7 +182,7 @@ export default function EmergencyContacts({ emergencyContacts }: EmergencyContac
       {/* Fire Brigade Section */}
       <Card 
         shadow="sm" 
-        padding="md" 
+        padding="sm" 
         radius="md" 
         withBorder 
         style={{ 
@@ -192,15 +192,15 @@ export default function EmergencyContacts({ emergencyContacts }: EmergencyContac
         }}
         onClick={() => toggleSection('fireBrigade')}
       >
-        <Group gap="md" justify="space-between">
-          <Group gap="md">
-            <ThemeIcon size="lg" color="red" variant="light">
-              <IconFlame size={20} />
+        <Group gap="sm" justify="space-between" align="center">
+          <Group gap="sm" align="center">
+            <ThemeIcon size="md" color="red" variant="light">
+              <IconFlame size={16} />
             </ThemeIcon>
-            <Title order={3} c="red">JAMAICA FIRE BRIGADE</Title>
-            <Badge color="red" variant="light">{emergencyContacts.fireBrigade.contacts.length}</Badge>
+            <Title order={4} c="red" size="sm">FIRE BRIGADE</Title>
+            <Badge color="red" variant="light" size="sm">{emergencyContacts.fireBrigade.contacts.length}</Badge>
           </Group>
-          <Text c="dimmed" size="sm">
+          <Text c="dimmed" size="xs">
             {expandedSections.fireBrigade ? '▼' : '▶'}
           </Text>
         </Group>
@@ -226,7 +226,7 @@ export default function EmergencyContacts({ emergencyContacts }: EmergencyContac
       {/* Police Section */}
       <Card 
         shadow="sm" 
-        padding="md" 
+        padding="sm" 
         radius="md" 
         withBorder 
         style={{ 
@@ -236,15 +236,15 @@ export default function EmergencyContacts({ emergencyContacts }: EmergencyContac
         }}
         onClick={() => toggleSection('police')}
       >
-        <Group gap="md" justify="space-between">
-          <Group gap="md">
-            <ThemeIcon size="lg" color="green" variant="light">
-              <IconShield size={20} />
+        <Group gap="sm" justify="space-between" align="center">
+          <Group gap="sm" align="center">
+            <ThemeIcon size="md" color="green" variant="light">
+              <IconShield size={16} />
             </ThemeIcon>
-            <Title order={3} c="green">JAMAICA CONSTABULARY FORCE</Title>
-            <Badge color="green" variant="light">{emergencyContacts.police.contacts.length}</Badge>
+            <Title order={4} c="green" size="sm">POLICE</Title>
+            <Badge color="green" variant="light" size="sm">{emergencyContacts.police.contacts.length}</Badge>
           </Group>
-          <Text c="dimmed" size="sm">
+          <Text c="dimmed" size="xs">
             {expandedSections.police ? '▼' : '▶'}
           </Text>
         </Group>
