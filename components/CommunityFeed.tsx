@@ -190,7 +190,6 @@ export default function CommunityFeed() {
                     onFocus={() => combobox.openDropdown()}
                     onBlur={() => combobox.closeDropdown()}
                     disabled={!filterParish}
-                    clearable
                   />
                 </Combobox.Target>
 

@@ -16,18 +16,23 @@ export async function GET(request: Request) {
       );
     }
     
-    let query = db.select().from(communities).where(eq(communities.parish, parish));
+    let whereCondition;
     
     if (search) {
-      query = query.where(
-        and(
-          eq(communities.parish, parish),
-          ilike(communities.name, `%${search}%`)
-        )
+      whereCondition = and(
+        eq(communities.parish, parish),
+        ilike(communities.name, `%${search}%`)
       );
+    } else {
+      whereCondition = eq(communities.parish, parish);
     }
     
-    const results = await query.orderBy(communities.name).limit(20);
+    const results = await db
+      .select()
+      .from(communities)
+      .where(whereCondition)
+      .orderBy(communities.name)
+      .limit(20);
     
     return NextResponse.json(results);
     
