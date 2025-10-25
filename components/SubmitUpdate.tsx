@@ -18,9 +18,11 @@ import {
   useCombobox
 } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { useQueryClient } from '@tanstack/react-query';
 import jamaicaLocations from '../data/jamaica-locations.json';
 
 export default function SubmitUpdate() {
+  const queryClient = useQueryClient();
   const [selectedParish, setSelectedParish] = useState<string>('');
   const [selectedCommunity, setSelectedCommunity] = useState<string>('');
   const [communitySearch, setCommunitySearch] = useState<string>('');
@@ -114,6 +116,9 @@ export default function SubmitUpdate() {
         message: 'Your status update has been submitted!',
         color: 'green'
       });
+
+      // Invalidate submissions query to refresh the feed
+      queryClient.invalidateQueries({ queryKey: ['submissions'] });
 
       // Reset form
         setSelectedParish('');
