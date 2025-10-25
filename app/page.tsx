@@ -647,17 +647,49 @@ export default function HomePage() {
         {activeTab === 'news' && <NewsFeed />}
       </Container>
 
-      {/* Floating Action Button */}
+      {/* Mobile Floating Action Button */}
       <Box
+        hiddenFrom="sm"
+        style={{
+          position: 'fixed',
+          bottom: '100px', // Higher up to avoid bottom nav overlap
+          right: '20px',
+          zIndex: 1000
+        }}
+      >
+        <ActionIcon
+          size="xl"
+          radius="xl"
+          color="electricBlue"
+          variant="filled"
+          onClick={() => setActiveTab('submit')}
+          style={{
+            boxShadow: '0 4px 12px rgba(20, 120, 255, 0.3)',
+            transition: 'all 0.2s ease',
+            width: '56px',
+            height: '56px'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(20, 120, 255, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(20, 120, 255, 0.3)';
+          }}
+        >
+          <Text size="xl" fw={700}>+</Text>
+        </ActionIcon>
+      </Box>
+
+      {/* Desktop Floating Action Button */}
+      <Box
+        visibleFrom="sm"
         style={{
           position: 'fixed',
           bottom: '20px',
           right: '20px',
-          zIndex: 1000,
-          // Mobile positioning - above bottom nav
-          '@media (max-width: 768px)': {
-            bottom: '80px'
-          }
+          zIndex: 1000
         }}
       >
         <ActionIcon
