@@ -229,7 +229,7 @@ export default function CommunityFeed() {
       <Card shadow="sm" padding="md" radius="md" withBorder>
         <Group justify="space-between" align="center" mb="md">
           <Box>
-            <Title order={3} c="#0f0f23">Community Updates</Title>
+            <Title order={3} c="#1478FF">Community Updates</Title>
             <Text size="xs" c="dimmed" mt="xs">
               Last updated: {new Date().toLocaleString('en-US', {
                 month: 'short', 
