@@ -92,53 +92,6 @@ export default function StormUpdates({ data, loading, error }: StormUpdatesProps
         </Text>
       </Alert>
 
-      {/* Storm Status */}
-      {data.status === 'active' && data.storm && (
-        <Card shadow="sm" padding="lg" radius="md" withBorder style={{ borderColor: '#1478FF' }}>
-          <Stack gap="md">
-            <Group justify="space-between" align="flex-start">
-              <div>
-                <Title order={2} c="electricBlue.0">{data.storm.name}</Title>
-                <Text size="lg" c="teal.0" fw={600}>{data.storm.type}</Text>
-              </div>
-              {data.storm.isCloseApproach && (
-                <Badge color="coral" size="lg" leftSection={<IconAlertTriangle />}>
-                  Close Approach
-                </Badge>
-              )}
-            </Group>
-
-            <Divider />
-
-            <Group grow>
-              <div>
-                <Text size="sm" c="dimmed">Wind Speed</Text>
-                <Text size="xl" fw={700} c="electricBlue.0">{data.storm.windSpeed}</Text>
-              </div>
-              <div>
-                <Text size="sm" c="dimmed">Distance from Jamaica</Text>
-                <Text size="xl" fw={700} c="teal.0">{data.storm.position.distance} {data.storm.position.distanceUnit}</Text>
-              </div>
-            </Group>
-
-             {data.storm.movement && (
-               <Group grow>
-                 <div>
-                   <Text size="sm" c="dimmed">Movement</Text>
-                   <Text size="lg" fw={600} c="coral.0">{data.storm.movement.direction} at {data.storm.movement.speed}</Text>
-                 </div>
-               </Group>
-             )}
-
-            {data.storm.lastAdvisory && (
-              <Text size="sm" c="dimmed">
-                Last Advisory: {formatLastUpdated(data.storm.lastAdvisory)}
-              </Text>
-            )}
-          </Stack>
-        </Card>
-      )}
-
       {data.status === 'not_found' && (
         <Card shadow="sm" padding="lg" radius="md" withBorder style={{ borderColor: '#11DDB0' }}>
           <Stack gap="md" align="center">

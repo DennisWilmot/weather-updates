@@ -232,7 +232,7 @@ export default function SubmitUpdate() {
 
             <Group grow>
               <Box>
-                <Text size="sm" fw={500} mb="xs">Do you have electricity?</Text>
+                <Text size="sm" fw={500} mb="xs">Do you have electricity/light?</Text>
                 <Radio.Group
                   value={hasElectricity ? 'yes' : 'no'}
                   onChange={(value) => setHasElectricity(value === 'yes')}
@@ -244,7 +244,7 @@ export default function SubmitUpdate() {
                 </Radio.Group>
               </Box>
               <Box>
-                <Text size="sm" fw={500} mb="xs">Do you have WiFi?</Text>
+                <Text size="sm" fw={500} mb="xs">Do you have WiFi/service/data?</Text>
                 <Radio.Group
                   value={hasWifi ? 'yes' : 'no'}
                   onChange={(value) => setHasWifi(value === 'yes')}
