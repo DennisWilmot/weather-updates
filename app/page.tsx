@@ -28,6 +28,7 @@ import StormUpdates from '../components/StormUpdates';
 import EmergencyContacts from '../components/EmergencyContacts';
 import CommunityFeed from '../components/CommunityFeed';
 import SubmitUpdate from '../components/SubmitUpdate';
+import NewsFeed from '../components/NewsFeed';
 
 interface StormData {
   status: 'active' | 'not_found' | 'error';
@@ -619,57 +620,7 @@ export default function HomePage() {
             </Center>
           )
         )}
-        {activeTab === 'news' && (
-          <Stack gap="lg">
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Stack gap="md">
-                <Group justify="space-between" align="center">
-                  <Title order={2} c="gray.6">📰 News Feed</Title>
-                  <Badge color="blue" variant="light" size="lg">
-                    As of {new Date().toLocaleString('en-US', {
-                      weekday: 'short',
-                      month: 'short', 
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      timeZone: 'America/Jamaica'
-                    })}
-                  </Badge>
-                </Group>
-                
-                <Text c="dimmed" ta="center" size="lg">
-                  Latest news and updates will appear here
-                </Text>
-                
-                <Alert color="blue" title="News Updates" icon="📰">
-                  <Text size="sm">
-                    This section will display real-time news updates, official announcements, 
-                    and emergency information related to Hurricane Melissa and Jamaica.
-                  </Text>
-                </Alert>
-                
-                <Card withBorder padding="md" style={{ backgroundColor: '#f8f9fa' }}>
-                  <Stack gap="xs">
-                    <Text fw={600} size="sm" c="blue">Sample News Item</Text>
-                    <Text size="xs" c="dimmed">
-                      Last updated: {new Date().toLocaleString('en-US', {
-                        month: 'short', 
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        timeZone: 'America/Jamaica'
-                      })}
-                    </Text>
-                    <Text size="sm">
-                      This is where official news updates, weather advisories, 
-                      and emergency information will be displayed.
-                    </Text>
-                  </Stack>
-                </Card>
-              </Stack>
-            </Card>
-          </Stack>
-        )}
+        {activeTab === 'news' && <NewsFeed />}
       </Container>
 
       {/* Main Content - Desktop */}
@@ -693,61 +644,22 @@ export default function HomePage() {
             </Center>
           )
         )}
-        {activeTab === 'news' && (
-          <Stack gap="lg">
-            <Card shadow="sm" padding="lg" radius="md" withBorder>
-              <Stack gap="md">
-                <Group justify="space-between" align="center">
-                  <Title order={2} c="gray.6">📰 News Feed</Title>
-                  <Badge color="blue" variant="light" size="lg">
-                    As of {new Date().toLocaleString('en-US', {
-                      weekday: 'short',
-                      month: 'short', 
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      timeZone: 'America/Jamaica'
-                    })}
-                  </Badge>
-                </Group>
-                
-                <Text c="dimmed" ta="center" size="lg">
-                  Latest news and updates will appear here
-                </Text>
-                
-                <Alert color="blue" title="News Updates" icon="📰">
-                  <Text size="sm">
-                    This section will display real-time news updates, official announcements, 
-                    and emergency information related to Hurricane Melissa and Jamaica.
-                  </Text>
-                </Alert>
-                
-                <Card withBorder padding="md" style={{ backgroundColor: '#f8f9fa' }}>
-                  <Stack gap="xs">
-                    <Text fw={600} size="sm" c="blue">Sample News Item</Text>
-                    <Text size="xs" c="dimmed">
-                      Last updated: {new Date().toLocaleString('en-US', {
-                        month: 'short', 
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        timeZone: 'America/Jamaica'
-                      })}
-                    </Text>
-                    <Text size="sm">
-                      This is where official news updates, weather advisories, 
-                      and emergency information will be displayed.
-                    </Text>
-                  </Stack>
-                </Card>
-              </Stack>
-            </Card>
-          </Stack>
-        )}
+        {activeTab === 'news' && <NewsFeed />}
       </Container>
 
       {/* Floating Action Button */}
-      <Affix position={{ bottom: 20, right: 20 }}>
+      <Box
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          zIndex: 1000,
+          // Mobile positioning - above bottom nav
+          '@media (max-width: 768px)': {
+            bottom: '80px'
+          }
+        }}
+      >
         <ActionIcon
           size="xl"
           radius="xl"
@@ -757,7 +669,8 @@ export default function HomePage() {
           style={{
             boxShadow: '0 4px 12px rgba(20, 120, 255, 0.3)',
             transition: 'all 0.2s ease',
-            zIndex: 1000
+            width: '56px',
+            height: '56px'
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'scale(1.1)';
@@ -770,7 +683,7 @@ export default function HomePage() {
         >
           <Text size="xl" fw={700}>+</Text>
         </ActionIcon>
-      </Affix>
+      </Box>
 
       {/* Mobile Bottom Navigation */}
       <Paper

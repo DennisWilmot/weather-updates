@@ -283,10 +283,10 @@ export default function CommunityFeed() {
                         {submission.parish}, {submission.community}
                       </Text>
                       <Group gap="xs" align="center" mt="xs">
-                        <Text size="xs" c="dimmed">
+                        <Text size="xs" c="dimmed" component="span">
                           {formatTimeAgo(submission.createdAt)}
                         </Text>
-                        <Text size="xs" c="blue" fw={500}>
+                        <Text size="xs" c="blue" fw={500} component="span">
                           • As of {new Date(submission.createdAt).toLocaleString('en-US', {
                             month: 'short', 
                             day: 'numeric',
