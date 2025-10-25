@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE!;
-const INGEST_TOKEN = process.env.INGEST_TOKEN!;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE = process.env.SUPABASE_SERVICE_ROLE;
+const INGEST_TOKEN = process.env.INGEST_TOKEN;
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE, {
-  auth: { persistSession: false }
-});
+// Only create Supabase client if environment variables are available
+const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE 
+  ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE, {
+      auth: { persistSession: false }
+    })
+  : null;
 
 export async function POST(req: NextRequest) {
+  // Check if Supabase is configured
+  if (!supabase) {
+    return NextResponse.json({ 
+      error: "Ingest service not configured - missing Supabase credentials" 
+    }, { status: 503 });
+  }
+
   // Check for authorization token
   if (req.headers.get("x-ingest-token") !== INGEST_TOKEN) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
