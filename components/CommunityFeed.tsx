@@ -280,7 +280,7 @@ export default function CommunityFeed() {
                 <Stack gap="sm">
                   <Group justify="space-between" align="flex-start">
                     <Box>
-                      <Text fw={600} size="sm" c="teal.0">
+                      <Text fw={600} size="sm" style={{ color: '#1e50ff' }}>
                         {submission.parish}, {submission.community}
                       </Text>
                       <Group gap="xs" align="center" mt="xs">

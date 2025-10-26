@@ -734,8 +734,8 @@ export default function HomePage() {
               flex: 1,
               flexDirection: 'column',
               height: 'auto',
-              padding: '12px 8px',
-              minHeight: '50px',
+              padding: '8px 4px',
+              minHeight: '56px',
               borderRadius: '12px',
               backgroundColor: activeTab === 'feed' ? 'rgba(17, 221, 176, 0.15)' : 'transparent',
               border: activeTab === 'feed' ? '1px solid rgba(17, 221, 176, 0.3)' : '1px solid transparent',
@@ -748,6 +748,11 @@ export default function HomePage() {
               color: activeTab === 'feed' ? '#11DDB0' : '#8B8B8B',
               transition: 'color 0.3s ease'
             }}>📋</Text>
+            <Text size="xs" style={{ 
+              color: activeTab === 'feed' ? '#11DDB0' : '#8B8B8B',
+              transition: 'color 0.3s ease',
+              marginTop: '2px'
+            }}>Feed</Text>
           </Button>
           
           <Button
@@ -759,8 +764,8 @@ export default function HomePage() {
               flex: 1,
               flexDirection: 'column',
               height: 'auto',
-              padding: '12px 8px',
-              minHeight: '50px',
+              padding: '8px 4px',
+              minHeight: '56px',
               borderRadius: '12px',
               backgroundColor: activeTab === 'submit' ? 'rgba(20, 120, 255, 0.15)' : 'transparent',
               border: activeTab === 'submit' ? '1px solid rgba(20, 120, 255, 0.3)' : '1px solid transparent',
@@ -773,6 +778,11 @@ export default function HomePage() {
               color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
               transition: 'color 0.3s ease'
             }}>📝</Text>
+            <Text size="xs" style={{ 
+              color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
+              transition: 'color 0.3s ease',
+              marginTop: '2px'
+            }}>Submit</Text>
           </Button>
           
           <Button
@@ -784,8 +794,8 @@ export default function HomePage() {
               flex: 1,
               flexDirection: 'column',
               height: 'auto',
-              padding: '12px 8px',
-              minHeight: '50px',
+              padding: '8px 4px',
+              minHeight: '56px',
               borderRadius: '12px',
               backgroundColor: activeTab === 'storm' ? 'rgba(255, 230, 109, 0.15)' : 'transparent',
               border: activeTab === 'storm' ? '1px solid rgba(255, 230, 109, 0.3)' : '1px solid transparent',
@@ -798,6 +808,11 @@ export default function HomePage() {
               color: activeTab === 'storm' ? '#FFE66D' : '#8B8B8B',
               transition: 'color 0.3s ease'
             }}>🌪️</Text>
+            <Text size="xs" style={{ 
+              color: activeTab === 'storm' ? '#FFE66D' : '#8B8B8B',
+              transition: 'color 0.3s ease',
+              marginTop: '2px'
+            }}>Storm</Text>
           </Button>
           
           <Button
@@ -809,8 +824,8 @@ export default function HomePage() {
               flex: 1,
               flexDirection: 'column',
               height: 'auto',
-              padding: '12px 8px',
-              minHeight: '50px',
+              padding: '8px 4px',
+              minHeight: '56px',
               borderRadius: '12px',
               backgroundColor: activeTab === 'contacts' ? 'rgba(255, 104, 109, 0.15)' : 'transparent',
               border: activeTab === 'contacts' ? '1px solid rgba(255, 104, 109, 0.3)' : '1px solid transparent',
@@ -823,31 +838,11 @@ export default function HomePage() {
               color: activeTab === 'contacts' ? '#FF686D' : '#8B8B8B',
               transition: 'color 0.3s ease'
             }}>📞</Text>
-          </Button>
-          
-          <Button
-            variant="subtle"
-            color="gray"
-            size="sm"
-            onClick={() => setActiveTab('news')}
-            style={{
-              flex: 1,
-              flexDirection: 'column',
-              height: 'auto',
-              padding: '12px 8px',
-              minHeight: '50px',
-              borderRadius: '12px',
-              backgroundColor: activeTab === 'news' ? 'rgba(128, 128, 128, 0.15)' : 'transparent',
-              border: activeTab === 'news' ? '1px solid rgba(128, 128, 128, 0.3)' : '1px solid transparent',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: activeTab === 'news' ? 'translateY(-2px)' : 'translateY(0)',
-              boxShadow: activeTab === 'news' ? '0 4px 12px rgba(128, 128, 128, 0.2)' : 'none'
-            }}
-          >
-            <Text size="xl" style={{ 
-              color: activeTab === 'news' ? '#808080' : '#8B8B8B',
-              transition: 'color 0.3s ease'
-            }}>📰</Text>
+            <Text size="xs" style={{ 
+              color: activeTab === 'contacts' ? '#FF686D' : '#8B8B8B',
+              transition: 'color 0.3s ease',
+              marginTop: '2px'
+            }}>Contacts</Text>
           </Button>
         </Group>
       </Paper>
