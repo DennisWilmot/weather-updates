@@ -132,10 +132,11 @@ export async function GET(
       const needsHelp = communitySubmissions.filter((sub) => sub.needsHelp === true).length;
 
       // Get last update time
-      const lastUpdate = communitySubmissions.reduce((latest, sub) =>
-        new Date(sub.createdAt) > new Date(latest) ? sub.createdAt : latest,
-        communitySubmissions[0].createdAt
-      );
+      const lastUpdate: string = communitySubmissions.reduce((latest, sub) => {
+        const subDate = new Date(sub.createdAt);
+        const latestDate = new Date(latest);
+        return subDate > latestDate ? sub.createdAt : latest;
+      }, communitySubmissions[0].createdAt);
 
       const stats: Omit<CommunityStats, 'severity'> = {
         communityId: community.id,
