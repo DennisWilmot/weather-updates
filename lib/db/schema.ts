@@ -42,11 +42,11 @@ export const submissions = pgTable('submissions', {
   communityId: uuid('community_id').references(() => communities.id).notNull(),
   locationId: uuid('location_id').references(() => locations.id), // Optional - for specific places
 
-  // Service Status Reports (keep field names but track separately)
-  hasElectricity: boolean('has_electricity').notNull(), // JPS Electricity
+  // Service Status Reports
+  hasElectricity: boolean('has_electricity'), // JPS Electricity
   hasWifi: boolean('has_wifi').notNull(), // Internet service (Flow/Digicel combined for now)
-  flowService: boolean('flow_service').default(true), // Flow cable/internet
-  digicelService: boolean('digicel_service').default(true), // Digicel mobile
+  flowService: boolean('flow_service'), // Flow cable/internet (nullable for 3-state)
+  digicelService: boolean('digicel_service'), // Digicel mobile (nullable for 3-state)
   waterService: boolean('water_service'), // Water availability (nullable for 3-state)
 
   // Infrastructure Status
@@ -73,6 +73,10 @@ export const submissions = pgTable('submissions', {
   // Location Details (for custom locations not in locations table)
   streetName: text('street_name'),
   placeName: text('place_name'),
+
+  // Legacy fields for backward compatibility
+  parish: text('parish'), // Will be deprecated after migration
+  community: text('community'), // Will be deprecated after migration
 
   // Metadata
   confidence: integer('confidence').default(1), // 1-5 scale for report reliability
