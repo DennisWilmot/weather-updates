@@ -245,17 +245,34 @@ export default function CommunityFeed() {
   const formatTimeAgo = (dateString: string) => {
     try {
       const now = new Date();
-      // Parse the timestamp as UTC (since DB stores without timezone)
-      const submissionTime = new Date(dateString + 'Z');
+      // Parse the timestamp - database stores in UTC
+      let submissionTime: Date;
+      
+      // Check if the dateString already has timezone info
+      if (dateString.includes('Z') || dateString.includes('+') || dateString.includes('-')) {
+        submissionTime = new Date(dateString);
+      } else {
+        // If no timezone info, assume it's UTC and add Z
+        submissionTime = new Date(dateString + 'Z');
+      }
       
       // Check if date is valid
       if (isNaN(submissionTime.getTime())) {
+        console.log('Invalid date:', dateString);
         return 'Just now';
       }
       
       // Calculate difference in milliseconds
       const diffMs = now.getTime() - submissionTime.getTime();
       const diffMinutes = Math.round(diffMs / (1000 * 60));
+      
+      console.log('Time calculation:', {
+        dateString,
+        submissionTime: submissionTime.toISOString(),
+        now: now.toISOString(),
+        diffMs,
+        diffMinutes
+      });
       
       // If negative (future date), just say "Just now"
       if (diffMinutes < 0) {
@@ -272,9 +289,15 @@ export default function CommunityFeed() {
         return `${diffMinutes} min ago`;
       }
       
-      // Otherwise show in hours
-      const hours = Math.round(diffMinutes / 60);
-      return `${hours} hours ago`;
+      // If less than 24 hours, show in hours
+      if (diffMinutes < 1440) {
+        const hours = Math.round(diffMinutes / 60);
+        return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+      }
+      
+      // If more than 24 hours, show in days
+      const days = Math.round(diffMinutes / 1440);
+      return `${days} day${days > 1 ? 's' : ''} ago`;
     } catch (error) {
       console.error('Error formatting time:', error, dateString);
       return 'Just now';
