@@ -105,12 +105,13 @@ export async function GET() {
       ).size;
 
       // Get last update time
-      const lastUpdate =
+      const lastUpdate: string =
         parishSubmissions.length > 0
-          ? parishSubmissions.reduce((latest, sub) =>
-              new Date(sub.createdAt) > new Date(latest) ? sub.createdAt : latest,
-              parishSubmissions[0].createdAt
-            )
+          ? parishSubmissions.reduce((latest: string, sub) => {
+              const subDate = new Date(sub.createdAt);
+              const latestDate = new Date(latest);
+              return subDate > latestDate ? sub.createdAt.toISOString() : latest;
+            }, parishSubmissions[0].createdAt.toISOString())
           : new Date().toISOString();
 
       const stats: Omit<ParishStats, 'severity'> = {
