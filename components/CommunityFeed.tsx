@@ -38,6 +38,7 @@ interface Submission {
   placeName?: string;
   streetName?: string;
   hasElectricity: boolean;
+  powerProvider?: string;
   hasWifi: boolean;
   flowService?: boolean;
   digicelService?: boolean;
@@ -410,6 +411,19 @@ export default function CommunityFeed() {
                           </Text>
                         </Group>
                       )}
+
+                      {submission.digicelService !== undefined && (
+                        <Group gap="xs">
+                          <ThemeIcon size="sm" color={submission.digicelService ? 'green' : 'red'} variant="light">
+                            {submission.digicelService ? <IconCheck size={12} /> : <IconX size={12} />}
+                          </ThemeIcon>
+                          <Text size="xs" c={submission.digicelService ? 'green' : 'red'}>
+                            Digicel: {submission.digicelService ? 'Up' : 'Down'}
+                          </Text>
+                        </Group>
+                      )}
+                    </Group>
+                  </Box>
 
                       {submission.digicelService !== undefined && (
                         <Group gap="xs">

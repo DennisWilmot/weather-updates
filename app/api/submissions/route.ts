@@ -12,48 +12,87 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '10');
     
     // Build query conditions
-    const conditions = [];
+    let whereConditions = [];
     
-    // Filter by last 24 hours
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    conditions.push(gte(submissions.createdAt, twentyFourHoursAgo));
-    
-    // Add parish filter if provided
     if (parish) {
-      conditions.push(eq(submissions.parish, parish));
+      // Find parish ID by name
+      const parishRecord = await db
+        .select({ id: parishes.id })
+        .from(parishes)
+        .where(eq(parishes.name, parish))
+        .limit(1);
+      
+      if (parishRecord.length > 0) {
+        whereConditions.push(eq(submissions.parishId, parishRecord[0].id));
+      }
     }
     
-    // Add community filter if provided
     if (community) {
-      conditions.push(eq(submissions.community, community));
+      // Find community ID by name
+      const communityRecord = await db
+        .select({ id: communities.id })
+        .from(communities)
+        .where(eq(communities.name, community))
+        .limit(1);
+      
+      if (communityRecord.length > 0) {
+        whereConditions.push(eq(submissions.communityId, communityRecord[0].id));
+      }
     }
-    
-    const offset = (page - 1) * limit;
-    
-    // Execute query with pagination
-    const results = await db
-      .select()
-      .from(submissions)
-      .where(and(...conditions))
-      .orderBy(desc(submissions.createdAt))
-      .limit(limit)
-      .offset(offset);
     
     // Get total count for pagination
     const totalCount = await db
       .select({ count: sql<number>`count(*)` })
       .from(submissions)
-      .where(and(...conditions));
+      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
+    
+    const total = totalCount[0]?.count || 0;
+    const totalPages = Math.ceil(total / limit);
+    const offset = (page - 1) * limit;
+    
+    // Get submissions with pagination
+    const results = await db
+      .select({
+        id: submissions.id,
+        parishId: submissions.parishId,
+        communityId: submissions.communityId,
+        locationId: submissions.locationId,
+        jpsElectricity: submissions.jpsElectricity,
+        flowService: submissions.flowService,
+        digicelService: submissions.digicelService,
+        waterService: submissions.waterService,
+        hasElectricity: submissions.hasElectricity,
+        hasWifi: submissions.hasWifi,
+        hasPower: submissions.hasPower,
+        flooding: submissions.flooding,
+        downedPowerLines: submissions.downedPowerLines,
+        fallenTrees: submissions.fallenTrees,
+        structuralDamage: submissions.structuralDamage,
+        needsHelp: submissions.needsHelp,
+        helpType: submissions.helpType,
+        roadStatus: submissions.roadStatus,
+        additionalInfo: submissions.additionalInfo,
+        imageUrl: submissions.imageUrl,
+        streetName: submissions.streetName,
+        placeName: submissions.placeName,
+        parish: submissions.parish,
+        community: submissions.community,
+        confidence: submissions.confidence,
+        createdAt: submissions.createdAt
+      })
+      .from(submissions)
+      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+      .orderBy(desc(submissions.createdAt))
+      .limit(limit)
+      .offset(offset);
     
     return NextResponse.json({
       data: results,
       pagination: {
         page,
         limit,
-        total: totalCount[0]?.count || 0,
-        totalPages: Math.ceil((totalCount[0]?.count || 0) / limit),
-        hasNext: page < Math.ceil((totalCount[0]?.count || 0) / limit),
-        hasPrev: page > 1
+        total,
+        totalPages
       }
     });
     
@@ -69,37 +108,23 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-
-    // Handle both old format (parish/community names) and new format (IDs)
-    const {
-      parish,
-      community,
-      parishId,
-      communityId,
-      locationId,
-      placeName,
-      streetName,
-      hasElectricity,
-      flowService,
-      digicelService,
-      flooding,
-      downedPowerLines,
-      fallenTrees,
-      structuralDamage,
-      hasWifi,
-      needsHelp,
-      helpType,
-      roadStatus
-    } = body;
-
+    
     // Validate required fields
-    if (hasElectricity === undefined || needsHelp === undefined || !roadStatus) {
+    const { 
+      parish, community, 
+      jpsElectricity, flowService, digicelService, waterService, // New service states
+      needsHelp, helpType, roadStatus, 
+      additionalInfo, imageUrl,
+      placeName, streetName // New location details
+    } = body;
+    
+    if (!parish || !community || jpsElectricity === undefined || flowService === undefined || digicelService === undefined || waterService === undefined || needsHelp === undefined || !roadStatus) {
       return NextResponse.json(
-        { error: 'Missing required fields: hasElectricity, needsHelp, roadStatus' },
+        { error: 'Missing required fields: parish, community, jpsElectricity, flowService, digicelService, waterService, needsHelp, roadStatus' },
         { status: 400 }
       );
     }
-
+    
     // Validate help type if help is needed
     if (needsHelp && !helpType) {
       return NextResponse.json(
@@ -107,7 +132,7 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
+    
     // Validate road status
     const validRoadStatuses = ['clear', 'flooded', 'blocked', 'mudslide', 'damaged'];
     if (!validRoadStatuses.includes(roadStatus)) {
@@ -116,104 +141,56 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
-    // Resolve parish and community IDs
-    let finalParishId = parishId;
-    let finalCommunityId = communityId;
-    let finalParishName = parish;
-    let finalCommunityName = community;
-
-    // If using new format with IDs, get the names for backward compatibility
-    if (parishId && !parish) {
-      const [parishRecord] = await db.select().from(parishes).where(eq(parishes.id, parishId)).limit(1);
-      if (parishRecord) {
-        finalParishName = parishRecord.name;
-      }
-    }
-
-    if (communityId && !community) {
-      const [communityRecord] = await db.select().from(communities).where(eq(communities.id, communityId)).limit(1);
-      if (communityRecord) {
-        finalCommunityName = communityRecord.name;
-      }
-    }
-
-    // If using old format with names, get/create the IDs
-    if (!parishId && parish) {
-      const [parishRecord] = await db.select().from(parishes).where(eq(parishes.name, parish)).limit(1);
-      if (parishRecord) {
-        finalParishId = parishRecord.id;
-        finalParishName = parishRecord.name;
-      } else {
-        return NextResponse.json(
-          { error: `Parish not found: ${parish}` },
-          { status: 400 }
-        );
-      }
-    }
-
-    if (!communityId && community && finalParishId) {
-      // Check if community exists
-      const [existingCommunity] = await db
-        .select()
-        .from(communities)
-        .where(
-          and(
-            eq(communities.name, community),
-            eq(communities.parishId, finalParishId)
-          )
+    
+    // Check if community exists, create if not
+    let communityId;
+    const existingCommunity = await db
+      .select()
+      .from(communities)
+      .where(
+        and(
+          eq(communities.name, community),
+          eq(communities.parishId, body.parishId)
         )
-        .limit(1);
-
-      if (existingCommunity) {
-        finalCommunityId = existingCommunity.id;
-        finalCommunityName = existingCommunity.name;
-      } else {
-        // Create new community
-        const [newCommunity] = await db.insert(communities).values({
-          name: community,
-          parishId: finalParishId
-        }).returning();
-        finalCommunityId = newCommunity.id;
-        finalCommunityName = newCommunity.name;
-      }
+      )
+      .limit(1);
+    
+    if (existingCommunity.length > 0) {
+      communityId = existingCommunity[0].id;
+    } else {
+      // Create new community
+      const newCommunity = await db.insert(communities).values({
+        name: community,
+        parishId: body.parishId
+      }).returning();
+      communityId = newCommunity[0].id;
     }
-
-    // Validate we have all required IDs
-    if (!finalParishId || !finalCommunityId) {
-      return NextResponse.json(
-        { error: 'Could not resolve parish and community IDs' },
-        { status: 400 }
-      );
-    }
-
+    
     // Insert submission
     const result = await db.insert(submissions).values({
-      parish: finalParishName,
-      community: finalCommunityName,
-      parishId: finalParishId,
-      communityId: finalCommunityId,
-      locationId: locationId || null,
-      placeName: placeName || null,
-      streetName: streetName || null,
-      hasElectricity: Boolean(hasElectricity),
-      hasPower: Boolean(hasElectricity), // Map hasElectricity to hasPower for backward compatibility
-      flowService: flowService !== undefined ? Boolean(flowService) : null,
-      digicelService: digicelService !== undefined ? Boolean(digicelService) : null,
-      flooding: flooding !== undefined ? Boolean(flooding) : false,
-      downedPowerLines: downedPowerLines !== undefined ? Boolean(downedPowerLines) : false,
-      fallenTrees: fallenTrees !== undefined ? Boolean(fallenTrees) : false,
-      structuralDamage: structuralDamage !== undefined ? Boolean(structuralDamage) : false,
-      hasWifi: hasWifi !== undefined ? Boolean(hasWifi) : null,
+      parish,
+      community,
+      parishId: body.parishId, // Assuming these will be passed from HierarchicalLocationPicker
+      communityId: body.communityId,
+      locationId: body.locationId,
+      streetName: streetName,
+      placeName: placeName,
+      jpsElectricity: jpsElectricity,
+      flowService: flowService,
+      digicelService: digicelService,
+      waterService: waterService,
+      hasElectricity: jpsElectricity > 0, // For backward compatibility
+      hasWifi: flowService > 0 || digicelService > 0, // For backward compatibility
+      hasPower: jpsElectricity > 0, // For backward compatibility
       needsHelp: Boolean(needsHelp),
       helpType: needsHelp ? helpType : null,
       roadStatus,
-      additionalInfo: body.additionalInfo || null,
-      imageUrl: body.imageUrl || null
+      additionalInfo: additionalInfo || null,
+      imageUrl: imageUrl || null
     }).returning();
-
+    
     return NextResponse.json(result[0], { status: 201 });
-
+    
   } catch (error) {
     console.error('Error creating submission:', error);
     return NextResponse.json(
