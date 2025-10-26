@@ -29,6 +29,7 @@ import {
   IconAlertTriangle
 } from '@tabler/icons-react';
 import jamaicaLocations from '../data/jamaica-locations.json';
+import JamaicaParishMap from './JamaicaParishMap';
 
 interface Submission {
   id: string;
@@ -156,6 +157,26 @@ export default function CommunityFeed() {
 
   return (
     <Stack gap="lg">
+      {/* Map Card */}
+      <Card shadow="sm" padding="xs" radius="md" withBorder style={{ paddingTop: '12px', paddingBottom: '12px' }}>
+        <Stack gap={4}>
+          <Text size="xs" fw={500}>Tap a Parish to View Updates</Text>
+          <JamaicaParishMap 
+            selectedParish={filterParish}
+            onParishClick={(parish) => {
+              // Toggle filter: if clicking same parish, clear filter; otherwise set it
+              if (filterParish === parish) {
+                setFilterParish('');
+              } else {
+                setFilterParish(parish);
+              }
+              setFilterCommunity('');
+              setCommunitySearch('');
+            }}
+          />
+        </Stack>
+      </Card>
+
       {/* Filter Controls */}
       <Card shadow="sm" padding="md" radius="md" withBorder>
         <Group justify="space-between" align="flex-end">
