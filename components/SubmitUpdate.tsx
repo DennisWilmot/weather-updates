@@ -4,293 +4,507 @@ import { useState } from 'react';
 import {
   Stack,
   Title,
-  Text,
-  Button,
   Card,
   Group,
-  TextInput,
-  Textarea,
+  Text,
+  Button,
   Select,
+  Switch,
   Radio,
+  Textarea,
+  Box,
+  Combobox,
+  TextInput,
+  useCombobox,
   FileInput,
   Image,
-  Alert,
-  Loader,
+  Slider,
+  Badge,
   Center
 } from '@mantine/core';
-import { IconUpload, IconPhoto, IconX } from '@tabler/icons-react';
-import { createClient } from '@supabase/supabase-js';
+import { IconPhoto } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
+import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../lib/supabase';
+import jamaicaLocations from '../data/jamaica-locations.json';
+import HierarchicalLocationPicker from './HierarchicalLocationPicker';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Service Status Slider Component
+function ServiceStatusSlider({ 
+  label, 
+  emoji, 
+  color, 
+  value, 
+  onChange 
+}: { 
+  label: string; 
+  emoji: string; 
+  color: string; 
+  value: number; 
+  onChange: (value: number) => void; 
+}) {
+  const statusLabels = ['Out', 'Partial', 'Working'];
+  const statusEmojis = ['❌', '⚠️', '✅'];
+  const statusColors = ['red', 'yellow', 'green'];
+  
+  return (
+    <Card withBorder padding="md" radius="md" style={{ backgroundColor: '#f8f9fa' }}>
+      <Stack gap="sm">
+        <Group justify="space-between" align="center">
+          <Group gap="xs">
+            <Text size="lg">{emoji}</Text>
+            <Text size="sm" fw={600} c="dark">
+              {label}
+            </Text>
+          </Group>
+          <Badge 
+            color={statusColors[value]} 
+            variant="filled"
+            size="md"
+            radius="md"
+          >
+            {statusEmojis[value]} {statusLabels[value]}
+          </Badge>
+        </Group>
+        
+        <Slider
+          value={value}
+          onChange={onChange}
+          min={0}
+          max={2}
+          step={1}
+          marks={[
+            { value: 0, label: <Text size="xs" c="red">Out</Text> },
+            { value: 1, label: <Text size="xs" c="yellow">Partial</Text> },
+            { value: 2, label: <Text size="xs" c="green">Working</Text> }
+          ]}
+          color={statusColors[value]}
+          size="lg"
+          styles={{
+            track: {
+              backgroundColor: '#e9ecef',
+              height: 8,
+            },
+            thumb: {
+              backgroundColor: statusColors[value],
+              border: `3px solid white`,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              width: 24,
+              height: 24,
+            },
+            mark: {
+              backgroundColor: statusColors[value],
+              border: `2px solid white`,
+              width: 16,
+              height: 16,
+            },
+            markLabel: {
+              marginTop: 8,
+            }
+          }}
+        />
+      </Stack>
+    </Card>
+  );
+}
 
 export default function SubmitUpdate() {
-  const [parish, setParish] = useState('');
-  const [community, setCommunity] = useState('');
-  const [hasElectricity, setHasElectricity] = useState<'yes' | 'no' | 'na'>('na');
-  const [hasWifi, setHasWifi] = useState<'yes' | 'no' | 'na'>('na');
-  const [needsHelp, setNeedsHelp] = useState(false);
-  const [helpType, setHelpType] = useState<string>('');
-  const [roadStatus, setRoadStatus] = useState<string>('');
-  const [additionalInfo, setAdditionalInfo] = useState('');
+  const queryClient = useQueryClient();
+  const [selectedParish, setSelectedParish] = useState<string>('');
+  const [selectedCommunity, setSelectedCommunity] = useState<string>('');
+  const [selectedPlace, setSelectedPlace] = useState<string>('');
+  const [selectedStreet, setSelectedStreet] = useState<string>('');
+  const [communitySearch, setCommunitySearch] = useState<string>('');
+  const [communities, setCommunities] = useState<any[]>([]);
+  const [hasElectricity, setHasElectricity] = useState<boolean>(true);
+  const [hasWifi, setHasWifi] = useState<boolean>(true);
+  const [jpsElectricity, setJpsElectricity] = useState<number>(2); // 0=out, 1=partial, 2=working
+  const [flowService, setFlowService] = useState<number>(2); // 0=out, 1=partial, 2=working
+  const [digicelService, setDigicelService] = useState<number>(2); // 0=out, 1=partial, 2=working
+  const [waterService, setWaterService] = useState<number>(2); // 0=out, 1=partial, 2=working
+  const [needsHelp, setNeedsHelp] = useState<boolean>(false);
+  const [helpType, setHelpType] = useState<'medical' | 'physical' | 'police' | 'firefighter' | 'other' | ''>('');
+  const [roadStatus, setRoadStatus] = useState<'clear' | 'flooded' | 'blocked' | 'mudslide'>('clear');
+  const [additionalInfo, setAdditionalInfo] = useState<string>('');
+  const [submitting, setSubmitting] = useState(false);
+  const [loadingCommunities, setLoadingCommunities] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  
+  const combobox = useCombobox({
+    onDropdownClose: () => combobox.resetSelectedOption(),
+  });
 
-  const handleImageUpload = async (file: File | null) => {
-    if (!file) return;
-
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `submissions/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('submissions')
-        .upload(filePath, file);
-
-      if (uploadError) {
-        console.error('Upload error:', uploadError);
-        return;
-      }
-
-      const { data } = supabase.storage
-        .from('submissions')
-        .getPublicUrl(filePath);
-
-      setImageUrl(data.publicUrl);
-    } catch (error) {
-      console.error('Error uploading image:', error);
+  const searchCommunities = async (search: string) => {
+    if (!selectedParish || search.length < 2) {
+      setCommunities([]);
+      return;
     }
+    
+    try {
+      setLoadingCommunities(true);
+      const response = await fetch(`/api/communities?parish=${selectedParish}&search=${encodeURIComponent(search)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setCommunities(data);
+      }
+    } catch (error) {
+      console.error('Error searching communities:', error);
+    } finally {
+      setLoadingCommunities(false);
+    }
+  };
+
+  const handleCommunitySearch = (value: string) => {
+    setCommunitySearch(value);
+    setSelectedCommunity(value);
+    searchCommunities(value);
+    combobox.openDropdown();
+  };
+
+  const handleCommunitySelect = (value: string) => {
+    setSelectedCommunity(value);
+    setCommunitySearch(value);
+    combobox.closeDropdown();
+  };
+
+  // Handle location change from HierarchicalLocationPicker
+  const handleLocationChange = (location: {
+    parishId: string | null;
+    communityId: string | null;
+    locationId: string | null;
+    placeName: string | null;
+    streetName: string | null;
+  }) => {
+    // For now, we'll use the old system but with the new data
+    // This will be updated when the database schema is migrated
+    setSelectedParish(location.parishId || '');
+    setSelectedCommunity(location.communityId || '');
+    setSelectedPlace(location.placeName || '');
+    setSelectedStreet(location.streetName || '');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setSubmitError(null);
+    
+    if (!selectedParish || !selectedCommunity) {
+      notifications.show({
+        title: 'Validation Error',
+        message: 'Please select both parish and community',
+        color: 'red'
+      });
+      return;
+    }
 
     try {
+      setSubmitting(true);
+      
+      // Upload image if provided
+      let uploadedImageUrl: string | null = null;
+      if (imageFile) {
+        try {
+          const fileName = `${Date.now()}-${imageFile.name}`;
+          const { data, error: uploadError } = await supabase.storage
+            .from('submission-photos')
+            .upload(fileName, imageFile, {
+              cacheControl: '3600',
+              upsert: false
+            });
+
+          if (uploadError) {
+            throw new Error(`Upload failed: ${uploadError.message}`);
+          }
+
+          // Get public URL
+          const { data: { publicUrl } } = supabase.storage
+            .from('submission-photos')
+            .getPublicUrl(fileName);
+          
+          uploadedImageUrl = publicUrl;
+        } catch (uploadErr) {
+          notifications.show({
+            title: 'Image Upload Error',
+            message: `Failed to upload image: ${uploadErr instanceof Error ? uploadErr.message : 'Unknown error'}`,
+            color: 'orange'
+          });
+          // Continue without image rather than failing the entire submission
+        }
+      }
+      
       const response = await fetch('/api/submissions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          parish,
-          community,
-          hasElectricity: hasElectricity === 'yes',
-          hasWifi: hasWifi === 'yes',
+          parish: selectedParish,
+          community: selectedCommunity,
+          hasElectricity: jpsElectricity > 0, // Convert slider to boolean for backward compatibility
+          hasWifi: flowService > 0 || digicelService > 0, // Convert sliders to boolean for backward compatibility
+          jpsElectricity: jpsElectricity,
+          flowService: flowService,
+          digicelService: digicelService,
+          waterService: waterService,
           needsHelp,
           helpType: needsHelp ? helpType : null,
           roadStatus,
-          additionalInfo,
-          imageUrl
+          additionalInfo: additionalInfo.trim() || undefined,
+          imageUrl: uploadedImageUrl
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to submit update');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      setSubmitSuccess(true);
-      // Reset form
-      setParish('');
-      setCommunity('');
-      setHasElectricity('na');
-      setHasWifi('na');
-        setNeedsHelp(false);
-        setHelpType('');
-      setRoadStatus('');
-        setAdditionalInfo('');
-      setImageFile(null);
-      setImageUrl(null);
-    } catch (error) {
-      console.error('Error submitting update:', error);
-      setSubmitError(error instanceof Error ? error.message : 'Failed to submit update');
+      const result = await response.json();
+      
+      notifications.show({
+        title: '✅ Successfully Submitted!',
+        message: `Your status update for ${selectedCommunity}, ${selectedParish} has been submitted and is now visible in the community feed.`,
+        color: 'green',
+        autoClose: 5000,
+        withCloseButton: true,
+        position: 'top-center'
+      });
+
+      // Invalidate and refetch all submissions queries to refresh the feed
+      await queryClient.invalidateQueries({ 
+        queryKey: ['submissions'],
+        exact: false 
+      });
+      
+      // Also try to refetch immediately
+      await queryClient.refetchQueries({ 
+        queryKey: ['submissions'],
+        exact: false 
+      });
+
+      // Show additional feedback that the feed has been updated
+      setTimeout(() => {
+        notifications.show({
+          title: '🔄 Feed Updated',
+          message: 'The community feed has been refreshed with your latest update.',
+          color: 'blue',
+          autoClose: 3000,
+          position: 'top-center'
+        });
+      }, 1000);
+
+              // Reset form
+                setSelectedParish('');
+                setSelectedCommunity('');
+                setSelectedPlace('');
+                setSelectedStreet('');
+                setJpsElectricity(2);
+                setFlowService(2);
+                setDigicelService(2);
+                setWaterService(2);
+                setNeedsHelp(false);
+                setHelpType('');
+                setRoadStatus('clear');
+                setAdditionalInfo('');
+                setImageFile(null);
+                setImageUrl(null);
+      
+    } catch (err) {
+      console.error('Error submitting:', err);
+      notifications.show({
+        title: 'Submission Error',
+        message: `Failed to submit: ${err instanceof Error ? err.message : 'Unknown error'}`,
+        color: 'red'
+      });
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
-  if (submitSuccess) {
-    return (
-      <Card shadow="sm" padding="lg" radius="md" withBorder>
-        <Stack align="center" gap="md">
-          <Text size="lg" fw={600} c="green">✅ Update Submitted Successfully!</Text>
-          <Text size="sm" c="dimmed" ta="center">
-            Thank you for sharing your status. Your update has been recorded and will help others in your community.
-          </Text>
-          <Button onClick={() => setSubmitSuccess(false)}>
-            Submit Another Update
-          </Button>
-        </Stack>
-      </Card>
-    );
-  }
+  const availableCommunities = selectedParish ? jamaicaLocations[selectedParish as keyof typeof jamaicaLocations] || [] : [];
 
   return (
-    <Card shadow="sm" padding="lg" radius="md" withBorder>
+    <Stack gap="lg">
+      <Card shadow="sm" padding="lg" radius="md" withBorder style={{ borderColor: '#1478FF' }}>
+        <Title order={2} c="electricBlue.0" mb="md">Submit Status Update</Title>
+        
         <form onSubmit={handleSubmit}>
-          <Stack gap="md">
-          <Title order={2} c="#1478FF">Submit Status Update</Title>
-          
-          {submitError && (
-            <Alert color="red" title="Error">
-              {submitError}
-            </Alert>
-          )}
-
-          {/* Location */}
-          <Stack gap="xs">
-            <Text size="sm" fw={500}>Location</Text>
-            <Group grow>
-              <TextInput
-                placeholder="Parish"
-                value={parish}
-                onChange={(e) => setParish(e.currentTarget.value)}
-                required
-              />
-                    <TextInput
-                placeholder="Community/Town"
-                value={community}
-                onChange={(e) => setCommunity(e.currentTarget.value)}
-                      required
+                  <Stack gap="md">
+                    {/* Hierarchical Location Picker with Geolocation */}
+                    <HierarchicalLocationPicker
+                      onLocationChange={handleLocationChange}
+                      initialParish={selectedParish}
+                      initialCommunity={selectedCommunity}
+                      initialPlace={selectedPlace}
                     />
-            </Group>
-          </Stack>
 
-          {/* Service Status */}
-          <Stack gap="xs">
-            <Text size="sm" fw={500}>Service Status</Text>
-            
-            <Stack gap="xs">
-              <Text size="xs" c="dimmed">Do you have electricity/light?</Text>
-              <Radio.Group value={hasElectricity} onChange={(value) => setHasElectricity(value as 'yes' | 'no' | 'na')}>
-                <Group gap="md">
-                  <Radio value="yes" label="Yes" />
-                  <Radio value="no" label="No" />
-                  <Radio value="na" label="N/A" />
-                  </Group>
-                </Radio.Group>
-            </Stack>
-
-            <Stack gap="xs">
-              <Text size="xs" c="dimmed">Do you have WiFi/service/data?</Text>
-              <Radio.Group value={hasWifi} onChange={(value) => setHasWifi(value as 'yes' | 'no' | 'na')}>
-                <Group gap="md">
-                  <Radio value="yes" label="Yes" />
-                  <Radio value="no" label="No" />
-                  <Radio value="na" label="N/A" />
+            {/* Service Status Section */}
+            <Card withBorder padding="lg" radius="md" style={{ backgroundColor: '#f8f9fa' }}>
+              <Stack gap="md">
+                <Group gap="xs" mb="sm">
+                  <Text size="lg">🔧</Text>
+                  <Text size="lg" fw={700} c="dark">Service Status</Text>
                 </Group>
-              </Radio.Group>
-            </Stack>
-          </Stack>
+                
+                <Stack gap="md">
+                  <ServiceStatusSlider
+                    label="JPS Electricity"
+                    emoji="⚡"
+                    color="yellow"
+                    value={jpsElectricity}
+                    onChange={setJpsElectricity}
+                  />
+                  
+                  <ServiceStatusSlider
+                    label="Flow Service"
+                    emoji="📡"
+                    color="blue"
+                    value={flowService}
+                    onChange={setFlowService}
+                  />
+                  
+                  <ServiceStatusSlider
+                    label="Digicel Service"
+                    emoji="📱"
+                    color="red"
+                    value={digicelService}
+                    onChange={setDigicelService}
+                  />
+                  
+                  <ServiceStatusSlider
+                    label="Water Service"
+                    emoji="💧"
+                    color="cyan"
+                    value={waterService}
+                    onChange={setWaterService}
+                  />
+                </Stack>
+              </Stack>
+            </Card>
 
-          {/* Emergency Help */}
-          <Stack gap="xs">
-            <Text size="sm" fw={500}>Emergency Status</Text>
-            <Radio.Group value={needsHelp ? 'yes' : 'no'} onChange={(value) => setNeedsHelp(value === 'yes')}>
-              <Group gap="md">
-                <Radio value="yes" label="I need help" />
-                <Radio value="no" label="I'm okay" />
+            <Box>
+              <Text size="sm" fw={500} mb="xs">Do you need help?</Text>
+              <Radio.Group
+                value={needsHelp ? 'yes' : 'no'}
+                onChange={(value) => {
+                  setNeedsHelp(value === 'yes');
+                  if (value === 'no') setHelpType('');
+                }}
+              >
+                <Group mt="xs">
+                  <Radio value="yes" label="Yes" color="red" />
+                  <Radio value="no" label="No" color="teal" />
                 </Group>
               </Radio.Group>
               
               {needsHelp && (
+                <Box mt="md">
+                  <Text size="sm" fw={500} mb="xs">What type of help do you need?</Text>
                   <Select
-                placeholder="What type of help do you need?"
+                    placeholder="Select help type"
                     value={helpType}
-                onChange={(value) => setHelpType(value || '')}
+                    onChange={(value) => setHelpType(value as any)}
                     data={[
-                  { value: 'medical', label: 'Medical' },
-                  { value: 'physical', label: 'Physical Rescue' },
+                      { value: 'medical', label: 'Medical Help' },
+                      { value: 'physical', label: 'Physical Help' },
                       { value: 'police', label: 'Police' },
-                  { value: 'firefighter', label: 'Fire Department' },
+                      { value: 'firefighter', label: 'Firefighter' },
                       { value: 'other', label: 'Other' }
                     ]}
-                required={needsHelp}
-              />
-            )}
-          </Stack>
+                    required
+                  />
+                </Box>
+              )}
+            </Box>
 
-          {/* Road Status */}
-          <Stack gap="xs">
-            <Text size="sm" fw={500}>Road Status</Text>
-            <Select
-              placeholder="Select road condition"
+            <Box>
+              <Text size="sm" fw={500} mb="xs">Road Status</Text>
+              <Radio.Group
                 value={roadStatus}
-              onChange={(value) => setRoadStatus(value || '')}
-              data={[
-                { value: 'clear', label: 'Clear - Passable' },
-                { value: 'flooded', label: 'Flooded' },
-                { value: 'blocked', label: 'Blocked' },
-                { value: 'mudslide', label: 'Mudslide' },
-                { value: 'damaged', label: 'Damaged' }
-              ]}
-              required
-            />
+                onChange={(value) => setRoadStatus(value as any)}
+              >
+                <Stack gap="xs">
+                  <Radio value="clear" label="Clear" color="green" />
+                  <Radio value="flooded" label="Flooded" color="blue" />
+                  <Radio value="blocked" label="Blocked" color="yellow" />
+                  <Radio value="mudslide" label="Mudslide" color="red" />
                 </Stack>
+              </Radio.Group>
+            </Box>
 
-          {/* Additional Info */}
-          <Stack gap="xs">
-            <Text size="sm" fw={500}>Additional Information</Text>
             <Textarea
-              placeholder="Any additional details about your situation..."
+              label="Additional Information (Optional)"
+              placeholder="Any additional details about conditions in your area..."
               value={additionalInfo}
-              onChange={(e) => setAdditionalInfo(e.currentTarget.value)}
+              onChange={(event) => setAdditionalInfo(event.currentTarget.value)}
+              maxLength={500}
               minRows={3}
             />
-          </Stack>
 
-          {/* Photo Upload */}
-          <Stack gap="xs">
-            <Text size="sm" fw={500}>Photo (Optional)</Text>
             <FileInput
-              placeholder="Upload a photo"
-              leftSection={<IconPhoto size={16} />}
+              label="Upload Photo (Optional)"
+              placeholder="Take or choose a photo"
               accept="image/*"
-              value={imageFile}
+              capture="environment"
               onChange={(file) => {
                 setImageFile(file);
-                if (file) handleImageUpload(file);
+                if (file) {
+                  const url = URL.createObjectURL(file);
+                  setImageUrl(url);
+                } else {
+                  setImageUrl(null);
+                }
               }}
+              clearable
+              leftSection={<IconPhoto size={16} />}
             />
-            {imageUrl && (
-              <Group gap="xs">
-                <Image src={imageUrl} alt="Uploaded" width={100} height={100} radius="md" />
-                <Button
-                  size="xs"
-                  variant="subtle"
-                  color="red"
-                  leftSection={<IconX size={12} />}
-                  onClick={() => {
-                    setImageFile(null);
-                    setImageUrl(null);
-                  }}
-                >
-                  Remove
-                </Button>
-              </Group>
-            )}
-          </Stack>
 
-          {/* Submit Button */}
+            {imageUrl && (
+              <Box>
+                <Image
+                  src={imageUrl}
+                  alt="Preview"
+                  style={{
+                    maxHeight: '300px',
+                    objectFit: 'cover',
+                    borderRadius: '8px'
+                  }}
+                />
+              </Box>
+            )}
+
             <Button
               type="submit"
-            fullWidth
+              loading={submitting}
+              disabled={!selectedParish || !selectedCommunity}
+              color="electricBlue"
               size="md"
-            loading={isSubmitting}
-            leftSection={!isSubmitting && <IconUpload size={16} />}
+              fullWidth
             >
-            {isSubmitting ? 'Submitting...' : 'Submit Update'}
+              Submit Status Update
             </Button>
           </Stack>
         </form>
       </Card>
+
+      <Card shadow="sm" padding="md" radius="md" withBorder style={{ borderColor: '#11DDB0' }}>
+        <Stack gap="xs">
+          <Title order={4} c="teal.0">How to Use</Title>
+          <Text size="sm" c="dimmed">
+            • Select your parish and community from the dropdowns
+          </Text>
+          <Text size="sm" c="dimmed">
+            • Toggle power and WiFi status based on your current situation
+          </Text>
+          <Text size="sm" c="dimmed">
+            • Choose the road status that best describes conditions in your area
+          </Text>
+          <Text size="sm" c="dimmed">
+            • Add any additional details that might help others in your community
+          </Text>
+          <Text size="sm" c="dimmed">
+            • Your update will appear in the Community Feed for others to see
+          </Text>
+        </Stack>
+      </Card>
+    </Stack>
   );
 }

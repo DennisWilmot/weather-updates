@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Stack,
@@ -38,7 +38,6 @@ interface Submission {
   placeName?: string;
   streetName?: string;
   hasElectricity: boolean;
-  powerProvider?: string;
   hasWifi: boolean;
   flowService?: boolean;
   digicelService?: boolean;
@@ -127,16 +126,18 @@ export default function CommunityFeed() {
   };
 
   // Debounced search function
-  const debouncedSearchRef = useRef<NodeJS.Timeout>();
-
-  const debouncedSearch = useCallback((search: string) => {
-    if (debouncedSearchRef.current) {
-      clearTimeout(debouncedSearchRef.current);
-    }
-    debouncedSearchRef.current = setTimeout(() => {
-      searchCommunities(search);
-    }, 300); // 300ms delay
-  }, [filterParish]);
+  const debouncedSearch = useCallback(
+    (() => {
+      let timeoutId: NodeJS.Timeout;
+      return (search: string) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          searchCommunities(search);
+        }, 300); // 300ms delay
+      };
+    })(),
+    [filterParish]
+  );
 
   const handleCommunitySearch = (value: string) => {
     setCommunitySearch(value);
@@ -409,19 +410,6 @@ export default function CommunityFeed() {
                           </Text>
                         </Group>
                       )}
-
-                      {submission.digicelService !== undefined && (
-                        <Group gap="xs">
-                          <ThemeIcon size="sm" color={submission.digicelService ? 'green' : 'red'} variant="light">
-                            {submission.digicelService ? <IconCheck size={12} /> : <IconX size={12} />}
-                          </ThemeIcon>
-                          <Text size="xs" c={submission.digicelService ? 'green' : 'red'}>
-                            Digicel: {submission.digicelService ? 'Up' : 'Down'}
-                          </Text>
-                        </Group>
-                      )}
-                    </Group>
-                  </Box>
 
                       {submission.digicelService !== undefined && (
                         <Group gap="xs">
