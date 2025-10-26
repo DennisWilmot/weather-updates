@@ -33,12 +33,27 @@ function formatDirection(direction: number): string {
 
 export async function GET() {
   try {
-    const response = await fetch('https://www.nhc.noaa.gov/CurrentStorms.json', {
-      cache: 'no-store',
-      headers: {
-        'User-Agent': 'Tropical Storm Melissa Tracker (https://github.com/your-repo)',
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch('https://www.nhc.noaa.gov/CurrentStorms.json', {
+        cache: 'no-store',
+        headers: {
+          'User-Agent': 'Tropical Storm Melissa Tracker (https://github.com/your-repo)',
+        },
+        // Add timeout for fetch
+        signal: AbortSignal.timeout(10000), // 10 second timeout
+      });
+    } catch (fetchError: any) {
+      // Handle DNS errors, network errors, timeouts
+      console.error('Network error fetching NHC data:', fetchError);
+      return NextResponse.json({
+        status: 'error',
+        message: 'Unable to connect to National Hurricane Center. Please check your connection.',
+        error: fetchError.code || fetchError.message,
+        lastUpdated: new Date().toISOString(),
+        emergencyContacts: emergencyContacts.jamaica
+      }, { status: 503 }); // Service Unavailable
+    }
 
     if (!response.ok) {
       throw new Error(`NHC API responded with status: ${response.status}`);
