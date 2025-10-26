@@ -1,30 +1,46 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { communities } from '@/lib/db/schema';
+import { communities, parishes } from '@/lib/db/schema';
 import { eq, ilike, and } from 'drizzle-orm';
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const parish = searchParams.get('parish');
+    const parishName = searchParams.get('parish');
     const search = searchParams.get('search');
     
-    if (!parish) {
+    if (!parishName) {
       return NextResponse.json(
         { error: 'Parish parameter is required' },
         { status: 400 }
       );
     }
     
+    // First, find the parish ID by parish name
+    const parish = await db
+      .select({ id: parishes.id })
+      .from(parishes)
+      .where(eq(parishes.name, parishName))
+      .limit(1);
+    
+    if (parish.length === 0) {
+      return NextResponse.json(
+        { error: `Parish not found: ${parishName}` },
+        { status: 404 }
+      );
+    }
+    
+    const parishId = parish[0].id;
+    
     let whereCondition;
     
     if (search) {
       whereCondition = and(
-        eq(communities.parish, parish),
+        eq(communities.parishId, parishId),
         ilike(communities.name, `%${search}%`)
       );
     } else {
-      whereCondition = eq(communities.parish, parish);
+      whereCondition = eq(communities.parishId, parishId);
     }
     
     const results = await db
@@ -48,14 +64,30 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, parish } = body;
+    const { name, parishName } = body;
     
-    if (!name || !parish) {
+    if (!name || !parishName) {
       return NextResponse.json(
         { error: 'Name and parish are required' },
         { status: 400 }
       );
     }
+    
+    // First, find the parish ID by parish name
+    const parish = await db
+      .select({ id: parishes.id })
+      .from(parishes)
+      .where(eq(parishes.name, parishName))
+      .limit(1);
+    
+    if (parish.length === 0) {
+      return NextResponse.json(
+        { error: `Parish not found: ${parishName}` },
+        { status: 404 }
+      );
+    }
+    
+    const parishId = parish[0].id;
     
     // Check if community already exists
     const existing = await db
@@ -64,7 +96,7 @@ export async function POST(request: Request) {
       .where(
         and(
           eq(communities.name, name),
-          eq(communities.parish, parish)
+          eq(communities.parishId, parishId)
         )
       )
       .limit(1);
@@ -76,7 +108,7 @@ export async function POST(request: Request) {
     // Create new community
     const result = await db.insert(communities).values({
       name,
-      parish
+      parishId
     }).returning();
     
     return NextResponse.json(result[0], { status: 201 });

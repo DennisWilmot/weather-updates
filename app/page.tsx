@@ -27,7 +27,7 @@ import { IconAlertTriangle, IconRefresh } from '@tabler/icons-react';
 import StormUpdates from '../components/StormUpdates';
 import EmergencyContacts from '../components/EmergencyContacts';
 import CommunityFeed from '../components/CommunityFeed';
-import SubmitUpdate from '../components/SubmitUpdate';
+import SubmitUpdateEnhanced from '../components/SubmitUpdateEnhanced';
 import NewsFeed from '../components/NewsFeed';
 import Image from 'next/image';
 
@@ -472,16 +472,16 @@ export default function HomePage() {
                 onClick={() => setActiveTab('feed')}
                 leftSection="📋"
               >
-                Community Feed
+                Feed
               </Button>
               <Button
                 variant={activeTab === 'submit' ? 'filled' : 'outline'}
                 color="electricBlue"
                 size="sm"
                 onClick={() => setActiveTab('submit')}
-                leftSection="📝"
+                leftSection="📢"
               >
-                Submit Update
+                Report
               </Button>
               <Button
                 variant={activeTab === 'storm' ? 'filled' : 'outline'}
@@ -490,7 +490,7 @@ export default function HomePage() {
                 onClick={() => setActiveTab('storm')}
                 leftSection="🌪️"
               >
-                Storm Updates
+                Storm
               </Button>
               <Button
                 variant={activeTab === 'contacts' ? 'filled' : 'outline'}
@@ -499,7 +499,7 @@ export default function HomePage() {
                 onClick={() => setActiveTab('contacts')}
                 leftSection="📞"
               >
-                Emergency Contacts
+                Contacts
               </Button>
             </Group>
           </Flex>
@@ -549,9 +549,9 @@ export default function HomePage() {
               setActiveTab('submit');
               close();
             }}
-            leftSection="📝"
+            leftSection="📢"
           >
-            Submit Update
+            Report Update
           </Button>
           <Button
             variant={activeTab === 'storm' ? 'filled' : 'subtle'}
@@ -593,14 +593,14 @@ export default function HomePage() {
       </Drawer>
 
       {/* Main Content - Mobile */}
-      <Container size="md" py="xl" style={{ paddingBottom: '70px' }} hiddenFrom="sm">
+      <Container size="md" py="xl" style={{ paddingBottom: '120px' }} hiddenFrom="sm">
         {activeTab === 'feed' && <CommunityFeed />}
-        {activeTab === 'submit' && <SubmitUpdate />}
+        {activeTab === 'submit' && <SubmitUpdateEnhanced />}
         {activeTab === 'storm' && (
-          <StormUpdates 
-            data={data} 
-            loading={loading} 
-            error={error} 
+          <StormUpdates
+            data={data}
+            loading={loading}
+            error={error}
           />
         )}
         {activeTab === 'contacts' && (
@@ -618,12 +618,12 @@ export default function HomePage() {
       {/* Main Content - Desktop */}
       <Container size="md" py="xl" visibleFrom="sm">
         {activeTab === 'feed' && <CommunityFeed />}
-        {activeTab === 'submit' && <SubmitUpdate />}
+        {activeTab === 'submit' && <SubmitUpdateEnhanced />}
         {activeTab === 'storm' && (
-          <StormUpdates 
-            data={data} 
-            loading={loading} 
-            error={error} 
+          <StormUpdates
+            data={data}
+            loading={loading}
+            error={error}
           />
         )}
         {activeTab === 'contacts' && (
@@ -745,17 +745,17 @@ export default function HomePage() {
               boxShadow: activeTab === 'feed' ? '0 4px 12px rgba(17, 221, 176, 0.2)' : 'none'
             }}
           >
-            <Text size="xl" style={{ 
+            <Text size="xl" style={{
               color: activeTab === 'feed' ? '#11DDB0' : '#8B8B8B',
               transition: 'color 0.3s ease'
             }}>📋</Text>
-            <Text size="xs" style={{ 
+            <Text size="xs" style={{
               color: activeTab === 'feed' ? '#11DDB0' : '#8B8B8B',
               transition: 'color 0.3s ease',
               marginTop: '2px'
             }}>Feed</Text>
           </Button>
-          
+
           <Button
             variant="subtle"
             color="gray"
@@ -775,17 +775,17 @@ export default function HomePage() {
               boxShadow: activeTab === 'submit' ? '0 4px 12px rgba(20, 120, 255, 0.2)' : 'none'
             }}
           >
-            <Text size="xl" style={{ 
+            <Text size="xl" style={{
               color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
               transition: 'color 0.3s ease'
-            }}>📝</Text>
-            <Text size="xs" style={{ 
+            }}>📢</Text>
+            <Text size="xs" style={{
               color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
               transition: 'color 0.3s ease',
               marginTop: '2px'
-            }}>Submit</Text>
+            }}>Report</Text>
           </Button>
-          
+
           <Button
             variant="subtle"
             color="gray"
@@ -805,17 +805,17 @@ export default function HomePage() {
               boxShadow: activeTab === 'storm' ? '0 4px 12px rgba(255, 230, 109, 0.2)' : 'none'
             }}
           >
-            <Text size="xl" style={{ 
+            <Text size="xl" style={{
               color: activeTab === 'storm' ? '#FFE66D' : '#8B8B8B',
               transition: 'color 0.3s ease'
             }}>🌪️</Text>
-            <Text size="xs" style={{ 
+            <Text size="xs" style={{
               color: activeTab === 'storm' ? '#FFE66D' : '#8B8B8B',
               transition: 'color 0.3s ease',
               marginTop: '2px'
             }}>Storm</Text>
           </Button>
-          
+
           <Button
             variant="subtle"
             color="gray"
@@ -835,11 +835,11 @@ export default function HomePage() {
               boxShadow: activeTab === 'contacts' ? '0 4px 12px rgba(255, 104, 109, 0.2)' : 'none'
             }}
           >
-            <Text size="xl" style={{ 
+            <Text size="xl" style={{
               color: activeTab === 'contacts' ? '#FF686D' : '#8B8B8B',
               transition: 'color 0.3s ease'
             }}>📞</Text>
-            <Text size="xs" style={{ 
+            <Text size="xs" style={{
               color: activeTab === 'contacts' ? '#FF686D' : '#8B8B8B',
               transition: 'color 0.3s ease',
               marginTop: '2px'

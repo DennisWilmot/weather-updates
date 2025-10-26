@@ -17,22 +17,111 @@ import {
   TextInput,
   useCombobox,
   FileInput,
-  Image
+  Image,
+  Slider,
+  Badge,
+  Center
 } from '@mantine/core';
 import { IconPhoto } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import jamaicaLocations from '../data/jamaica-locations.json';
+import HierarchicalLocationPicker from './HierarchicalLocationPicker';
+
+// Service Status Slider Component
+function ServiceStatusSlider({ 
+  label, 
+  emoji, 
+  color, 
+  value, 
+  onChange 
+}: { 
+  label: string; 
+  emoji: string; 
+  color: string; 
+  value: number; 
+  onChange: (value: number) => void; 
+}) {
+  const statusLabels = ['Out', 'Partial', 'Working'];
+  const statusEmojis = ['❌', '⚠️', '✅'];
+  const statusColors = ['red', 'yellow', 'green'];
+  
+  return (
+    <Card withBorder padding="md" radius="md" style={{ backgroundColor: '#f8f9fa' }}>
+      <Stack gap="sm">
+        <Group justify="space-between" align="center">
+          <Group gap="xs">
+            <Text size="lg">{emoji}</Text>
+            <Text size="sm" fw={600} c="dark">
+              {label}
+            </Text>
+          </Group>
+          <Badge 
+            color={statusColors[value]} 
+            variant="filled"
+            size="md"
+            radius="md"
+          >
+            {statusEmojis[value]} {statusLabels[value]}
+          </Badge>
+        </Group>
+        
+        <Slider
+          value={value}
+          onChange={onChange}
+          min={0}
+          max={2}
+          step={1}
+          marks={[
+            { value: 0, label: <Text size="xs" c="red">Out</Text> },
+            { value: 1, label: <Text size="xs" c="yellow">Partial</Text> },
+            { value: 2, label: <Text size="xs" c="green">Working</Text> }
+          ]}
+          color={statusColors[value]}
+          size="lg"
+          styles={{
+            track: {
+              backgroundColor: '#e9ecef',
+              height: 8,
+            },
+            thumb: {
+              backgroundColor: statusColors[value],
+              border: `3px solid white`,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              width: 24,
+              height: 24,
+            },
+            mark: {
+              backgroundColor: statusColors[value],
+              border: `2px solid white`,
+              width: 16,
+              height: 16,
+            },
+            markLabel: {
+              marginTop: 8,
+            }
+          }}
+        />
+      </Stack>
+    </Card>
+  );
+}
 
 export default function SubmitUpdate() {
   const queryClient = useQueryClient();
   const [selectedParish, setSelectedParish] = useState<string>('');
   const [selectedCommunity, setSelectedCommunity] = useState<string>('');
+  const [selectedPlace, setSelectedPlace] = useState<string>('');
+  const [selectedStreet, setSelectedStreet] = useState<string>('');
   const [communitySearch, setCommunitySearch] = useState<string>('');
   const [communities, setCommunities] = useState<any[]>([]);
   const [hasElectricity, setHasElectricity] = useState<boolean>(true);
   const [hasWifi, setHasWifi] = useState<boolean>(true);
+  const [jpsElectricity, setJpsElectricity] = useState<number>(2); // 0=out, 1=partial, 2=working
+  const [flowService, setFlowService] = useState<number>(2); // 0=out, 1=partial, 2=working
+  const [digicelService, setDigicelService] = useState<number>(2); // 0=out, 1=partial, 2=working
+  const [waterService, setWaterService] = useState<number>(2); // 0=out, 1=partial, 2=working
   const [needsHelp, setNeedsHelp] = useState<boolean>(false);
   const [helpType, setHelpType] = useState<'medical' | 'physical' | 'police' | 'firefighter' | 'other' | ''>('');
   const [roadStatus, setRoadStatus] = useState<'clear' | 'flooded' | 'blocked' | 'mudslide'>('clear');
@@ -77,6 +166,22 @@ export default function SubmitUpdate() {
     setSelectedCommunity(value);
     setCommunitySearch(value);
     combobox.closeDropdown();
+  };
+
+  // Handle location change from HierarchicalLocationPicker
+  const handleLocationChange = (location: {
+    parishId: string | null;
+    communityId: string | null;
+    locationId: string | null;
+    placeName: string | null;
+    streetName: string | null;
+  }) => {
+    // For now, we'll use the old system but with the new data
+    // This will be updated when the database schema is migrated
+    setSelectedParish(location.parishId || '');
+    setSelectedCommunity(location.communityId || '');
+    setSelectedPlace(location.placeName || '');
+    setSelectedStreet(location.streetName || '');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -134,8 +239,12 @@ export default function SubmitUpdate() {
         body: JSON.stringify({
           parish: selectedParish,
           community: selectedCommunity,
-          hasElectricity,
-          hasWifi,
+          hasElectricity: jpsElectricity > 0, // Convert slider to boolean for backward compatibility
+          hasWifi: flowService > 0 || digicelService > 0, // Convert sliders to boolean for backward compatibility
+          jpsElectricity: jpsElectricity,
+          flowService: flowService,
+          digicelService: digicelService,
+          waterService: waterService,
           needsHelp,
           helpType: needsHelp ? helpType : null,
           roadStatus,
@@ -182,17 +291,21 @@ export default function SubmitUpdate() {
         });
       }, 1000);
 
-      // Reset form
-        setSelectedParish('');
-        setSelectedCommunity('');
-        setHasElectricity(true);
-        setHasWifi(true);
-        setNeedsHelp(false);
-        setHelpType('');
-        setRoadStatus('clear');
-        setAdditionalInfo('');
-        setImageFile(null);
-        setImageUrl(null);
+              // Reset form
+                setSelectedParish('');
+                setSelectedCommunity('');
+                setSelectedPlace('');
+                setSelectedStreet('');
+                setJpsElectricity(2);
+                setFlowService(2);
+                setDigicelService(2);
+                setWaterService(2);
+                setNeedsHelp(false);
+                setHelpType('');
+                setRoadStatus('clear');
+                setAdditionalInfo('');
+                setImageFile(null);
+                setImageUrl(null);
       
     } catch (err) {
       console.error('Error submitting:', err);
@@ -214,89 +327,58 @@ export default function SubmitUpdate() {
         <Title order={2} c="electricBlue.0" mb="md">Submit Status Update</Title>
         
         <form onSubmit={handleSubmit}>
-          <Stack gap="md">
-            <Group grow>
-              <Select
-                label="Parish"
-                placeholder="Select your parish"
-                value={selectedParish}
-                onChange={(value) => {
-                  setSelectedParish(value || '');
-                  setSelectedCommunity('');
-                  setCommunitySearch('');
-                }}
-                data={Object.keys(jamaicaLocations)}
-                required
-              />
-              <Box>
-                <Text size="sm" fw={500} mb="xs">Community</Text>
-                <Combobox
-                  store={combobox}
-                  onOptionSubmit={handleCommunitySelect}
-                  withinPortal={false}
-                >
-                  <Combobox.Target>
-                    <TextInput
-                      placeholder="Type your community name"
-                      value={communitySearch}
-                      onChange={(event) => handleCommunitySearch(event.currentTarget.value)}
-                      onClick={() => combobox.openDropdown()}
-                      onFocus={() => combobox.openDropdown()}
-                      onBlur={() => combobox.closeDropdown()}
-                      disabled={!selectedParish}
-                      required
+                  <Stack gap="md">
+                    {/* Hierarchical Location Picker with Geolocation */}
+                    <HierarchicalLocationPicker
+                      onLocationChange={handleLocationChange}
+                      initialParish={selectedParish}
+                      initialCommunity={selectedCommunity}
+                      initialPlace={selectedPlace}
                     />
-                  </Combobox.Target>
 
-                  <Combobox.Dropdown>
-                    <Combobox.Options>
-                      {loadingCommunities ? (
-                        <Combobox.Empty>Searching...</Combobox.Empty>
-                      ) : communities.length > 0 ? (
-                        communities.map((community) => (
-                          <Combobox.Option value={community.name} key={community.id}>
-                            {community.name}
-                          </Combobox.Option>
-                        ))
-                      ) : communitySearch.length >= 2 ? (
-                        <Combobox.Empty>
-                          No existing communities found. "{communitySearch}" will be created as a new community.
-                        </Combobox.Empty>
-                      ) : (
-                        <Combobox.Empty>Start typing to search communities</Combobox.Empty>
-                      )}
-                    </Combobox.Options>
-                  </Combobox.Dropdown>
-                </Combobox>
-              </Box>
-            </Group>
-
-            <Group grow>
-              <Box>
-                <Text size="sm" fw={500} mb="xs">Do you have electricity/light?</Text>
-                <Radio.Group
-                  value={hasElectricity ? 'yes' : 'no'}
-                  onChange={(value) => setHasElectricity(value === 'yes')}
-                >
-                  <Group mt="xs">
-                    <Radio value="yes" label="Yes" color="teal" />
-                    <Radio value="no" label="No" color="red" />
-                  </Group>
-                </Radio.Group>
-              </Box>
-              <Box>
-                <Text size="sm" fw={500} mb="xs">Do you have WiFi/service/data?</Text>
-                <Radio.Group
-                  value={hasWifi ? 'yes' : 'no'}
-                  onChange={(value) => setHasWifi(value === 'yes')}
-                >
-                  <Group mt="xs">
-                    <Radio value="yes" label="Yes" color="teal" />
-                    <Radio value="no" label="No" color="red" />
-                  </Group>
-                </Radio.Group>
-              </Box>
-            </Group>
+            {/* Service Status Section */}
+            <Card withBorder padding="lg" radius="md" style={{ backgroundColor: '#f8f9fa' }}>
+              <Stack gap="md">
+                <Group gap="xs" mb="sm">
+                  <Text size="lg">🔧</Text>
+                  <Text size="lg" fw={700} c="dark">Service Status</Text>
+                </Group>
+                
+                <Stack gap="md">
+                  <ServiceStatusSlider
+                    label="JPS Electricity"
+                    emoji="⚡"
+                    color="yellow"
+                    value={jpsElectricity}
+                    onChange={setJpsElectricity}
+                  />
+                  
+                  <ServiceStatusSlider
+                    label="Flow Service"
+                    emoji="📡"
+                    color="blue"
+                    value={flowService}
+                    onChange={setFlowService}
+                  />
+                  
+                  <ServiceStatusSlider
+                    label="Digicel Service"
+                    emoji="📱"
+                    color="red"
+                    value={digicelService}
+                    onChange={setDigicelService}
+                  />
+                  
+                  <ServiceStatusSlider
+                    label="Water Service"
+                    emoji="💧"
+                    color="cyan"
+                    value={waterService}
+                    onChange={setWaterService}
+                  />
+                </Stack>
+              </Stack>
+            </Card>
 
             <Box>
               <Text size="sm" fw={500} mb="xs">Do you need help?</Text>

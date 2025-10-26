@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run db:push:*)",
+      "Bash(npx drizzle-kit push:*)",
+      "Bash(if grep -q \"DATABASE_URL\" .env.local)",
+      "Bash(then echo \"DATABASE_URL found in .env.local\")",
+      "Bash(else echo \"DATABASE_URL NOT found in .env.local\")",
+      "Bash(fi)",
+      "Bash(set -a)",
+      "Bash(. .env.local)",
+      "Bash(set +a)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

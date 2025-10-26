@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Stack,
@@ -35,14 +35,40 @@ interface Submission {
   id: string;
   parish: string;
   community: string;
+  placeName?: string;
+  streetName?: string;
   hasElectricity: boolean;
   hasWifi: boolean;
+  flowService?: boolean;
+  digicelService?: boolean;
+  flooding?: boolean;
+  downedPowerLines?: boolean;
+  fallenTrees?: boolean;
+  structuralDamage?: boolean;
   needsHelp: boolean;
   helpType?: 'medical' | 'physical' | 'police' | 'firefighter' | 'other';
-  roadStatus: 'clear' | 'flooded' | 'blocked' | 'mudslide';
+  roadStatus: 'clear' | 'flooded' | 'blocked' | 'mudslide' | 'damaged';
   additionalInfo?: string;
   imageUrl?: string;
   createdAt: string;
+}
+
+interface ParishStats {
+  parishId: string;
+  parishName: string;
+  totalSubmissions: number;
+  recentSubmissions: number;
+  electricityOutages: number;
+  flowOutages: number;
+  digicelOutages: number;
+  activeHazards: {
+    flooding: number;
+    downedPowerLines: number;
+    fallenTrees: number;
+    structuralDamage: number;
+  };
+  needsHelp: number;
+  severity: 'low' | 'medium' | 'high' | 'critical';
 }
 
 export default function CommunityFeed() {
@@ -53,7 +79,7 @@ export default function CommunityFeed() {
   const [communities, setCommunities] = useState<any[]>([]);
   const [loadingCommunities, setLoadingCommunities] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  
+
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
   });
@@ -67,19 +93,20 @@ export default function CommunityFeed() {
       if (filterCommunity) params.append('community', filterCommunity);
       params.append('page', currentPage.toString());
       params.append('limit', '10');
-      
+
       const response = await fetch(`/api/submissions?${params.toString()}`);
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      
+
       return response.json();
     },
     refetchInterval: 30000, // Refetch every 30 seconds
   });
 
+
   const searchCommunities = async (search: string) => {
-    if (!filterParish || search.length < 2) {
+    if (!filterParish || search.length < 1) {
       setCommunities([]);
       return;
     }
@@ -98,10 +125,24 @@ export default function CommunityFeed() {
     }
   };
 
+  // Debounced search function
+  const debouncedSearch = useCallback(
+    (() => {
+      let timeoutId: NodeJS.Timeout;
+      return (search: string) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          searchCommunities(search);
+        }, 300); // 300ms delay
+      };
+    })(),
+    [filterParish]
+  );
+
   const handleCommunitySearch = (value: string) => {
     setCommunitySearch(value);
     setFilterCommunity(value);
-    searchCommunities(value);
+    debouncedSearch(value);
     combobox.openDropdown();
   };
 
@@ -155,8 +196,10 @@ export default function CommunityFeed() {
 
   const filterCommunities = filterParish ? jamaicaLocations[filterParish as keyof typeof jamaicaLocations] || [] : [];
 
+
   return (
     <Stack gap="lg">
+
       {/* Map Card */}
       <Card shadow="sm" padding="xs" radius="md" withBorder style={{ paddingTop: '12px', paddingBottom: '12px' }}>
         <Stack gap={4}>
@@ -225,7 +268,7 @@ export default function CommunityFeed() {
                           {community.name}
                         </Combobox.Option>
                       ))
-                    ) : communitySearch.length >= 2 ? (
+                    ) : communitySearch.length >= 1 ? (
                       <Combobox.Empty>
                         No communities found matching "{communitySearch}"
                       </Combobox.Empty>
@@ -299,18 +342,36 @@ export default function CommunityFeed() {
             {submissionsData.data.map((submission: Submission) => (
               <Card key={submission.id} shadow="xs" padding="md" radius="md" withBorder>
                 <Stack gap="sm">
+                  {/* Location Header */}
                   <Group justify="space-between" align="flex-start">
-                    <Box>
-                      <Text fw={600} size="sm" style={{ color: '#1e50ff' }}>
-                        {submission.parish}, {submission.community}
-                      </Text>
+                    <Box style={{ flex: 1 }}>
+                      {/* Hierarchical Location */}
+                      <Group gap="xs" wrap="wrap">
+                        <Badge color="teal" variant="light" size="sm">
+                          {submission.parish}
+                        </Badge>
+                        <Text size="xs" c="dimmed">→</Text>
+                        <Badge color="cyan" variant="light" size="sm">
+                          {submission.community}
+                        </Badge>
+                        {(submission.placeName || submission.streetName) && (
+                          <>
+                            <Text size="xs" c="dimmed">→</Text>
+                            <Badge color="blue" variant="filled" size="sm">
+                              📍 {submission.placeName || submission.streetName}
+                            </Badge>
+                          </>
+                        )}
+                      </Group>
+
+                      {/* Timestamp */}
                       <Group gap="xs" align="center" mt="xs">
                         <Text size="xs" c="dimmed">
                           {formatTimeAgo(submission.createdAt)}
                         </Text>
                         <Text size="xs" c="blue" fw={500}>
-                          • As of {new Date(submission.createdAt).toLocaleString('en-US', {
-                            month: 'short', 
+                          • {new Date(submission.createdAt).toLocaleString('en-US', {
+                            month: 'short',
                             day: 'numeric',
                             hour: '2-digit',
                             minute: '2-digit',
@@ -324,37 +385,66 @@ export default function CommunityFeed() {
                     </Badge>
                   </Group>
 
-                  <Group gap="md">
-                    <Group gap="xs">
-                      <ThemeIcon size="sm" color={submission.hasElectricity ? 'green' : 'red'} variant="light">
-                        {submission.hasElectricity ? <IconCheck size={12} /> : <IconX size={12} />}
-                      </ThemeIcon>
-                      <Text size="xs" c={submission.hasElectricity ? 'green' : 'red'}>
-                        Electricity: {submission.hasElectricity ? 'Yes' : 'No'}
-                      </Text>
-                    </Group>
-                    <Group gap="xs">
-                      <ThemeIcon size="sm" color={submission.hasWifi ? 'green' : 'red'} variant="light">
-                        {submission.hasWifi ? <IconCheck size={12} /> : <IconX size={12} />}
-                      </ThemeIcon>
-                      <Text size="xs" c={submission.hasWifi ? 'green' : 'red'}>
-                        WiFi: {submission.hasWifi ? 'Yes' : 'No'}
-                      </Text>
-                    </Group>
-                    <Group gap="xs">
-                      <ThemeIcon size="sm" color={submission.needsHelp ? 'red' : 'green'} variant="light">
-                        {submission.needsHelp ? <IconAlertTriangle size={12} /> : <IconCheck size={12} />}
-                      </ThemeIcon>
-                      <Text size="xs" c={submission.needsHelp ? 'red' : 'green'}>
-                        Needs Help: {submission.needsHelp ? 'Yes' : 'No'}
-                        {submission.needsHelp && submission.helpType && (
-                          <Text size="xs" c="red" ml="xs">
-                            ({submission.helpType.charAt(0).toUpperCase() + submission.helpType.slice(1)})
+                  <Divider />
+
+                  {/* Service Status */}
+                  <Box>
+                    <Text size="xs" fw={600} c="dimmed" mb="xs">Services</Text>
+                    <Group gap="md" wrap="wrap">
+                      <Group gap="xs">
+                        <ThemeIcon size="sm" color={submission.hasElectricity ? 'green' : 'red'} variant="light">
+                          {submission.hasElectricity ? <IconCheck size={12} /> : <IconX size={12} />}
+                        </ThemeIcon>
+                        <Text size="xs" c={submission.hasElectricity ? 'green' : 'red'}>
+                          JPS: {submission.hasElectricity ? 'On' : 'Off'}
+                        </Text>
+                      </Group>
+
+                      {submission.flowService !== undefined && (
+                        <Group gap="xs">
+                          <ThemeIcon size="sm" color={submission.flowService ? 'green' : 'red'} variant="light">
+                            {submission.flowService ? <IconCheck size={12} /> : <IconX size={12} />}
+                          </ThemeIcon>
+                          <Text size="xs" c={submission.flowService ? 'green' : 'red'}>
+                            Flow: {submission.flowService ? 'Up' : 'Down'}
                           </Text>
-                        )}
-                      </Text>
+                        </Group>
+                      )}
+
+                      {submission.digicelService !== undefined && (
+                        <Group gap="xs">
+                          <ThemeIcon size="sm" color={submission.digicelService ? 'green' : 'red'} variant="light">
+                            {submission.digicelService ? <IconCheck size={12} /> : <IconX size={12} />}
+                          </ThemeIcon>
+                          <Text size="xs" c={submission.digicelService ? 'green' : 'red'}>
+                            Digicel: {submission.digicelService ? 'Up' : 'Down'}
+                          </Text>
+                        </Group>
+                      )}
                     </Group>
-                  </Group>
+                  </Box>
+
+                  {/* Hazards */}
+                  {(submission.flooding || submission.downedPowerLines || submission.fallenTrees || submission.structuralDamage) && (
+                    <Box>
+                      <Text size="xs" fw={600} c="red" mb="xs">⚠️ Active Hazards</Text>
+                      <Group gap="xs" wrap="wrap">
+                        {submission.flooding && <Badge color="blue" variant="light" size="sm">💧 Flooding</Badge>}
+                        {submission.downedPowerLines && <Badge color="yellow" variant="light" size="sm">⚡ Power Lines Down</Badge>}
+                        {submission.fallenTrees && <Badge color="green" variant="light" size="sm">🌳 Fallen Trees</Badge>}
+                        {submission.structuralDamage && <Badge color="red" variant="light" size="sm">🏚️ Structural Damage</Badge>}
+                      </Group>
+                    </Box>
+                  )}
+
+                  {/* Emergency Help */}
+                  {submission.needsHelp && (
+                    <Box>
+                      <Badge color="red" variant="filled" size="lg" fullWidth>
+                        🆘 NEEDS HELP: {submission.helpType?.toUpperCase() || 'GENERAL'}
+                      </Badge>
+                    </Box>
+                  )}
 
                   {submission.additionalInfo && (
                     <>
