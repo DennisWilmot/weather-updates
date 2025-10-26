@@ -338,26 +338,6 @@ export default function CommunityFeed() {
                         <Text size="xs" c="dimmed">
                           {formatTimeAgo(submission.createdAt)}
                         </Text>
-                        <Text size="xs" c="blue" fw={500}>
-                          • As of {(() => {
-                            try {
-                              // Parse as UTC and convert to local time
-                              const date = new Date(submission.createdAt + 'Z');
-                              if (isNaN(date.getTime())) {
-                                return 'Unknown date';
-                              }
-                              // Just parse and show the time
-                              return date.toLocaleString('en-US', {
-                                month: 'short', 
-                                day: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              });
-                            } catch (error) {
-                              return 'Unknown date';
-                            }
-                          })()}
-                        </Text>
                       </Group>
                     </Box>
                     <Badge color={getRoadStatusColor(submission.roadStatus)} variant="light">
