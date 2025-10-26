@@ -108,8 +108,8 @@ export async function GET() {
       const lastUpdate =
         parishSubmissions.length > 0
           ? parishSubmissions.reduce((latest, sub) =>
-              new Date(sub.createdAt) > new Date(latest) ? sub.createdAt : latest,
-              parishSubmissions[0].createdAt
+              new Date(sub.createdAt) > new Date(latest) ? sub.createdAt.toISOString() : latest,
+              parishSubmissions[0].createdAt.toISOString()
             )
           : new Date().toISOString();
 

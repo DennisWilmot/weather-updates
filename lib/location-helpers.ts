@@ -1,6 +1,6 @@
 import { db } from './db';
 import { parishes, communities, locations } from './db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 /**
  * Get parish ID from parish name
@@ -25,8 +25,10 @@ export async function getCommunityId(
   const [community] = await db
     .select({ id: communities.id })
     .from(communities)
-    .where(eq(communities.name, communityName))
-    .where(eq(communities.parishId, parishId))
+    .where(and(
+      eq(communities.name, communityName),
+      eq(communities.parishId, parishId)
+    ))
     .limit(1);
 
   return community?.id || null;
@@ -67,8 +69,10 @@ export async function getLocationId(
   const [location] = await db
     .select({ id: locations.id })
     .from(locations)
-    .where(eq(locations.name, locationName))
-    .where(eq(locations.communityId, communityId))
+    .where(and(
+      eq(locations.name, locationName),
+      eq(locations.communityId, communityId)
+    ))
     .limit(1);
 
   return location?.id || null;

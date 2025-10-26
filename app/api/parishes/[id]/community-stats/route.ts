@@ -135,8 +135,8 @@ export async function GET(
       const lastUpdate: string = communitySubmissions.reduce((latest: string, sub) => {
         const subDate = new Date(sub.createdAt);
         const latestDate = new Date(latest);
-        return subDate > latestDate ? sub.createdAt : latest;
-      }, communitySubmissions[0].createdAt);
+        return subDate > latestDate ? sub.createdAt.toISOString() : latest;
+      }, communitySubmissions[0].createdAt.toISOString());
 
       const stats: Omit<CommunityStats, 'severity'> = {
         communityId: community.id,
