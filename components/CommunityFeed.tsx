@@ -39,8 +39,8 @@ import JamaicaParishMap from './JamaicaParishMap';
 
 interface Submission {
   id: string;
-  parish: string;
-  community: string;
+  parishId: string;
+  communityId: string;
   placeName?: string;
   streetName?: string;
   hasElectricity: boolean;
@@ -92,6 +92,10 @@ export default function CommunityFeed() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adminKey, setAdminKey] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  // Parish and community name mapping
+  const [parishNames, setParishNames] = useState<Record<string, string>>({});
+  const [communityNames, setCommunityNames] = useState<Record<string, string>>({});
 
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
@@ -281,10 +285,56 @@ export default function CommunityFeed() {
     }
   };
 
+  // Function to fetch parish and community names
+  const fetchLocationNames = async (submissions: Submission[]) => {
+    const parishIds = [...new Set(submissions.map(s => s.parishId))];
+    const communityIds = [...new Set(submissions.map(s => s.communityId))];
+    
+    try {
+      // Fetch parish names
+      const parishPromises = parishIds.map(async (id) => {
+        const response = await fetch(`/api/parishes/${id}`);
+        if (response.ok) {
+          const data = await response.json();
+          return { id, name: data.name };
+        }
+        return { id, name: 'Unknown Parish' };
+      });
+      
+      // Fetch community names
+      const communityPromises = communityIds.map(async (id) => {
+        const response = await fetch(`/api/communities/${id}`);
+        if (response.ok) {
+          const data = await response.json();
+          return { id, name: data.name };
+        }
+        return { id, name: 'Unknown Community' };
+      });
+      
+      const parishResults = await Promise.all(parishPromises);
+      const communityResults = await Promise.all(communityPromises);
+      
+      const parishMap = parishResults.reduce((acc, { id, name }) => ({ ...acc, [id]: name }), {});
+      const communityMap = communityResults.reduce((acc, { id, name }) => ({ ...acc, [id]: name }), {});
+      
+      setParishNames(prev => ({ ...prev, ...parishMap }));
+      setCommunityNames(prev => ({ ...prev, ...communityMap }));
+    } catch (error) {
+      console.error('Error fetching location names:', error);
+    }
+  };
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
   }, [filterParish, filterCommunity]);
+
+  // Fetch location names when submissions data changes
+  useEffect(() => {
+    if (data?.data) {
+      fetchLocationNames(data.data);
+    }
+  }, [data?.data]);
 
   const filterCommunities = filterParish ? jamaicaLocations[filterParish as keyof typeof jamaicaLocations] || [] : [];
 
@@ -439,11 +489,11 @@ export default function CommunityFeed() {
                       {/* Hierarchical Location */}
                       <Group gap="xs" wrap="wrap">
                         <Badge color="teal" variant="light" size="sm">
-                          {submission.parish}
+                          {parishNames[submission.parishId] || 'Loading...'}
                         </Badge>
                         <Text size="xs" c="dimmed">→</Text>
                         <Badge color="cyan" variant="light" size="sm">
-                          {submission.community}
+                          {communityNames[submission.communityId] || 'Loading...'}
                         </Badge>
                         {(submission.placeName || submission.streetName) && (
                           <>
