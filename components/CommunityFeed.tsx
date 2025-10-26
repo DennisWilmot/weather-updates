@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Stack,
@@ -127,18 +127,16 @@ export default function CommunityFeed() {
   };
 
   // Debounced search function
-  const debouncedSearch = useCallback(
-    (() => {
-      let timeoutId: NodeJS.Timeout;
-      return (search: string) => {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          searchCommunities(search);
-        }, 300); // 300ms delay
-      };
-    })(),
-    [filterParish]
-  );
+  const debouncedSearchRef = useRef<NodeJS.Timeout>();
+
+  const debouncedSearch = useCallback((search: string) => {
+    if (debouncedSearchRef.current) {
+      clearTimeout(debouncedSearchRef.current);
+    }
+    debouncedSearchRef.current = setTimeout(() => {
+      searchCommunities(search);
+    }, 300); // 300ms delay
+  }, [filterParish]);
 
   const handleCommunitySearch = (value: string) => {
     setCommunitySearch(value);
