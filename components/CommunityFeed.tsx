@@ -224,7 +224,6 @@ export default function CommunityFeed() {
 
   const filterCommunities = filterParish ? jamaicaLocations[filterParish as keyof typeof jamaicaLocations] || [] : [];
 
-
   return (
     <Stack gap="lg">
 
