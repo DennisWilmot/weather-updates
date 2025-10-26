@@ -10,19 +10,19 @@ interface JamaicaParishMapProps {
 
 const parishMap: Record<string, string> = {
   'JM01': 'Kingston',
-  'JM02': 'Saint Andrew',
-  'JM03': 'Saint Thomas',
+  'JM02': 'St. Andrew',
+  'JM03': 'St. Thomas',
   'JM04': 'Portland',
-  'JM05': 'Saint Mary',
-  'JM06': 'Saint Ann',
+  'JM05': 'St. Mary',
+  'JM06': 'St. Ann',
   'JM07': 'Trelawny',
-  'JM08': 'Saint James',
+  'JM08': 'St. James',
   'JM09': 'Hanover',
   'JM10': 'Westmoreland',
-  'JM11': 'Saint Elizabeth',
+  'JM11': 'St. Elizabeth',
   'JM12': 'Manchester',
   'JM13': 'Clarendon',
-  'JM14': 'Saint Catherine'
+  'JM14': 'St. Catherine'
 };
 
 export default function JamaicaParishMap({ selectedParish, onParishClick }: JamaicaParishMapProps) {

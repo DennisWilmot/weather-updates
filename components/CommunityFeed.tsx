@@ -28,7 +28,6 @@ import {
   IconRefresh,
   IconAlertTriangle
 } from '@tabler/icons-react';
-import jamaicaLocations from '../data/jamaica-locations.json';
 import JamaicaParishMap from './JamaicaParishMap';
 
 interface Submission {
@@ -82,6 +81,19 @@ export default function CommunityFeed() {
 
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
+  });
+
+  // React Query for fetching parishes
+  const { data: parishesData } = useQuery({
+    queryKey: ['parishes'],
+    queryFn: async () => {
+      const response = await fetch('/api/parishes');
+      if (!response.ok) {
+        throw new Error('Failed to fetch parishes');
+      }
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // React Query for fetching submissions
@@ -222,8 +234,6 @@ export default function CommunityFeed() {
     setCurrentPage(1);
   }, [filterParish, filterCommunity]);
 
-  const filterCommunities = filterParish ? jamaicaLocations[filterParish as keyof typeof jamaicaLocations] || [] : [];
-
 
   return (
     <Stack gap="lg">
@@ -263,7 +273,10 @@ export default function CommunityFeed() {
               }}
               data={[
                 { value: '', label: 'All Parishes' },
-                ...Object.keys(jamaicaLocations).map(parish => ({ value: parish, label: parish }))
+                ...(parishesData?.parishes || []).map((parish: any) => ({ 
+                  value: parish.name, 
+                  label: parish.name 
+                }))
               ]}
               clearable
             />
