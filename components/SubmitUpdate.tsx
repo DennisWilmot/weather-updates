@@ -32,7 +32,9 @@ export default function SubmitUpdate() {
   const [communitySearch, setCommunitySearch] = useState<string>('');
   const [communities, setCommunities] = useState<any[]>([]);
   const [hasElectricity, setHasElectricity] = useState<boolean>(true);
+  const [powerProvider, setPowerProvider] = useState<string>('');
   const [hasWifi, setHasWifi] = useState<boolean>(true);
+  const [wifiProvider, setWifiProvider] = useState<string>('');
   const [needsHelp, setNeedsHelp] = useState<boolean>(false);
   const [helpType, setHelpType] = useState<'medical' | 'physical' | 'police' | 'firefighter' | 'other' | ''>('');
   const [roadStatus, setRoadStatus] = useState<'clear' | 'flooded' | 'blocked' | 'mudslide'>('clear');
@@ -79,13 +81,33 @@ export default function SubmitUpdate() {
     combobox.closeDropdown();
   };
 
+  const handleCommunityBlur = () => {
+    // Don't close immediately - let the search complete first
+    setTimeout(() => {
+      combobox.closeDropdown();
+    }, 150);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedParish || !selectedCommunity) {
+    // Trim and validate community name
+    const trimmedCommunity = selectedCommunity.trim();
+    
+    if (!selectedParish || !trimmedCommunity) {
       notifications.show({
         title: 'Validation Error',
         message: 'Please select both parish and community',
+        color: 'red'
+      });
+      return;
+    }
+
+    // Additional validation for community name
+    if (trimmedCommunity.length < 2) {
+      notifications.show({
+        title: 'Validation Error',
+        message: 'Community name must be at least 2 characters long',
         color: 'red'
       });
       return;
@@ -133,9 +155,11 @@ export default function SubmitUpdate() {
         },
         body: JSON.stringify({
           parish: selectedParish,
-          community: selectedCommunity,
+          community: trimmedCommunity,
           hasElectricity,
+          powerProvider: hasElectricity ? powerProvider : null,
           hasWifi,
+          wifiProvider: hasWifi ? wifiProvider : null,
           needsHelp,
           helpType: needsHelp ? helpType : null,
           roadStatus,
@@ -145,14 +169,15 @@ export default function SubmitUpdate() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
       
       notifications.show({
         title: '✅ Successfully Submitted!',
-        message: `Your status update for ${selectedCommunity}, ${selectedParish} has been submitted and is now visible in the community feed.`,
+        message: `Your status update for ${trimmedCommunity}, ${selectedParish} has been submitted and is now visible in the community feed.`,
         color: 'green',
         autoClose: 5000,
         withCloseButton: true,
@@ -165,10 +190,21 @@ export default function SubmitUpdate() {
         exact: false 
       });
       
-      // Also try to refetch immediately
+      // Also try to refetch immediately - be more specific about which queries to refetch
       await queryClient.refetchQueries({ 
         queryKey: ['submissions'],
-        exact: false 
+        exact: false,
+        type: 'active' // Only refetch active queries
+      });
+
+      // Add a small delay to ensure database transaction is complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Force refetch one more time to be absolutely sure
+      await queryClient.refetchQueries({ 
+        queryKey: ['submissions'],
+        exact: false,
+        type: 'active'
       });
 
       // Show additional feedback that the feed has been updated
@@ -186,7 +222,9 @@ export default function SubmitUpdate() {
         setSelectedParish('');
         setSelectedCommunity('');
         setHasElectricity(true);
+        setPowerProvider('');
         setHasWifi(true);
+        setWifiProvider('');
         setNeedsHelp(false);
         setHelpType('');
         setRoadStatus('clear');
@@ -242,7 +280,7 @@ export default function SubmitUpdate() {
                       onChange={(event) => handleCommunitySearch(event.currentTarget.value)}
                       onClick={() => combobox.openDropdown()}
                       onFocus={() => combobox.openDropdown()}
-                      onBlur={() => combobox.closeDropdown()}
+                      onBlur={handleCommunityBlur}
                       disabled={!selectedParish}
                       required
                     />
@@ -276,25 +314,58 @@ export default function SubmitUpdate() {
                 <Text size="sm" fw={500} mb="xs">Do you have electricity/light?</Text>
                 <Radio.Group
                   value={hasElectricity ? 'yes' : 'no'}
-                  onChange={(value) => setHasElectricity(value === 'yes')}
+                  onChange={(value) => {
+                    setHasElectricity(value === 'yes');
+                    if (value === 'no') setPowerProvider('');
+                  }}
                 >
                   <Group mt="xs">
                     <Radio value="yes" label="Yes" color="teal" />
                     <Radio value="no" label="No" color="red" />
                   </Group>
                 </Radio.Group>
+                {hasElectricity && (
+                  <Select
+                    mt="md"
+                    placeholder="Select provider (optional)"
+                    value={powerProvider}
+                    onChange={(value) => setPowerProvider(value || '')}
+                    data={[
+                      { value: 'JPS', label: 'JPS' },
+                      { value: 'Other', label: 'Other' }
+                    ]}
+                    clearable
+                  />
+                )}
               </Box>
               <Box>
                 <Text size="sm" fw={500} mb="xs">Do you have WiFi/service/data?</Text>
                 <Radio.Group
                   value={hasWifi ? 'yes' : 'no'}
-                  onChange={(value) => setHasWifi(value === 'yes')}
+                  onChange={(value) => {
+                    setHasWifi(value === 'yes');
+                    if (value === 'no') setWifiProvider('');
+                  }}
                 >
                   <Group mt="xs">
                     <Radio value="yes" label="Yes" color="teal" />
                     <Radio value="no" label="No" color="red" />
                   </Group>
                 </Radio.Group>
+                {hasWifi && (
+                  <Select
+                    mt="md"
+                    placeholder="Select provider (optional)"
+                    value={wifiProvider}
+                    onChange={(value) => setWifiProvider(value || '')}
+                    data={[
+                      { value: 'Flow', label: 'Flow' },
+                      { value: 'Digicel', label: 'Digicel' },
+                      { value: 'Other', label: 'Other' }
+                    ]}
+                    clearable
+                  />
+                )}
               </Box>
             </Group>
 

@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { submissions, communities } from '@/lib/db/schema';
-import { desc, eq, gte, and, sql } from 'drizzle-orm';
+import { supabase } from '@/lib/supabase';
 
 export async function GET(request: Request) {
   try {
@@ -12,47 +10,57 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || '10');
     
     // Build query conditions
-    const conditions = [];
-    
-    // Filter by last 24 hours
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    conditions.push(gte(submissions.createdAt, twentyFourHoursAgo));
+    let query = supabase
+      .from('submissions')
+      .select('*', { count: 'exact' })
+      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: false });
     
     // Add parish filter if provided
     if (parish) {
-      conditions.push(eq(submissions.parish, parish));
+      query = query.eq('parish', parish);
     }
     
     // Add community filter if provided
     if (community) {
-      conditions.push(eq(submissions.community, community));
+      query = query.eq('community', community);
     }
     
+    // Add pagination
     const offset = (page - 1) * limit;
+    query = query.range(offset, offset + limit - 1);
     
-    // Execute query with pagination
-    const results = await db
-      .select()
-      .from(submissions)
-      .where(and(...conditions))
-      .orderBy(desc(submissions.createdAt))
-      .limit(limit)
-      .offset(offset);
+    const { data: results, error, count } = await query;
     
-    // Get total count for pagination
-    const totalCount = await db
-      .select({ count: sql<number>`count(*)` })
-      .from(submissions)
-      .where(and(...conditions));
+    if (error) {
+      throw error;
+    }
+    
+    // Transform snake_case to camelCase for frontend
+    const transformedResults = (results || []).map((item: any) => ({
+      id: item.id,
+      parish: item.parish,
+      community: item.community,
+      hasElectricity: item.has_electricity,
+      powerProvider: item.power_provider,
+      hasWifi: item.has_wifi,
+      wifiProvider: item.wifi_provider,
+      needsHelp: item.needs_help,
+      helpType: item.help_type,
+      roadStatus: item.road_status,
+      additionalInfo: item.additional_info,
+      imageUrl: item.image_url,
+      createdAt: item.created_at
+    }));
     
     return NextResponse.json({
-      data: results,
+      data: transformedResults,
       pagination: {
         page,
         limit,
-        total: totalCount[0]?.count || 0,
-        totalPages: Math.ceil((totalCount[0]?.count || 0) / limit),
-        hasNext: page < Math.ceil((totalCount[0]?.count || 0) / limit),
+        total: count || 0,
+        totalPages: Math.ceil((count || 0) / limit),
+        hasNext: page < Math.ceil((count || 0) / limit),
         hasPrev: page > 1
       }
     });
@@ -71,7 +79,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     
     // Validate required fields
-    const { parish, community, hasElectricity, hasWifi, needsHelp, helpType, roadStatus } = body;
+    const { parish, community, hasElectricity, powerProvider, hasWifi, wifiProvider, needsHelp, helpType, roadStatus } = body;
     
     if (!parish || !community || hasElectricity === undefined || hasWifi === undefined || needsHelp === undefined || !roadStatus) {
       return NextResponse.json(
@@ -98,44 +106,75 @@ export async function POST(request: Request) {
     }
     
     // Check if community exists, create if not
-    let communityId;
-    const existingCommunity = await db
-      .select()
-      .from(communities)
-      .where(
-        and(
-          eq(communities.name, community),
-          eq(communities.parish, parish)
-        )
-      )
+    const { data: existingCommunity, error: communityError } = await supabase
+      .from('communities')
+      .select('id')
+      .eq('name', community)
+      .eq('parish', parish)
       .limit(1);
     
-    if (existingCommunity.length > 0) {
+    if (communityError) {
+      console.error('Error checking community:', communityError);
+      return NextResponse.json(
+        { error: `Database error: ${communityError.message}` },
+        { status: 500 }
+      );
+    }
+    
+    let communityId;
+    if (existingCommunity && existingCommunity.length > 0) {
       communityId = existingCommunity[0].id;
     } else {
       // Create new community
-      const newCommunity = await db.insert(communities).values({
-        name: community,
-        parish
-      }).returning();
-      communityId = newCommunity[0].id;
+      const { data: newCommunity, error: createError } = await supabase
+        .from('communities')
+        .insert({
+          name: community,
+          parish
+        })
+        .select()
+        .single();
+      
+      if (createError) {
+        console.error('Error creating community:', createError);
+        return NextResponse.json(
+          { error: `Failed to create community "${community}": ${createError.message}` },
+          { status: 500 }
+        );
+      }
+      
+      communityId = newCommunity.id;
     }
     
     // Insert submission
-    const result = await db.insert(submissions).values({
-      parish,
-      community,
-      hasElectricity: Boolean(hasElectricity),
-      hasWifi: Boolean(hasWifi),
-      hasPower: Boolean(hasElectricity), // Map hasElectricity to hasPower for database compatibility
-      needsHelp: Boolean(needsHelp),
-      helpType: needsHelp ? helpType : null,
-      roadStatus,
-      additionalInfo: body.additionalInfo || null,
-      imageUrl: body.imageUrl || null
-    }).returning();
+    const { data: result, error: submissionError } = await supabase
+      .from('submissions')
+      .insert({
+        parish,
+        community,
+        has_electricity: Boolean(hasElectricity),
+        power_provider: hasElectricity ? (powerProvider || null) : null,
+        has_wifi: Boolean(hasWifi),
+        wifi_provider: wifiProvider || null,
+        has_power: Boolean(hasElectricity), // Map hasElectricity to hasPower for database compatibility
+        needs_help: Boolean(needsHelp),
+        help_type: needsHelp ? helpType : null,
+        road_status: roadStatus,
+        additional_info: body.additionalInfo || null,
+        image_url: body.imageUrl || null
+      })
+      .select()
+      .single();
     
-    return NextResponse.json(result[0], { status: 201 });
+    if (submissionError) {
+      console.error('Error creating submission:', submissionError);
+      return NextResponse.json(
+        { error: `Failed to create submission: ${submissionError.message}` },
+        { status: 500 }
+      );
+    }
+    
+    return NextResponse.json(result, { status: 201 });
     
   } catch (error) {
     console.error('Error creating submission:', error);

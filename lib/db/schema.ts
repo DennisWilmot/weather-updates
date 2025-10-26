@@ -14,7 +14,9 @@ export const submissions = pgTable('submissions', {
   parish: text('parish').notNull(),
   community: text('community').notNull(),
   hasElectricity: boolean('has_electricity').notNull(),
+  powerProvider: text('power_provider'),
   hasWifi: boolean('has_wifi').notNull(),
+  wifiProvider: text('wifi_provider'),
   hasPower: boolean('has_power').notNull(),
   needsHelp: boolean('needs_help').notNull(),
   helpType: text('help_type', { 

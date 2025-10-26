@@ -36,7 +36,9 @@ interface Submission {
   parish: string;
   community: string;
   hasElectricity: boolean;
+  powerProvider?: string;
   hasWifi: boolean;
+  wifiProvider?: string;
   needsHelp: boolean;
   helpType?: 'medical' | 'physical' | 'police' | 'firefighter' | 'other';
   roadStatus: 'clear' | 'flooded' | 'blocked' | 'mudslide';
@@ -330,7 +332,7 @@ export default function CommunityFeed() {
                         {submission.hasElectricity ? <IconCheck size={12} /> : <IconX size={12} />}
                       </ThemeIcon>
                       <Text size="xs" c={submission.hasElectricity ? 'green' : 'red'}>
-                        Electricity: {submission.hasElectricity ? 'Yes' : 'No'}
+                        Electricity: {submission.hasElectricity ? `Yes${submission.powerProvider ? ` (${submission.powerProvider})` : ''}` : 'No'}
                       </Text>
                     </Group>
                     <Group gap="xs">
@@ -338,7 +340,7 @@ export default function CommunityFeed() {
                         {submission.hasWifi ? <IconCheck size={12} /> : <IconX size={12} />}
                       </ThemeIcon>
                       <Text size="xs" c={submission.hasWifi ? 'green' : 'red'}>
-                        WiFi: {submission.hasWifi ? 'Yes' : 'No'}
+                        WiFi: {submission.hasWifi ? `Yes${submission.wifiProvider ? ` (${submission.wifiProvider})` : ''}` : 'No'}
                       </Text>
                     </Group>
                     <Group gap="xs">
