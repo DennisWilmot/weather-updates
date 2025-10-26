@@ -179,14 +179,42 @@ export default function CommunityFeed() {
   };
 
   const formatTimeAgo = (dateString: string) => {
-    const now = new Date();
-    const submissionTime = new Date(dateString);
-    const diffInMinutes = Math.floor((now.getTime() - submissionTime.getTime()) / (1000 * 60));
-    
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes} min ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
-    return `${Math.floor(diffInMinutes / 1440)} days ago`;
+    try {
+      const now = new Date();
+      // Parse the timestamp as UTC (since DB stores without timezone)
+      const submissionTime = new Date(dateString + 'Z');
+      
+      // Check if date is valid
+      if (isNaN(submissionTime.getTime())) {
+        return 'Just now';
+      }
+      
+      // Calculate difference in milliseconds
+      const diffMs = now.getTime() - submissionTime.getTime();
+      const diffMinutes = Math.round(diffMs / (1000 * 60));
+      
+      // If negative (future date), just say "Just now"
+      if (diffMinutes < 0) {
+        return 'Just now';
+      }
+      
+      // If less than 1 minute
+      if (diffMinutes < 1) {
+        return 'Just now';
+      }
+      
+      // If less than 60 minutes, show in minutes
+      if (diffMinutes < 60) {
+        return `${diffMinutes} min ago`;
+      }
+      
+      // Otherwise show in hours
+      const hours = Math.round(diffMinutes / 60);
+      return `${hours} hours ago`;
+    } catch (error) {
+      console.error('Error formatting time:', error, dateString);
+      return 'Just now';
+    }
   };
 
   // Reset to page 1 when filters change
