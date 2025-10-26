@@ -29,6 +29,7 @@ import EmergencyContacts from '../components/EmergencyContacts';
 import CommunityFeed from '../components/CommunityFeed';
 import SubmitUpdate from '../components/SubmitUpdate';
 import NewsFeed from '../components/NewsFeed';
+import Image from 'next/image';
 
 interface StormData {
   status: 'active' | 'not_found' | 'error';
@@ -449,6 +450,15 @@ export default function HomePage() {
               hiddenFrom="sm"
             />
 
+            {/* Intellibus Logo */}
+            <Image 
+              src="/White_Icon_Blue_Bkg-removebg-preview.png" 
+              alt="Intellibus" 
+              width={40} 
+              height={40}
+              style={{ objectFit: 'contain' }}
+            />
+
             <Title order={1} c="white" fw={800} size="xl" style={{ flex: '1 1 auto', textAlign: 'center' }}>
               Hurricane Melissa Updates
             </Title>
@@ -490,15 +500,6 @@ export default function HomePage() {
                 leftSection="📞"
               >
                 Emergency Contacts
-              </Button>
-              <Button
-                variant={activeTab === 'news' ? 'filled' : 'outline'}
-                color="gray"
-                size="sm"
-                onClick={() => setActiveTab('news')}
-                leftSection="📰"
-              >
-                News Feed
               </Button>
             </Group>
           </Flex>
@@ -576,19 +577,19 @@ export default function HomePage() {
           >
             Emergency Contacts
           </Button>
-          <Button
-            variant={activeTab === 'news' ? 'filled' : 'subtle'}
-            color="gray"
-            fullWidth
-            onClick={() => {
-              setActiveTab('news');
-              close();
-            }}
-            leftSection="📰"
-          >
-            News Feed
-          </Button>
         </Stack>
+        <Box mt="auto" pt="xl" style={{ borderTop: '1px solid rgba(20, 120, 255, 0.2)' }}>
+          <Stack gap={4} align="center" mb="md">
+            <Text size="xs" c="dimmed">Powered by:</Text>
+            <Image 
+              src="/white_logo.png" 
+              alt="Intellibus" 
+              width={240} 
+              height={180}
+              style={{ objectFit: 'contain', marginTop: '-20px' }}
+            />
+          </Stack>
+        </Box>
       </Drawer>
 
       {/* Main Content - Mobile */}
