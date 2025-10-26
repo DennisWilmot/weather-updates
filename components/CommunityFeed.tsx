@@ -20,14 +20,20 @@ import {
   Combobox,
   TextInput,
   useCombobox,
-  Pagination
+  Pagination,
+  Modal,
+  PasswordInput,
+  ActionIcon
 } from '@mantine/core';
-import { 
+import { useDisclosure } from '@mantine/hooks';
+import {
   IconCheck,
   IconX,
   IconRefresh,
-  IconAlertTriangle
+  IconAlertTriangle,
+  IconTrash
 } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
 import jamaicaLocations from '../data/jamaica-locations.json';
 import JamaicaParishMap from './JamaicaParishMap';
 
@@ -41,6 +47,7 @@ interface Submission {
   hasWifi: boolean;
   flowService?: boolean;
   digicelService?: boolean;
+  waterService?: boolean;
   flooding?: boolean;
   downedPowerLines?: boolean;
   fallenTrees?: boolean;
@@ -79,6 +86,12 @@ export default function CommunityFeed() {
   const [communities, setCommunities] = useState<any[]>([]);
   const [loadingCommunities, setLoadingCommunities] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Admin delete state
+  const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [adminKey, setAdminKey] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
@@ -156,6 +169,57 @@ export default function CommunityFeed() {
     setFilterParish('');
     setFilterCommunity('');
     setCommunitySearch('');
+  };
+
+  const handleDeleteClick = (submissionId: string) => {
+    setDeletingId(submissionId);
+    setAdminKey('');
+    openDeleteModal();
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingId || !adminKey) {
+      notifications.show({
+        title: 'Error',
+        message: 'Please enter admin key',
+        color: 'red'
+      });
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      const response = await fetch(`/api/submissions/${deletingId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${adminKey}`
+        }
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to delete submission');
+      }
+
+      notifications.show({
+        title: 'Success',
+        message: 'Submission deleted successfully',
+        color: 'green'
+      });
+
+      closeDeleteModal();
+      setDeletingId(null);
+      setAdminKey('');
+      refetch();
+    } catch (error) {
+      notifications.show({
+        title: 'Error',
+        message: error instanceof Error ? error.message : 'Failed to delete submission',
+        color: 'red'
+      });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const getRoadStatusColor = (status: string) => {
@@ -407,9 +471,19 @@ export default function CommunityFeed() {
                         </Text>
                       </Group>
                     </Box>
-                    <Badge color={getRoadStatusColor(submission.roadStatus)} variant="light">
-                      {getRoadStatusLabel(submission.roadStatus)}
-                    </Badge>
+                    <Group gap="xs">
+                      <Badge color={getRoadStatusColor(submission.roadStatus)} variant="light">
+                        {getRoadStatusLabel(submission.roadStatus)}
+                      </Badge>
+                      <ActionIcon
+                        color="red"
+                        variant="subtle"
+                        onClick={() => handleDeleteClick(submission.id)}
+                        title="Delete submission (admin only)"
+                      >
+                        <IconTrash size={16} />
+                      </ActionIcon>
+                    </Group>
                   </Group>
 
                   <Divider />
@@ -427,7 +501,7 @@ export default function CommunityFeed() {
                         </Text>
                       </Group>
 
-                      {submission.flowService !== undefined && (
+                      {submission.flowService !== undefined && submission.flowService !== null && (
                         <Group gap="xs">
                           <ThemeIcon size="sm" color={submission.flowService ? 'green' : 'red'} variant="light">
                             {submission.flowService ? <IconCheck size={12} /> : <IconX size={12} />}
@@ -438,13 +512,24 @@ export default function CommunityFeed() {
                         </Group>
                       )}
 
-                      {submission.digicelService !== undefined && (
+                      {submission.digicelService !== undefined && submission.digicelService !== null && (
                         <Group gap="xs">
                           <ThemeIcon size="sm" color={submission.digicelService ? 'green' : 'red'} variant="light">
                             {submission.digicelService ? <IconCheck size={12} /> : <IconX size={12} />}
                           </ThemeIcon>
                           <Text size="xs" c={submission.digicelService ? 'green' : 'red'}>
                             Digicel: {submission.digicelService ? 'Up' : 'Down'}
+                          </Text>
+                        </Group>
+                      )}
+
+                      {submission.waterService !== undefined && submission.waterService !== null && (
+                        <Group gap="xs">
+                          <ThemeIcon size="sm" color={submission.waterService ? 'green' : 'red'} variant="light">
+                            {submission.waterService ? <IconCheck size={12} /> : <IconX size={12} />}
+                          </ThemeIcon>
+                          <Text size="xs" c={submission.waterService ? 'green' : 'red'}>
+                            Water: {submission.waterService ? 'Available' : 'Unavailable'}
                           </Text>
                         </Group>
                       )}
@@ -523,6 +608,42 @@ export default function CommunityFeed() {
           </Card>
         )}
       </Card>
+
+      {/* Admin Delete Modal */}
+      <Modal
+        opened={deleteModalOpened}
+        onClose={closeDeleteModal}
+        title="Delete Submission (Admin Only)"
+        centered
+      >
+        <Stack gap="md">
+          <Alert color="yellow" title="Warning">
+            This action cannot be undone. Please enter your admin key to confirm deletion.
+          </Alert>
+
+          <PasswordInput
+            label="Admin Key"
+            placeholder="Enter admin key"
+            value={adminKey}
+            onChange={(e) => setAdminKey(e.currentTarget.value)}
+            required
+          />
+
+          <Group justify="flex-end" gap="xs">
+            <Button variant="outline" onClick={closeDeleteModal} disabled={deleting}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={handleDeleteConfirm}
+              loading={deleting}
+              leftSection={<IconTrash size={16} />}
+            >
+              Delete
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }

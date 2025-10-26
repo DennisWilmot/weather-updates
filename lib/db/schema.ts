@@ -45,9 +45,9 @@ export const submissions = pgTable('submissions', {
   // Service Status Reports (keep field names but track separately)
   hasElectricity: boolean('has_electricity').notNull(), // JPS Electricity
   hasWifi: boolean('has_wifi').notNull(), // Internet service (Flow/Digicel combined for now)
-  hasPower: boolean('has_power').notNull(), // Backup compatibility
   flowService: boolean('flow_service').default(true), // Flow cable/internet
   digicelService: boolean('digicel_service').default(true), // Digicel mobile
+  waterService: boolean('water_service'), // Water availability (nullable for 3-state)
 
   // Infrastructure Status
   roadStatus: text('road_status', {
@@ -73,10 +73,6 @@ export const submissions = pgTable('submissions', {
   // Location Details (for custom locations not in locations table)
   streetName: text('street_name'),
   placeName: text('place_name'),
-
-  // Legacy fields for backward compatibility
-  parish: text('parish'), // Will be deprecated after migration
-  community: text('community'), // Will be deprecated after migration
 
   // Metadata
   confidence: integer('confidence').default(1), // 1-5 scale for report reliability

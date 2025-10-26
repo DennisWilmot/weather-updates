@@ -24,6 +24,7 @@ import { notifications } from '@mantine/notifications';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../lib/supabase';
 import HierarchicalLocationPicker from './HierarchicalLocationPicker';
+import imageCompression from 'browser-image-compression';
 
 // Service Status Toggle Component
 function ServiceStatusToggle({ 
@@ -176,6 +177,7 @@ export default function SubmitUpdateEnhanced() {
   const [jpsElectricity, setJpsElectricity] = useState<number>(1); // JPS
   const [flowService, setFlowService] = useState<number>(1); // Flow Internet
   const [digicelService, setDigicelService] = useState<number>(1); // Digicel Mobile
+  const [waterService, setWaterService] = useState<number>(1); // Water
 
   // Infrastructure
   const [roadStatus, setRoadStatus] = useState<'clear' | 'flooded' | 'blocked' | 'mudslide' | 'damaged'>('clear');
@@ -195,6 +197,64 @@ export default function SubmitUpdateEnhanced() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [compressing, setCompressing] = useState(false);
+
+  const compressImage = async (file: File): Promise<File> => {
+    const options = {
+      maxSizeMB: 0.2, // 200KB
+      maxWidthOrHeight: 1920,
+      useWebWorker: true,
+      fileType: 'image/jpeg' as const
+    };
+
+    try {
+      const compressedFile = await imageCompression(file, options);
+
+      // Show notification about compression
+      const originalSizeKB = (file.size / 1024).toFixed(0);
+      const compressedSizeKB = (compressedFile.size / 1024).toFixed(0);
+
+      notifications.show({
+        title: 'Image Compressed',
+        message: `Reduced from ${originalSizeKB}KB to ${compressedSizeKB}KB`,
+        color: 'blue',
+        autoClose: 3000
+      });
+
+      return compressedFile;
+    } catch (error) {
+      console.error('Image compression error:', error);
+      throw error;
+    }
+  };
+
+  const handleImageChange = async (file: File | null) => {
+    if (!file) {
+      setImageFile(null);
+      setImageUrl(null);
+      return;
+    }
+
+    try {
+      setCompressing(true);
+
+      // Compress the image
+      const compressedFile = await compressImage(file);
+
+      setImageFile(compressedFile);
+      setImageUrl(URL.createObjectURL(compressedFile));
+    } catch (error) {
+      notifications.show({
+        title: 'Compression Error',
+        message: 'Failed to compress image. Please try a different photo.',
+        color: 'red'
+      });
+      setImageFile(null);
+      setImageUrl(null);
+    } finally {
+      setCompressing(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -259,10 +319,10 @@ export default function SubmitUpdateEnhanced() {
           // Service status (convert slider values to boolean for backward compatibility)
           hasElectricity: jpsElectricity > 0, // JPS
           hasWifi: flowService > 0 || digicelService > 0, // Combined for backward compat
-          hasPower: jpsElectricity > 0, // Duplicate for backward compat
           jpsElectricity: jpsElectricity,
           flowService: flowService,
           digicelService: digicelService,
+          waterService: waterService,
 
           // Infrastructure
           roadStatus,
@@ -309,6 +369,7 @@ export default function SubmitUpdateEnhanced() {
       setJpsElectricity(1);
       setFlowService(1);
       setDigicelService(1);
+      setWaterService(1);
       setRoadStatus('clear');
       setFlooding(false);
       setDownedPowerLines(false);
@@ -372,6 +433,13 @@ export default function SubmitUpdateEnhanced() {
                     emoji="📱"
                     value={digicelService}
                     onChange={setDigicelService}
+                  />
+
+                  <ServiceStatusToggle
+                    label="Water Service"
+                    emoji="💧"
+                    value={waterService}
+                    onChange={setWaterService}
                   />
                 </Stack>
               </Stack>
@@ -486,16 +554,11 @@ export default function SubmitUpdateEnhanced() {
               placeholder="Take or choose a photo"
               accept="image/*"
               capture="environment"
-              onChange={(file) => {
-                setImageFile(file);
-                if (file) {
-                  setImageUrl(URL.createObjectURL(file));
-                } else {
-                  setImageUrl(null);
-                }
-              }}
+              onChange={handleImageChange}
               clearable
               leftSection={<IconPhoto size={16} />}
+              disabled={compressing}
+              description={compressing ? "Compressing image..." : "Images will be automatically compressed to 200KB max"}
             />
 
             {imageUrl && (

@@ -20,12 +20,12 @@ export async function GET(request: Request) {
     
     // Add parish filter if provided
     if (parish) {
-      conditions.push(eq(submissions.parish, parish));
+      conditions.push(eq(submissions.parishId, parish));
     }
     
     // Add community filter if provided
     if (community) {
-      conditions.push(eq(submissions.community, community));
+      conditions.push(eq(submissions.communityId, community));
     }
     
     const offset = (page - 1) * limit;
@@ -82,6 +82,7 @@ export async function POST(request: Request) {
       hasElectricity,
       flowService,
       digicelService,
+      waterService,
       flooding,
       downedPowerLines,
       fallenTrees,
@@ -189,17 +190,15 @@ export async function POST(request: Request) {
 
     // Insert submission
     const result = await db.insert(submissions).values({
-      parish: finalParishName,
-      community: finalCommunityName,
       parishId: finalParishId,
       communityId: finalCommunityId,
       locationId: locationId || null,
       placeName: placeName || null,
       streetName: streetName || null,
       hasElectricity: Boolean(hasElectricity),
-      hasPower: Boolean(hasElectricity), // Map hasElectricity to hasPower for backward compatibility
       flowService: flowService !== undefined ? Boolean(flowService) : null,
       digicelService: digicelService !== undefined ? Boolean(digicelService) : null,
+      waterService: waterService !== undefined ? (waterService === 1 ? null : waterService === 2) : null,
       flooding: flooding !== undefined ? Boolean(flooding) : false,
       downedPowerLines: downedPowerLines !== undefined ? Boolean(downedPowerLines) : false,
       fallenTrees: fallenTrees !== undefined ? Boolean(fallenTrees) : false,
