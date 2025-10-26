@@ -20,16 +20,16 @@ export async function GET(request: Request) {
     
     // Add parish filter if provided
     if (parish) {
-      conditions.push(eq(submissions.parishId, parish));
+      conditions.push(eq(submissions.parish, parish));
     }
     
     // Add community filter if provided
     if (community) {
-      conditions.push(eq(submissions.communityId, community));
+      conditions.push(eq(submissions.community, community));
     }
     
     const offset = (page - 1) * limit;
-    
+
     // Execute query with pagination
     const results = await db
       .select()
@@ -190,6 +190,8 @@ export async function POST(request: Request) {
 
     // Insert submission
     const result = await db.insert(submissions).values({
+      parish: finalParishName,
+      community: finalCommunityName,
       parishId: finalParishId,
       communityId: finalCommunityId,
       locationId: locationId || null,
