@@ -23,7 +23,8 @@ import {
   Pagination,
   Modal,
   PasswordInput,
-  ActionIcon
+  ActionIcon,
+  Checkbox
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
@@ -86,6 +87,7 @@ export default function CommunityFeed() {
   const [communities, setCommunities] = useState<any[]>([]);
   const [loadingCommunities, setLoadingCommunities] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showImagesOnly, setShowImagesOnly] = useState(false);
 
   // Admin delete state
   const [deleteModalOpened, { open: openDeleteModal, close: closeDeleteModal }] = useDisclosure(false);
@@ -99,11 +101,12 @@ export default function CommunityFeed() {
 
   // React Query for fetching submissions
   const { data: submissionsData, isLoading, error, refetch } = useQuery({
-    queryKey: ['submissions', filterParish, filterCommunity, currentPage],
+    queryKey: ['submissions', filterParish, filterCommunity, currentPage, showImagesOnly],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (filterParish) params.append('parish', filterParish);
       if (filterCommunity) params.append('community', filterCommunity);
+      if (showImagesOnly) params.append('imageOnly', 'true');
       params.append('page', currentPage.toString());
       params.append('limit', '10');
 
@@ -169,6 +172,7 @@ export default function CommunityFeed() {
     setFilterParish('');
     setFilterCommunity('');
     setCommunitySearch('');
+    setShowImagesOnly(false);
   };
 
   const handleDeleteClick = (submissionId: string) => {
@@ -307,7 +311,7 @@ export default function CommunityFeed() {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [filterParish, filterCommunity]);
+  }, [filterParish, filterCommunity, showImagesOnly]);
 
   const filterCommunities = filterParish ? jamaicaLocations[filterParish as keyof typeof jamaicaLocations] || [] : [];
 
@@ -394,13 +398,20 @@ export default function CommunityFeed() {
               </Combobox>
             </Box>
           </Group>
-          <Button
-            variant="outline"
-            onClick={clearFilters}
-            disabled={!filterParish && !filterCommunity}
-          >
-            Clear Filters
-          </Button>
+          <Group>
+            <Checkbox
+              label="Images only"
+              checked={showImagesOnly}
+              onChange={(event) => setShowImagesOnly(event.currentTarget.checked)}
+            />
+            <Button
+              variant="outline"
+              onClick={clearFilters}
+              disabled={!filterParish && !filterCommunity && !showImagesOnly}
+            >
+              Clear Filters
+            </Button>
+          </Group>
         </Group>
       </Card>
 

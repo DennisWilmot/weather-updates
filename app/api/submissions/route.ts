@@ -8,6 +8,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const parish = searchParams.get('parish');
     const community = searchParams.get('community');
+    const imageOnly = searchParams.get('imageOnly') === 'true';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
     
@@ -26,6 +27,11 @@ export async function GET(request: Request) {
     // Add community filter if provided
     if (community) {
       conditions.push(eq(submissions.community, community));
+    }
+    
+    // Add image filter if requested
+    if (imageOnly) {
+      conditions.push(sql`${submissions.imageUrl} IS NOT NULL AND ${submissions.imageUrl} != ''`);
     }
     
     const offset = (page - 1) * limit;

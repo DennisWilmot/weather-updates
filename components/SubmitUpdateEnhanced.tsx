@@ -553,7 +553,6 @@ export default function SubmitUpdateEnhanced() {
               label="Upload Photo (Optional)"
               placeholder="Take or choose a photo"
               accept="image/*"
-              capture="environment"
               onChange={handleImageChange}
               clearable
               leftSection={<IconPhoto size={16} />}

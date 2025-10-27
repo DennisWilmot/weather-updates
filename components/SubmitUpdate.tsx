@@ -443,7 +443,6 @@ export default function SubmitUpdate() {
               label="Upload Photo (Optional)"
               placeholder="Take or choose a photo"
               accept="image/*"
-              capture="environment"
               onChange={(file) => {
                 setImageFile(file);
                 if (file) {
