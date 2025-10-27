@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     
     // Filter by help type if provided
     if (helpType && helpType !== 'all') {
-      conditions.push(eq(submissions.helpType, helpType));
+      conditions.push(eq(submissions.helpType, helpType as 'medical' | 'physical' | 'police' | 'firefighter' | 'other'));
     }
 
     // Fetch all help requests (no time limit for emergency requests)
