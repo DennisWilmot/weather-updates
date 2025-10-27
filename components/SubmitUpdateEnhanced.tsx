@@ -259,10 +259,10 @@ export default function SubmitUpdateEnhanced() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!location.parishId || !location.communityId) {
+    if (!location.parishId || !location.communityName) {
       notifications.show({
         title: 'Validation Error',
-        message: 'Please select both parish and community',
+        message: 'Please select parish and enter community',
         color: 'red'
       });
       return;
@@ -299,51 +299,61 @@ export default function SubmitUpdateEnhanced() {
         }
       }
 
+      console.log('Submitting with location:', location);
+      
+      const submissionData = {
+        // Hierarchical location
+        parishId: location.parishId,
+        communityId: location.communityId,
+        locationId: location.locationId,
+
+        // Legacy text fields for backward compatibility
+        parish: location.parishName,
+        community: location.communityName,
+
+        // Place/Street details
+        placeName: location.placeName,
+        streetName: location.streetName,
+
+        // Service status (convert slider values to boolean for backward compatibility)
+        hasElectricity: jpsElectricity > 0, // JPS
+        hasWifi: flowService > 0 || digicelService > 0, // Combined for backward compat
+        jpsElectricity: jpsElectricity,
+        flowService: flowService,
+        digicelService: digicelService,
+        waterService: waterService,
+
+        // Infrastructure
+        roadStatus,
+
+        // Hazards
+        flooding,
+        downedPowerLines,
+        fallenTrees,
+        structuralDamage,
+
+        // Emergency
+        needsHelp,
+        helpType: needsHelp ? helpType : null,
+
+        // Additional info
+        additionalInfo: additionalInfo.trim() || undefined,
+        imageUrl: uploadedImageUrl
+      };
+
+      console.log('Submission data:', submissionData);
+
       const response = await fetch('/api/submissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          // Hierarchical location
-          parishId: location.parishId,
-          communityId: location.communityId,
-          locationId: location.locationId,
-
-          // Legacy text fields for backward compatibility
-          parish: location.parishName,
-          community: location.communityName,
-
-          // Place/Street details
-          placeName: location.placeName,
-          streetName: location.streetName,
-
-          // Service status (convert slider values to boolean for backward compatibility)
-          hasElectricity: jpsElectricity > 0, // JPS
-          hasWifi: flowService > 0 || digicelService > 0, // Combined for backward compat
-          jpsElectricity: jpsElectricity,
-          flowService: flowService,
-          digicelService: digicelService,
-          waterService: waterService,
-
-          // Infrastructure
-          roadStatus,
-
-          // Hazards
-          flooding,
-          downedPowerLines,
-          fallenTrees,
-          structuralDamage,
-
-          // Emergency
-          needsHelp,
-          helpType: needsHelp ? helpType : null,
-
-          // Additional info
-          additionalInfo: additionalInfo.trim() || undefined,
-          imageUrl: uploadedImageUrl
-        }),
+        body: JSON.stringify(submissionData),
       });
 
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Submission failed:', errorData);
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      }
 
       await response.json();
 
@@ -575,7 +585,7 @@ export default function SubmitUpdateEnhanced() {
             <Button
               type="submit"
               loading={submitting}
-              disabled={!location.parishId || !location.communityId}
+              disabled={!location.parishId || !location.communityName}
               color="electricBlue"
               size="lg"
               fullWidth

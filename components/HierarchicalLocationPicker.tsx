@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Select, Stack, Text, Loader, Group, Badge, TextInput } from '@mantine/core';
+import { Select, Stack, Text, Loader, Group, Badge, TextInput, Combobox, useCombobox } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 
 interface Parish {
@@ -39,10 +39,15 @@ export default function HierarchicalLocationPicker({
 }: HierarchicalLocationPickerProps) {
   const [selectedParishId, setSelectedParishId] = useState<string | null>(initialParish || null);
   const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(initialCommunity || null);
+  const [communitySearch, setCommunitySearch] = useState<string>(initialCommunity || '');
   const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [placeSearch, setPlaceSearch] = useState<string>(initialPlace || '');
   const [streetName, setStreetName] = useState<string>('');
   const [useCustomPlace, setUseCustomPlace] = useState<boolean>(false);
+  
+  const combobox = useCombobox({
+    onDropdownClose: () => combobox.resetSelectedOption(),
+  });
 
   // Fetch all parishes
   const { data: parishesData, isLoading: parishesLoading } = useQuery({
@@ -89,22 +94,29 @@ export default function HierarchicalLocationPicker({
       parishId: selectedParishId,
       parishName: parish?.name || null,
       communityId: selectedCommunityId,
-      communityName: community?.name || null,
+      // Use the community name from DB if ID exists, otherwise use the search text
+      communityName: community?.name || (communitySearch.trim() || null),
       locationId: selectedLocationId,
       placeName: useCustomPlace ? placeSearch : null,
       streetName: streetName || null
     });
-  }, [selectedParishId, selectedCommunityId, selectedLocationId, placeSearch, streetName, useCustomPlace, parishesData, communitiesData, onLocationChange]);
+  }, [selectedParishId, selectedCommunityId, communitySearch, selectedLocationId, placeSearch, streetName, useCustomPlace, parishesData, communitiesData, onLocationChange]);
 
   // Handle parish change
   const handleParishChange = (value: string | null) => {
     setSelectedParishId(value);
     setSelectedCommunityId(null); // Reset community when parish changes
+    setCommunitySearch(''); // Reset community search
   };
 
-  // Handle community change
-  const handleCommunityChange = (value: string | null) => {
-    setSelectedCommunityId(value);
+  // Handle community selection from dropdown
+  const handleCommunitySelect = (value: string) => {
+    const community = communitiesData?.communities?.find((c: Community) => c.id === value);
+    if (community) {
+      setSelectedCommunityId(community.id);
+      setCommunitySearch(community.name);
+    }
+    combobox.closeDropdown();
   };
 
   return (
@@ -144,36 +156,65 @@ export default function HierarchicalLocationPicker({
           <Text size="sm" fw={500}>Community/Town</Text>
           <Badge size="xs" color="blue" variant="light">Required</Badge>
         </Group>
-        <Select
-          placeholder={
-            !selectedParishId
-              ? "Select parish first"
-              : communitiesLoading
-              ? "Loading communities..."
-              : "Select community"
-          }
-          value={selectedCommunityId}
-          onChange={handleCommunityChange}
-          data={
-            communitiesData?.communities?.map((community: Community) => ({
-              value: community.id,
-              label: community.name
-            })) || []
-          }
-          searchable
-          clearable
-          disabled={!selectedParishId || communitiesLoading}
-          leftSection={communitiesLoading ? <Loader size="xs" /> : null}
-          styles={{
-            input: {
-              fontWeight: 500,
-              fontSize: '15px'
-            }
-          }}
-        />
-        {selectedParishId && communitiesData?.communities?.length === 0 && (
-          <Text size="xs" c="dimmed" mt="xs">
-            No communities found. Type a custom community name in the form.
+        <Combobox
+          store={combobox}
+          onOptionSubmit={handleCommunitySelect}
+          withinPortal={false}
+        >
+          <Combobox.Target>
+            <TextInput
+              placeholder={
+                !selectedParishId
+                  ? "Select parish first"
+                  : communitiesLoading
+                  ? "Loading communities..."
+                  : "Type or select community"
+              }
+              value={communitySearch}
+              onChange={(event) => {
+                setCommunitySearch(event.currentTarget.value);
+                setSelectedCommunityId(null); // Clear ID when typing custom name
+                combobox.openDropdown();
+              }}
+              onClick={() => combobox.openDropdown()}
+              onFocus={() => combobox.openDropdown()}
+              onBlur={() => {
+                combobox.closeDropdown();
+              }}
+              disabled={!selectedParishId || communitiesLoading}
+              leftSection={communitiesLoading ? <Loader size="xs" /> : null}
+              styles={{
+                input: {
+                  fontWeight: 500,
+                  fontSize: '15px'
+                }
+              }}
+            />
+          </Combobox.Target>
+          
+          <Combobox.Dropdown>
+            <Combobox.Options>
+              {communitiesLoading ? (
+                <Combobox.Empty>Loading...</Combobox.Empty>
+              ) : communitiesData?.communities?.length > 0 ? (
+                communitiesData.communities
+                  .filter((community: Community) => 
+                    community.name.toLowerCase().includes(communitySearch.toLowerCase())
+                  )
+                  .map((community: Community) => (
+                    <Combobox.Option value={community.id} key={community.id}>
+                      {community.name}
+                    </Combobox.Option>
+                  ))
+              ) : (
+                <Combobox.Empty>Type to add new community</Combobox.Empty>
+              )}
+            </Combobox.Options>
+          </Combobox.Dropdown>
+        </Combobox>
+        {selectedParishId && communitySearch && !selectedCommunityId && (
+          <Text size="xs" c="blue" mt="xs">
+            ✏️ New community "{communitySearch}" will be created
           </Text>
         )}
       </div>
