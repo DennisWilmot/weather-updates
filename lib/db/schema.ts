@@ -66,6 +66,11 @@ export const submissions = pgTable('submissions', {
     enum: ['medical', 'physical', 'police', 'firefighter', 'other']
   }),
 
+  // Contact Information (for emergency help requests)
+  requesterName: text('requester_name'),
+  requesterPhone: text('requester_phone'),
+  helpDescription: text('help_description'),
+
   // Additional Info
   additionalInfo: text('additional_info'),
   imageUrl: text('image_url'),

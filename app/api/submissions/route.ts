@@ -96,6 +96,9 @@ export async function POST(request: Request) {
       hasWifi,
       needsHelp,
       helpType,
+      requesterName,
+      requesterPhone,
+      helpDescription,
       roadStatus
     } = body;
 
@@ -107,12 +110,32 @@ export async function POST(request: Request) {
       );
     }
 
-    // Validate help type if help is needed
-    if (needsHelp && !helpType) {
-      return NextResponse.json(
-        { error: 'Help type is required when help is needed' },
-        { status: 400 }
-      );
+    // Validate help type and contact info if help is needed
+    if (needsHelp) {
+      if (!helpType) {
+        return NextResponse.json(
+          { error: 'Help type is required when help is needed' },
+          { status: 400 }
+        );
+      }
+      if (!requesterName || !requesterName.trim()) {
+        return NextResponse.json(
+          { error: 'Name is required when requesting help' },
+          { status: 400 }
+        );
+      }
+      if (!requesterPhone || !requesterPhone.trim()) {
+        return NextResponse.json(
+          { error: 'Phone number is required when requesting help' },
+          { status: 400 }
+        );
+      }
+      if (!helpDescription || !helpDescription.trim()) {
+        return NextResponse.json(
+          { error: 'Help description is required when requesting help' },
+          { status: 400 }
+        );
+      }
     }
 
     // Validate road status
@@ -214,6 +237,9 @@ export async function POST(request: Request) {
       hasWifi: hasWifi !== undefined ? Boolean(hasWifi) : true,
       needsHelp: Boolean(needsHelp),
       helpType: needsHelp ? helpType : null,
+      requesterName: needsHelp && requesterName ? requesterName.trim() : null,
+      requesterPhone: needsHelp && requesterPhone ? requesterPhone.trim() : null,
+      helpDescription: needsHelp && helpDescription ? helpDescription.trim() : null,
       roadStatus,
       additionalInfo: body.additionalInfo || null,
       imageUrl: body.imageUrl || null

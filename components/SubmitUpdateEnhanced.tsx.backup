@@ -192,8 +192,8 @@ export default function SubmitUpdateEnhanced() {
   // Emergency
   const [needsHelp, setNeedsHelp] = useState<boolean>(false);
   const [helpType, setHelpType] = useState<'medical' | 'physical' | 'police' | 'firefighter' | 'other' | ''>('');
-  const [requesterName, setRequesterName] = useState<string>('');
-  const [requesterPhone, setRequesterPhone] = useState<string>('');
+  const [contactName, setContactName] = useState<string>('');
+  const [contactPhone, setContactPhone] = useState<string>('');
   const [helpDescription, setHelpDescription] = useState<string>('');
 
   // Additional info
@@ -272,34 +272,6 @@ export default function SubmitUpdateEnhanced() {
       return;
     }
 
-    // Validate contact info if help is needed
-    if (needsHelp) {
-      if (!requesterName.trim()) {
-        notifications.show({
-          title: 'Validation Error',
-          message: 'Please enter your name for help requests',
-          color: 'red'
-        });
-        return;
-      }
-      if (!requesterPhone.trim()) {
-        notifications.show({
-          title: 'Validation Error',
-          message: 'Please enter your phone number for help requests',
-          color: 'red'
-        });
-        return;
-      }
-      if (!helpDescription.trim()) {
-        notifications.show({
-          title: 'Validation Error',
-          message: 'Please describe what help you need',
-          color: 'red'
-        });
-        return;
-      }
-    }
-
     try {
       setSubmitting(true);
 
@@ -367,11 +339,9 @@ export default function SubmitUpdateEnhanced() {
         // Emergency
         needsHelp,
         helpType: needsHelp ? helpType : null,
-
-        // Contact information (only if help is needed)
-        requesterName: needsHelp ? requesterName.trim() : null,
-        requesterPhone: needsHelp ? requesterPhone.trim() : null,
-        helpDescription: needsHelp ? helpDescription.trim() : null,
+        contactName: needsHelp ? contactName.trim() : undefined,
+        contactPhone: needsHelp ? contactPhone.trim() : undefined,
+        helpDescription: needsHelp ? helpDescription.trim() : undefined,
 
         // Additional info
         additionalInfo: additionalInfo.trim() || undefined,
@@ -424,13 +394,12 @@ export default function SubmitUpdateEnhanced() {
       setStructuralDamage(false);
       setNeedsHelp(false);
       setHelpType('');
-      setRequesterName('');
-      setRequesterPhone('');
+      setContactName('');
+      setContactPhone('');
       setHelpDescription('');
       setAdditionalInfo('');
       setImageFile(null);
       setImageUrl(null);
-
     } catch (err) {
       console.error('Error submitting:', err);
       notifications.show({
@@ -570,60 +539,70 @@ export default function SubmitUpdateEnhanced() {
               </Radio.Group>
 
               {needsHelp && (
-                <Stack gap="md" mt="md">
-                  <Box>
-                    <Text size="sm" fw={500} mb="xs">What type of help?</Text>
-                    <Radio.Group
-                      value={helpType}
-                      onChange={(value) => setHelpType(value as any)}
-                    >
-                      <Stack gap="xs">
-                        <Radio value="medical" label="🏥 Medical Emergency" color="red" />
-                        <Radio value="physical" label="💪 Physical Assistance" color="orange" />
-                        <Radio value="police" label="👮 Police" color="blue" />
-                        <Radio value="firefighter" label="🚒 Fire/Rescue" color="yellow" />
-                        <Radio value="other" label="ℹ️ Other" color="gray" />
-                      </Stack>
-                    </Radio.Group>
-                  </Box>
-
-                  <Divider />
-
-                  <Box>
-                    <Text size="sm" fw={600} mb="md" c="red">📞 Contact Information</Text>
-                    
-                    <Stack gap="md">
-                      <TextInput
-                        label="Your Name"
-                        placeholder="e.g., John Smith"
-                        value={requesterName}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRequesterName(e.currentTarget.value)}
-                        required
-                        leftSection={<Text size="sm">👤</Text>}
-                      />
-
-                      <TextInput
-                        label="Phone Number"
-                        placeholder="e.g., 876-123-4567"
-                        value={requesterPhone}
-                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRequesterPhone(e.currentTarget.value)}
-                        required
-                        leftSection={<Text size="sm">📱</Text>}
-                        description="So emergency services can contact you"
-                      />
-
-                      <Textarea
-                        label="Describe What You Need"
-                        placeholder="Please describe your situation and what kind of help you need..."
-                        value={helpDescription}
-                        onChange={(e) => setHelpDescription(e.currentTarget.value)}
-                        required
-                        minRows={3}
-                        maxLength={500}
-                      />
+                <Box mt="md">
+                  <Text size="sm" fw={500} mb="xs">What type of help?</Text>
+                  <Radio.Group
+                    value={helpType}
+                    onChange={(value) => setHelpType(value as any)}
+                  >
+                    <Stack gap="xs">
+                      <Radio value="medical" label="🏥 Medical Emergency" color="red" />
+                      <Radio value="physical" label="💪 Physical Assistance" color="orange" />
+                      <Radio value="police" label="👮 Police" color="blue" />
+                      <Radio value="firefighter" label="🚒 Fire/Rescue" color="yellow" />
+                      <Radio value="other" label="ℹ️ Other" color="gray" />
                     </Stack>
-                  </Box>
-                </Stack>
+                  </Radio.Group>
+                </Box>
+                
+                {/* Contact Information for Help Requests */}
+                <Card withBorder padding="md" radius="md" mt="md" style={{ backgroundColor: '#fff9e6', borderColor: '#ff6b6b' }}>
+                  <Stack gap="md">
+                    <Group gap="xs">
+                      <Text size="sm" fw={700} c="red">📞 Emergency Contact Information</Text>
+                      <Badge color="red" size="xs">Required</Badge>
+                    </Group>
+                    
+                    <TextInput
+                      label="Your Name"
+                      placeholder="Enter your full name"
+                      value={contactName}
+                      onChange={(event) => setContactName(event.currentTarget.value)}
+                      required
+                      styles={{
+                        label: { fontWeight: 600 }
+                      }}
+                    />
+                    
+                    <TextInput
+                      label="Phone Number"
+                      placeholder="Enter your phone number"
+                      value={contactPhone}
+                      onChange={(event) => setContactPhone(event.currentTarget.value)}
+                      required
+                      type="tel"
+                      styles={{
+                        label: { fontWeight: 600 }
+                      }}
+                    />
+                    
+                    <Textarea
+                      label="Describe What You Need"
+                      placeholder="Please describe your situation and what help you need..."
+                      value={helpDescription}
+                      onChange={(event) => setHelpDescription(event.currentTarget.value)}
+                      minRows={3}
+                      maxLength={500}
+                      styles={{
+                        label: { fontWeight: 600 }
+                      }}
+                    />
+                    
+                    <Text size="xs" c="dimmed">
+                      ⚠️ This information will be shared with emergency responders
+                    </Text>
+                  </Stack>
+                </Card>
               )}
             </Box>
 
