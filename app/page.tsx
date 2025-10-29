@@ -593,7 +593,7 @@ export default function HomePage() {
       </Drawer>
 
       {/* Main Content - Mobile */}
-      <Container size="md" py="xl" style={{ paddingBottom: '120px' }} hiddenFrom="sm">
+      <Container size="md" py="xl" style={{ paddingBottom: activeTab === 'submit' ? '160px' : '120px' }} hiddenFrom="sm">
         {activeTab === 'feed' && <CommunityFeed />}
         {activeTab === 'submit' && <SubmitUpdateEnhanced />}
         {activeTab === 'storm' && (

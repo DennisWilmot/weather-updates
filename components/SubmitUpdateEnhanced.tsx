@@ -668,6 +668,9 @@ export default function SubmitUpdateEnhanced() {
               color="electricBlue"
               size="lg"
               fullWidth
+              style={{
+                marginBottom: '20px'
+              }}
             >
               Submit Status Update
             </Button>
