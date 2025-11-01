@@ -33,7 +33,7 @@ async function syncAllUsers() {
       console.log('✅ Successfully fetched specific user!');
       console.log('User ID:', specificUser.id);
       console.log('User email:', specificUser.emailAddresses?.[0]?.emailAddress);
-      console.log('User name:', specificUser.fullName || `${specificUser.firstName} ${specificUser.lastName}`);
+      console.log('User name:', `${specificUser.firstName || ''} ${specificUser.lastName || ''}`.trim() || 'N/A');
     } catch (testError: any) {
       console.error('❌ Failed to fetch specific user');
       console.error('Error:', testError.message);
@@ -45,13 +45,11 @@ async function syncAllUsers() {
     try {
       console.log(`\n=== TESTING USER LIST API ===`);
       const testResponse = await clerk.users.getUserList({ limit: 1 });
-      console.log('Test response keys:', Object.keys(testResponse));
-      console.log('Test response.data:', testResponse.data);
-      console.log('Test response.totalCount:', testResponse.totalCount);
-      console.log('Test response length:', testResponse.data?.length);
+      console.log('Test response type:', Array.isArray(testResponse) ? 'array' : typeof testResponse);
+      console.log('Test response length:', Array.isArray(testResponse) ? testResponse.length : 'N/A');
       
-      if (testResponse.data && testResponse.data.length > 0) {
-        console.log('✅ User list API works! Found', testResponse.data.length, 'user(s)');
+      if (Array.isArray(testResponse) && testResponse.length > 0) {
+        console.log('✅ User list API works! Found', testResponse.length, 'user(s)');
       } else {
         console.log('⚠️ User list API returned empty array');
       }
@@ -82,11 +80,11 @@ async function syncAllUsers() {
       console.log(`\n=== FETCHING USER LIST ===`);
       const listResponse = await clerk.users.getUserList({ limit: 500 });
       
-      if (listResponse.data && listResponse.data.length > 0) {
-        console.log(`✅ Found ${listResponse.data.length} users in list`);
+      if (Array.isArray(listResponse) && listResponse.length > 0) {
+        console.log(`✅ Found ${listResponse.length} users in list`);
         // Add users that aren't already in our list
         const existingIds = new Set(allUsers.map(u => u.id));
-        const newUsers = listResponse.data.filter(u => !existingIds.has(u.id));
+        const newUsers = listResponse.filter(u => !existingIds.has(u.id));
         allUsers = [...allUsers, ...newUsers];
         console.log(`Added ${newUsers.length} new users from list`);
       } else {
@@ -118,7 +116,9 @@ async function syncAllUsers() {
           email: clerkUser.emailAddresses?.[0]?.emailAddress || null,
           firstName: clerkUser.firstName || null,
           lastName: clerkUser.lastName || null,
-          fullName: clerkUser.fullName || null,
+          fullName: clerkUser.firstName && clerkUser.lastName 
+            ? `${clerkUser.firstName} ${clerkUser.lastName}` 
+            : clerkUser.firstName || clerkUser.lastName || null,
           phoneNumber: clerkUser.phoneNumbers?.[0]?.phoneNumber || null,
           imageUrl: clerkUser.imageUrl || null,
           lastActiveAt: new Date(),
