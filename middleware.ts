@@ -1,14 +1,28 @@
-import { withClerkMiddleware } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
+import { authMiddleware } from "@clerk/nextjs/server";
 
-export default withClerkMiddleware(() => {
-  return NextResponse.next();
+export default authMiddleware({
+  publicRoutes: [
+    "/",
+    "/api/melissa",
+    "/api/submissions",
+    "/api/tweets",
+    "/api/rss-news",
+    "/api/parishes",
+    "/api/communities",
+    "/api/locations",
+    "/api/locations/(.*)",
+    "/api/search",
+    "/api/link-preview",
+    "/api/emergency-updates",
+    "/api/live-updates",
+    "/api/relief-portal/stats",
+    "/api/parishes/stats",
+    "/api/submissions/stats",
+    "/api/online-retailers",
+    "/sign-up"
+  ],
 });
 
-// Only run middleware for protected routes
 export const config = {
-  matcher: [
-    "/relief-portal(.*)",
-    "/api/relief-portal(.*)",
-  ],
+  matcher: ["/((?!_next|.*\\..*).*)"],
 };

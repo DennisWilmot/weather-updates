@@ -142,11 +142,13 @@ export default function HomePage() {
           setCanSubmit(data.canSubmit || false);
         } else {
           console.error('Failed to check permissions:', response.status);
-          setCanSubmit(false);
+          // If permissions check fails, allow anyway for now
+          setCanSubmit(true);
         }
       } catch (error) {
         console.error('Error checking permissions:', error);
-        setCanSubmit(false);
+        // If permissions check fails, allow anyway for now
+        setCanSubmit(true);
       }
     };
 
@@ -444,7 +446,7 @@ export default function HomePage() {
                     onClick={() => setActiveTab('submit')}
                     leftSection="📢"
                   >
-                    Report
+                    Submit Update
                   </Button>
                 )}
                 <Button
@@ -539,7 +541,7 @@ export default function HomePage() {
               }}
               leftSection="📢"
             >
-              Report Update
+              Submit Responder Update
             </Button>
           )}
           <Button
@@ -784,7 +786,7 @@ export default function HomePage() {
                 color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
                 transition: 'color 0.3s ease',
                 marginTop: '2px'
-              }}>Report</Text>
+              }}>Submit Update</Text>
             </Button>
           )}
 

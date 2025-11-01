@@ -84,6 +84,9 @@ export const submissions = pgTable('submissions', {
   community: text('community'), // Will be deprecated after migration
 
   // Metadata
+  submissionType: text('submission_type', {
+    enum: ['citizen', 'responder']
+  }).default('citizen'), // Distinguishes citizen reports from responder updates
   confidence: integer('confidence').default(1), // 1-5 scale for report reliability
   createdAt: timestamp('created_at').defaultNow().notNull()
 });

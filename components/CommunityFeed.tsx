@@ -24,9 +24,10 @@ import {
   Modal,
   PasswordInput,
   ActionIcon,
-  Checkbox
+  Checkbox,
+  Tabs
 } from '@mantine/core';
-import { useDisclosure } from '@mantine/hooks';
+import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
   IconCheck,
   IconX,
@@ -37,6 +38,7 @@ import {
 import { notifications } from '@mantine/notifications';
 import jamaicaLocations from '../data/jamaica-locations.json';
 import JamaicaParishMap from './JamaicaParishMap';
+import ResponderUpdatesTable from './ResponderUpdatesTable';
 
 interface Submission {
   id: string;
@@ -80,6 +82,12 @@ interface ParishStats {
 }
 
 export default function CommunityFeed() {
+  // Media query for responsive layout
+  const isDesktop = useMediaQuery('(min-width: 768px)');
+
+  // Feed type state (responder or community)
+  const [feedType, setFeedType] = useState<'responder' | 'citizen'>('responder');
+  
   // Filter state
   const [filterParish, setFilterParish] = useState<string>('');
   const [filterCommunity, setFilterCommunity] = useState<string>('');
@@ -101,9 +109,10 @@ export default function CommunityFeed() {
 
   // React Query for fetching submissions
   const { data: submissionsData, isLoading, error, refetch } = useQuery({
-    queryKey: ['submissions', filterParish, filterCommunity, currentPage, showImagesOnly],
+    queryKey: ['submissions', feedType, filterParish, filterCommunity, currentPage, showImagesOnly],
     queryFn: async () => {
       const params = new URLSearchParams();
+      params.append('type', feedType);
       if (filterParish) params.append('parish', filterParish);
       if (filterCommunity) params.append('community', filterCommunity);
       if (showImagesOnly) params.append('imageOnly', 'true');
@@ -174,6 +183,11 @@ export default function CommunityFeed() {
     setCommunitySearch('');
     setShowImagesOnly(false);
   };
+
+  // Reset to page 1 when feed type changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [feedType]);
 
   const handleDeleteClick = (submissionId: string) => {
     setDeletingId(submissionId);
@@ -248,7 +262,6 @@ export default function CommunityFeed() {
 
   const formatTimeAgo = (dateString: string) => {
     try {
-      const now = new Date();
       // Parse the timestamp - database stores in UTC
       let submissionTime: Date;
       
@@ -263,48 +276,20 @@ export default function CommunityFeed() {
       // Check if date is valid
       if (isNaN(submissionTime.getTime())) {
         console.log('Invalid date:', dateString);
-        return 'Just now';
+        return 'Invalid date';
       }
       
-      // Calculate difference in milliseconds
-      const diffMs = now.getTime() - submissionTime.getTime();
-      const diffMinutes = Math.round(diffMs / (1000 * 60));
+      // Format as dd/mm/yy hh:mm
+      const day = String(submissionTime.getDate()).padStart(2, '0');
+      const month = String(submissionTime.getMonth() + 1).padStart(2, '0');
+      const year = String(submissionTime.getFullYear()).slice(-2);
+      const hours = String(submissionTime.getHours()).padStart(2, '0');
+      const minutes = String(submissionTime.getMinutes()).padStart(2, '0');
       
-      console.log('Time calculation:', {
-        dateString,
-        submissionTime: submissionTime.toISOString(),
-        now: now.toISOString(),
-        diffMs,
-        diffMinutes
-      });
-      
-      // If negative (future date), just say "Just now"
-      if (diffMinutes < 0) {
-        return 'Just now';
-      }
-      
-      // If less than 1 minute
-      if (diffMinutes < 1) {
-        return 'Just now';
-      }
-      
-      // If less than 60 minutes, show in minutes
-      if (diffMinutes < 60) {
-        return `${diffMinutes} min ago`;
-      }
-      
-      // If less than 24 hours, show in hours
-      if (diffMinutes < 1440) {
-        const hours = Math.round(diffMinutes / 60);
-        return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-      }
-      
-      // If more than 24 hours, show in days
-      const days = Math.round(diffMinutes / 1440);
-      return `${days} day${days > 1 ? 's' : ''} ago`;
+      return `${day}/${month}/${year} ${hours}:${minutes}`;
     } catch (error) {
       console.error('Error formatting time:', error, dateString);
-      return 'Just now';
+      return 'Invalid date';
     }
   };
 
@@ -417,10 +402,16 @@ export default function CommunityFeed() {
 
       {/* Submissions Feed */}
       <Card shadow="sm" padding="md" radius="md" withBorder>
+        <Tabs value={feedType} onChange={(value) => setFeedType(value as 'responder' | 'citizen')}>
+          <Tabs.List mb="md">
+            <Tabs.Tab value="responder">Responder Updates</Tabs.Tab>
+            <Tabs.Tab value="citizen">Community Updates</Tabs.Tab>
+          </Tabs.List>
+        </Tabs>
+
         <Group justify="space-between" align="center" mb="md">
           <Box>
-            <Title order={3} c="#1478FF">Community Updates</Title>
-            <Text size="xs" c="dimmed" mt="xs">
+            <Text size="xs" c="dimmed">
               Last updated: {new Date().toLocaleString('en-US', {
                 month: 'short', 
                 day: 'numeric',
@@ -463,8 +454,13 @@ export default function CommunityFeed() {
             </Stack>
           </Center>
         ) : (
-          <Stack gap="sm">
-            {submissionsData.data.map((submission: Submission) => (
+          <>
+            {/* Responsive Layout: Table on desktop, cards on mobile */}
+            {isDesktop ? (
+              <ResponderUpdatesTable submissions={submissionsData.data} />
+            ) : (
+              <Stack gap="sm">
+                {submissionsData.data.map((submission: Submission) => (
               <Card key={submission.id} shadow="xs" padding="md" radius="md" withBorder>
                 <Stack gap="sm">
                   {/* Location Header */}
@@ -472,36 +468,17 @@ export default function CommunityFeed() {
                     <Box style={{ flex: 1 }}>
                       {/* Hierarchical Location */}
                       <Group gap="xs" wrap="wrap">
-                        <Badge color="teal" variant="light" size="sm">
-                          {submission.parish}
-                        </Badge>
-                        <Text size="xs" c="dimmed">→</Text>
-                        <Badge color="cyan" variant="light" size="sm">
-                          {submission.community}
-                        </Badge>
-                        {(submission.placeName || submission.streetName) && (
-                          <>
-                            <Text size="xs" c="dimmed">→</Text>
-                            <Badge color="blue" variant="filled" size="sm">
-                              📍 {submission.placeName || submission.streetName}
-                            </Badge>
-                          </>
-                        )}
+                        <Text size="xs" c="dimmed">
+                          {submission.placeName && `${submission.placeName}, `}
+                          {submission.streetName && `${submission.streetName}, `}
+                          {submission.community}, {submission.parish}
+                        </Text>
                       </Group>
 
                       {/* Timestamp */}
                       <Group gap="xs" align="center" mt="xs">
                         <Text size="xs" c="dimmed">
                           {formatTimeAgo(submission.createdAt)}
-                        </Text>
-                        <Text size="xs" c="blue" fw={500}>
-                          • {new Date(submission.createdAt).toLocaleString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            timeZone: 'America/Jamaica'
-                          })}
                         </Text>
                       </Group>
                     </Box>
@@ -620,8 +597,10 @@ export default function CommunityFeed() {
                   )}
                 </Stack>
               </Card>
-            ))}
-          </Stack>
+                ))}
+              </Stack>
+            )}
+          </>
         )}
         
         {/* Pagination */}

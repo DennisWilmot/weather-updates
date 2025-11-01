@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { submissions, communities, parishes } from '@/lib/db/schema';
-import { desc, eq, gte, and, sql } from 'drizzle-orm';
+import { desc, eq, and, sql } from 'drizzle-orm';
 import { canSubmitUpdates, syncUserToDb } from '@/lib/auth-helpers';
 import { currentUser } from '@clerk/nextjs/server';
 
@@ -13,29 +13,31 @@ export async function GET(request: Request) {
     const imageOnly = searchParams.get('imageOnly') === 'true';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '10');
-    
+    const submissionType = searchParams.get('type') || 'responder'; // Default to responder
+
     // Build query conditions
     const conditions = [];
-    
-    // Filter by last 24 hours
-    const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    conditions.push(gte(submissions.createdAt, twentyFourHoursAgo));
-    
+
+    // Filter by submission type (responder or citizen)
+    if (submissionType === 'responder' || submissionType === 'citizen') {
+      conditions.push(eq(submissions.submissionType, submissionType));
+    }
+
     // Add parish filter if provided
     if (parish) {
       conditions.push(eq(submissions.parish, parish));
     }
-    
+
     // Add community filter if provided
     if (community) {
       conditions.push(eq(submissions.community, community));
     }
-    
+
     // Add image filter if requested
     if (imageOnly) {
       conditions.push(sql`${submissions.imageUrl} IS NOT NULL AND ${submissions.imageUrl} != ''`);
     }
-    
+
     const offset = (page - 1) * limit;
 
     // Execute query with pagination
@@ -122,43 +124,16 @@ export async function POST(request: Request) {
       requesterName,
       requesterPhone,
       helpDescription,
-      roadStatus
+      roadStatus,
+      submissionType
     } = body;
 
     // Validate required fields
-    if (hasElectricity === undefined || needsHelp === undefined || !roadStatus) {
+    if (hasElectricity === undefined || !roadStatus) {
       return NextResponse.json(
-        { error: 'Missing required fields: hasElectricity, needsHelp, roadStatus' },
+        { error: 'Missing required fields: hasElectricity, roadStatus' },
         { status: 400 }
       );
-    }
-
-    // Validate help type and contact info if help is needed
-    if (needsHelp) {
-      if (!helpType) {
-        return NextResponse.json(
-          { error: 'Help type is required when help is needed' },
-          { status: 400 }
-        );
-      }
-      if (!requesterName || !requesterName.trim()) {
-        return NextResponse.json(
-          { error: 'Name is required when requesting help' },
-          { status: 400 }
-        );
-      }
-      if (!requesterPhone || !requesterPhone.trim()) {
-        return NextResponse.json(
-          { error: 'Phone number is required when requesting help' },
-          { status: 400 }
-        );
-      }
-      if (!helpDescription || !helpDescription.trim()) {
-        return NextResponse.json(
-          { error: 'Help description is required when requesting help' },
-          { status: 400 }
-        );
-      }
     }
 
     // Validate road status
@@ -252,17 +227,18 @@ export async function POST(request: Request) {
       hasElectricity: hasElectricity !== undefined ? Boolean(hasElectricity) : null,
       flowService: flowService !== undefined ? Boolean(flowService) : null,
       digicelService: digicelService !== undefined ? Boolean(digicelService) : null,
-      waterService: waterService !== undefined ? (waterService === 2) : null,
+      waterService: waterService !== undefined ? Boolean(waterService) : null,
       flooding: flooding !== undefined ? Boolean(flooding) : false,
       downedPowerLines: downedPowerLines !== undefined ? Boolean(downedPowerLines) : false,
       fallenTrees: fallenTrees !== undefined ? Boolean(fallenTrees) : false,
       structuralDamage: structuralDamage !== undefined ? Boolean(structuralDamage) : false,
       hasWifi: hasWifi !== undefined ? Boolean(hasWifi) : true,
-      needsHelp: Boolean(needsHelp),
+      needsHelp: needsHelp !== undefined ? Boolean(needsHelp) : false,
       helpType: needsHelp ? helpType : null,
       requesterName: needsHelp && requesterName ? requesterName.trim() : null,
       requesterPhone: needsHelp && requesterPhone ? requesterPhone.trim() : null,
       helpDescription: needsHelp && helpDescription ? helpDescription.trim() : null,
+      submissionType: submissionType || 'citizen', // Default to citizen for backward compatibility
       roadStatus,
       additionalInfo: body.additionalInfo || null,
       imageUrl: body.imageUrl || null
