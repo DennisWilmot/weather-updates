@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Stack,
   Title,
@@ -18,11 +18,13 @@ import {
   Badge,
   SimpleGrid,
   Slider,
-  TextInput
+  TextInput,
+  Alert
 } from '@mantine/core';
-import { IconPhoto, IconBolt, IconWifi, IconRoad, IconAlertTriangle } from '@tabler/icons-react';
+import { IconPhoto, IconBolt, IconWifi, IconRoad, IconAlertTriangle, IconLock } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import { useQueryClient } from '@tanstack/react-query';
+import { useUser } from '@clerk/nextjs';
 import { supabase } from '../lib/supabase';
 import HierarchicalLocationPicker from './HierarchicalLocationPicker';
 import imageCompression from 'browser-image-compression';
@@ -154,6 +156,41 @@ function ServiceStatusToggle({
 
 export default function SubmitUpdateEnhanced() {
   const queryClient = useQueryClient();
+  const { isSignedIn, user } = useUser();
+  const [canSubmit, setCanSubmit] = useState<boolean | null>(null);
+  const [checkingPermissions, setCheckingPermissions] = useState(true);
+
+  // Check permissions on mount
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (!isSignedIn) {
+        setCanSubmit(false);
+        setCheckingPermissions(false);
+        return;
+      }
+
+      try {
+        // Sync user to database first
+        await fetch('/api/users/sync', { method: 'POST' });
+        
+        // Check if user can submit
+        const response = await fetch('/api/users/check-permissions');
+        if (response.ok) {
+          const data = await response.json();
+          setCanSubmit(data.canSubmit || false);
+        } else {
+          setCanSubmit(false);
+        }
+      } catch (error) {
+        console.error('Error checking permissions:', error);
+        setCanSubmit(false);
+      } finally {
+        setCheckingPermissions(false);
+      }
+    };
+
+    checkPermissions();
+  }, [isSignedIn]);
 
   // Location state
   const [location, setLocation] = useState<{
@@ -389,7 +426,25 @@ export default function SubmitUpdateEnhanced() {
       if (!response.ok) {
         const errorData = await response.json();
         console.error('Submission failed:', errorData);
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        
+        // Handle permission errors specifically
+        if (response.status === 403 || response.status === 401) {
+          notifications.show({
+            title: 'Permission Denied',
+            message: errorData.error || 'You do not have permission to submit updates',
+            color: 'red',
+            autoClose: 5000
+          });
+          // Refresh permissions check
+          const permResponse = await fetch('/api/users/check-permissions');
+          if (permResponse.ok) {
+            const permData = await permResponse.json();
+            setCanSubmit(permData.canSubmit || false);
+          }
+        } else {
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        return;
       }
 
       await response.json();
@@ -442,6 +497,49 @@ export default function SubmitUpdateEnhanced() {
       setSubmitting(false);
     }
   };
+
+  // Show loading state while checking permissions
+  if (checkingPermissions) {
+    return (
+      <Stack gap="lg">
+        <Card shadow="sm" padding="lg" radius="md" withBorder>
+          <Alert color="blue" title="Checking permissions..." icon={<IconLock />}>
+            Verifying your access...
+          </Alert>
+        </Card>
+      </Stack>
+    );
+  }
+
+  // Show disabled state if user cannot submit
+  if (!canSubmit) {
+    return (
+      <Stack gap="lg">
+        <Card shadow="sm" padding="lg" radius="md" withBorder>
+          <Alert 
+            color="yellow" 
+            title="Access Restricted" 
+            icon={<IconLock />}
+            mb="md"
+          >
+            {!isSignedIn ? (
+              <>
+                You must be signed in to submit updates. Please sign in to continue.
+              </>
+            ) : (
+              <>
+                You do not have permission to submit updates. Only response team members and administrators can submit updates.
+                If you believe this is an error, please contact support.
+              </>
+            )}
+          </Alert>
+          <Box style={{ opacity: 0.6, pointerEvents: 'none' }}>
+            <Title order={2} c="electricBlue.0" mb="md">Submit Status Update</Title>
+          </Box>
+        </Card>
+      </Stack>
+    );
+  }
 
   return (
     <Stack gap="lg">

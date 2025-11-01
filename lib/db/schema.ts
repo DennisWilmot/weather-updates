@@ -124,3 +124,32 @@ export const locationStatus = pgTable('location_status', {
   lastUpdated: timestamp('last_updated').defaultNow().notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull()
 });
+
+// Users table - Links Clerk authentication with app-specific user data
+export const users = pgTable('users', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  clerkUserId: text('clerk_user_id').notNull().unique(), // Clerk's user ID
+  email: text('email'),
+  firstName: text('first_name'),
+  lastName: text('last_name'),
+  fullName: text('full_name'),
+  phoneNumber: text('phone_number'),
+  imageUrl: text('image_url'), // Profile image from Clerk
+  
+  // App-specific user metadata
+  role: text('role', {
+    enum: ['admin', 'coordinator', 'responder', 'viewer']
+  }).default('responder'),
+  organization: text('organization'), // e.g., "Jamaica Red Cross", "ODPEM"
+  department: text('department'), // e.g., "Emergency Response", "Logistics"
+  
+  // Permissions and preferences
+  canViewSensitiveData: boolean('can_view_sensitive_data').default(true), // First responders can see contact info
+  canExportData: boolean('can_export_data').default(false),
+  canManageUsers: boolean('can_manage_users').default(false), // Only admins
+  
+  // Metadata
+  lastActiveAt: timestamp('last_active_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});

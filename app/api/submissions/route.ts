@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { submissions, communities, parishes } from '@/lib/db/schema';
 import { desc, eq, gte, and, sql } from 'drizzle-orm';
+import { canSubmitUpdates, syncUserToDb } from '@/lib/auth-helpers';
+import { currentUser } from '@clerk/nextjs/server';
 
 export async function GET(request: Request) {
   try {
@@ -74,6 +76,27 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    // Check authentication
+    const clerkUser = await currentUser();
+    if (!clerkUser) {
+      return NextResponse.json(
+        { error: 'Unauthorized - Please sign in to submit updates' },
+        { status: 401 }
+      );
+    }
+
+    // Sync user to database if needed
+    await syncUserToDb(clerkUser);
+
+    // Check if user has permission to submit
+    const canSubmit = await canSubmitUpdates();
+    if (!canSubmit) {
+      return NextResponse.json(
+        { error: 'Forbidden - You do not have permission to submit updates' },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
 
     // Handle both old format (parish/community names) and new format (IDs)
