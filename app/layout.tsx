@@ -40,7 +40,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700;800&family=Satoshi:wght@500;600;700&display=swap" rel="stylesheet" />
       </head>
       <body style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
-        <ClerkProvider>
+        <ClerkProvider publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}>
           <QueryProvider>
             <MantineProvider theme={theme}>
               <Notifications />

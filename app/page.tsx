@@ -456,6 +456,15 @@ export default function HomePage() {
                 >
                   Contacts
                 </Button>
+                <Button
+                  variant="outline"
+                  color="yellow"
+                  size="sm"
+                  onClick={() => router.push('/onlineretailers')}
+                  leftSection="🛒"
+                >
+                  Retailers
+                </Button>
                 {isLoaded && !isSignedIn && (
                   <SignInButton mode="modal" afterSignInUrl="/">
                     <button
@@ -544,6 +553,18 @@ export default function HomePage() {
             leftSection="📞"
           >
             Emergency Contacts
+          </Button>
+          <Button
+            variant="subtle"
+            color="yellow"
+            fullWidth
+            onClick={() => {
+              router.push('/onlineretailers');
+              close();
+            }}
+            leftSection="🛒"
+          >
+            Online Retailers
           </Button>
           {isLoaded && !isSignedIn && (
             <SignInButton mode="modal" afterSignInUrl="/">
@@ -795,6 +816,34 @@ export default function HomePage() {
               transition: 'color 0.3s ease',
               marginTop: '2px'
             }}>Contacts</Text>
+          </Button>
+
+          <Button
+            variant="subtle"
+            color="gray"
+            size="sm"
+            onClick={() => router.push('/onlineretailers')}
+            style={{
+              flex: 1,
+              flexDirection: 'column',
+              height: 'auto',
+              padding: '8px 4px',
+              minHeight: '56px',
+              borderRadius: '12px',
+              backgroundColor: 'transparent',
+              border: '1px solid transparent',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
+            <Text size="xl" style={{
+              color: '#FFE66D',
+              transition: 'color 0.3s ease'
+            }}>🛒</Text>
+            <Text size="xs" style={{
+              color: '#FFE66D',
+              transition: 'color 0.3s ease',
+              marginTop: '2px'
+            }}>Retailers</Text>
           </Button>
         </Group>
       </Paper>

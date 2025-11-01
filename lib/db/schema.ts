@@ -153,3 +153,26 @@ export const users = pgTable('users', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
+
+// Online Retailers table - Stores online stores for purchasing goods
+export const onlineRetailers = pgTable('online_retailers', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  name: text('name').notNull(),
+  websiteUrl: text('website_url').notNull(),
+  phoneNumber: text('phone_number'),
+  description: text('description'),
+  logoUrl: text('logo_url'), // URL to retailer logo/thumbnail in Supabase storage
+  
+  // Status tracking
+  verified: boolean('verified').default(false), // Admin verified retailers
+  status: text('status', {
+    enum: ['active', 'pending', 'inactive']
+  }).notNull().default('active'),
+  
+  // User submission support (for future functionality)
+  submittedByUserId: uuid('submitted_by_user_id').references(() => users.id), // Nullable - null means admin/system added
+  
+  // Metadata
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull()
+});
