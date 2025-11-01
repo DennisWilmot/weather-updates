@@ -22,7 +22,7 @@
     "@tanstack/react-query": "^5.90.5",
     "browser-image-compression": "^2.0.2",
     "drizzle-orm": "^0.44.7",
-    "next": "14.0.4",
+    "next": "^14.2.25",
     "postgres": "^3.4.7",
     "react": "^18",
     "react-dom": "^18"
@@ -33,7 +33,7 @@
     "@types/react-dom": "^18",
     "drizzle-kit": "^0.31.5",
     "eslint": "^8",
-    "eslint-config-next": "14.0.4",
+    "eslint-config-next": "^14.2.25",
     "typescript": "^5"
   }
 }
