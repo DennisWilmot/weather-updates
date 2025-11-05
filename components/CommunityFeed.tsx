@@ -25,7 +25,8 @@ import {
   PasswordInput,
   ActionIcon,
   Checkbox,
-  Tabs
+  Tabs,
+  Drawer
 } from '@mantine/core';
 import { useDisclosure, useMediaQuery } from '@mantine/hooks';
 import {
@@ -33,7 +34,8 @@ import {
   IconX,
   IconRefresh,
   IconAlertTriangle,
-  IconTrash
+  IconTrash,
+  IconList
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import jamaicaLocations from '../data/jamaica-locations.json';
@@ -84,6 +86,9 @@ interface ParishStats {
 export default function CommunityFeed() {
   // Media query for responsive layout
   const isDesktop = useMediaQuery('(min-width: 768px)');
+
+  // Drawer state for updates panel
+  const [drawerOpened, { open: openDrawer, close: closeDrawer }] = useDisclosure(false);
 
   // Feed type state (responder or community)
   const [feedType, setFeedType] = useState<'responder' | 'citizen'>('responder');
@@ -301,326 +306,386 @@ export default function CommunityFeed() {
   const filterCommunities = filterParish ? jamaicaLocations[filterParish as keyof typeof jamaicaLocations] || [] : [];
 
   return (
-    <Stack gap="lg">
+    <Box style={{ position: 'relative', width: '100%', height: 'calc(100vh - 14.28vh)', overflow: 'hidden' }}>
+      {/* Full-screen map */}
+      <Box style={{ width: '100%', height: '100%', position: 'relative' }}>
+        <JamaicaParishMap 
+          selectedParish={filterParish}
+          onParishClick={(parish) => {
+            // Toggle filter: if clicking same parish, clear filter; otherwise set it
+            if (filterParish === parish) {
+              setFilterParish('');
+            } else {
+              setFilterParish(parish);
+            }
+            setFilterCommunity('');
+            setCommunitySearch('');
+            // Open drawer when parish is selected
+            if (parish !== filterParish) {
+              openDrawer();
+            }
+          }}
+        />
+      </Box>
 
-      {/* Map Card */}
-      <Card shadow="sm" padding="xs" radius="md" withBorder style={{ paddingTop: '12px', paddingBottom: '12px' }}>
-        <Stack gap={4}>
-          <Text size="xs" fw={500}>Tap a Parish to View Updates</Text>
-          <JamaicaParishMap 
-            selectedParish={filterParish}
-            onParishClick={(parish) => {
-              // Toggle filter: if clicking same parish, clear filter; otherwise set it
-              if (filterParish === parish) {
-                setFilterParish('');
-              } else {
-                setFilterParish(parish);
-              }
-              setFilterCommunity('');
-              setCommunitySearch('');
-            }}
-          />
-        </Stack>
-      </Card>
+      {/* Floating toggle button */}
+      <ActionIcon
+        size="xl"
+        radius="xl"
+        color="teal"
+        variant="filled"
+        onClick={openDrawer}
+        style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          zIndex: 1000,
+          boxShadow: '0 4px 12px rgba(17, 221, 176, 0.3)',
+          transition: 'all 0.2s ease'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.transform = 'scale(1.1)';
+          e.currentTarget.style.boxShadow = '0 6px 16px rgba(17, 221, 176, 0.4)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.transform = 'scale(1)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(17, 221, 176, 0.3)';
+        }}
+      >
+        <IconList size={24} />
+      </ActionIcon>
 
-      {/* Filter Controls */}
-      <Card shadow="sm" padding="md" radius="md" withBorder>
-        <Group justify="space-between" align="flex-end">
-          <Group grow>
-            <Select
-              label="Filter by Parish"
-              placeholder="All Parishes"
-              value={filterParish}
-              onChange={(value) => {
-                setFilterParish(value || '');
-                setFilterCommunity('');
-                setCommunitySearch('');
-              }}
-              data={[
-                { value: '', label: 'All Parishes' },
-                ...Object.keys(jamaicaLocations).map(parish => ({ value: parish, label: parish }))
-              ]}
-              clearable
-            />
-            <Box>
-              <Text size="sm" fw={500} mb="xs">Filter by Community</Text>
-              <Combobox
-                store={combobox}
-                onOptionSubmit={handleCommunitySelect}
-                withinPortal={false}
-              >
-                <Combobox.Target>
-                  <TextInput
-                    placeholder="Type community name to search"
-                    value={communitySearch}
-                    onChange={(event) => handleCommunitySearch(event.currentTarget.value)}
-                    onClick={() => combobox.openDropdown()}
-                    onFocus={() => combobox.openDropdown()}
-                    onBlur={() => combobox.closeDropdown()}
-                    disabled={!filterParish}
-                  />
-                </Combobox.Target>
-
-                <Combobox.Dropdown>
-                  <Combobox.Options>
-                    {loadingCommunities ? (
-                      <Combobox.Empty>Searching...</Combobox.Empty>
-                    ) : communities.length > 0 ? (
-                      communities.map((community) => (
-                        <Combobox.Option value={community.name} key={community.id}>
-                          {community.name}
-                        </Combobox.Option>
-                      ))
-                    ) : communitySearch.length >= 1 ? (
-                      <Combobox.Empty>
-                        No communities found matching "{communitySearch}"
-                      </Combobox.Empty>
-                    ) : (
-                      <Combobox.Empty>Start typing to search communities</Combobox.Empty>
-                    )}
-                  </Combobox.Options>
-                </Combobox.Dropdown>
-              </Combobox>
-            </Box>
-          </Group>
-          <Group>
-            <Checkbox
-              label="Images only"
-              checked={showImagesOnly}
-              onChange={(event) => setShowImagesOnly(event.currentTarget.checked)}
-            />
-            <Button
-              variant="outline"
-              onClick={clearFilters}
-              disabled={!filterParish && !filterCommunity && !showImagesOnly}
-            >
-              Clear Filters
-            </Button>
-          </Group>
-        </Group>
-      </Card>
-
-      {/* Submissions Feed */}
-      <Card shadow="sm" padding="md" radius="md" withBorder>
-        <Tabs value={feedType} onChange={(value) => setFeedType(value as 'responder' | 'citizen')}>
-          <Tabs.List mb="md">
-            <Tabs.Tab value="responder">Responder Updates</Tabs.Tab>
-            <Tabs.Tab value="citizen">Community Updates</Tabs.Tab>
-          </Tabs.List>
-        </Tabs>
-
-        <Group justify="space-between" align="center" mb="md">
-          <Box>
-            <Text size="xs" c="dimmed">
-              Last updated: {new Date().toLocaleString('en-US', {
-                month: 'short', 
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'America/Jamaica'
-              })}
-            </Text>
-          </Box>
-          <Button
-            variant="outline"
-            size="sm"
-            leftSection={<IconRefresh />}
-            onClick={() => refetch()}
-            loading={isLoading}
-          >
-            Refresh
-          </Button>
-        </Group>
-
-        {isLoading ? (
-          <Center py="xl">
-            <Stack align="center" gap="md">
-              <Loader size="md" />
-              <Text c="dimmed">Loading community updates...</Text>
-            </Stack>
-          </Center>
-        ) : error ? (
-          <Alert color="red" title="Error" icon={<IconAlertTriangle />}>
-            {error instanceof Error ? error.message : 'Failed to fetch submissions'}
-            <Button mt="sm" onClick={() => refetch()} leftSection={<IconRefresh />}>
-              Retry
-            </Button>
-          </Alert>
-        ) : !submissionsData?.data || submissionsData.data.length === 0 ? (
-          <Center py="xl">
-            <Stack align="center" gap="md">
-              <Text c="dimmed">No updates found</Text>
-              <Text size="sm" c="dimmed">Be the first to share your status!</Text>
-            </Stack>
-          </Center>
-        ) : (
-          <>
-            {/* Responsive Layout: Table on desktop, cards on mobile */}
-            {isDesktop ? (
-              <ResponderUpdatesTable submissions={submissionsData.data} />
-            ) : (
-              <Stack gap="sm">
-                {submissionsData.data.map((submission: Submission) => (
-              <Card key={submission.id} shadow="xs" padding="md" radius="md" withBorder>
-                <Stack gap="sm">
-                  {/* Location Header */}
-                  <Group justify="space-between" align="flex-start">
-                    <Box style={{ flex: 1 }}>
-                      {/* Hierarchical Location */}
-                      <Group gap="xs" wrap="wrap">
-                        <Text size="xs" c="dimmed">
-                          {submission.placeName && `${submission.placeName}, `}
-                          {submission.streetName && `${submission.streetName}, `}
-                          {submission.community}, {submission.parish}
-                        </Text>
-                      </Group>
-
-                      {/* Timestamp */}
-                      <Group gap="xs" align="center" mt="xs">
-                        <Text size="xs" c="dimmed">
-                          {formatTimeAgo(submission.createdAt)}
-                        </Text>
-                      </Group>
-                    </Box>
-                    <Group gap="xs">
-                      <Badge color={getRoadStatusColor(submission.roadStatus)} variant="light">
-                        {getRoadStatusLabel(submission.roadStatus)}
-                      </Badge>
-                      <ActionIcon
-                        color="red"
-                        variant="subtle"
-                        onClick={() => handleDeleteClick(submission.id)}
-                        title="Delete submission (admin only)"
-                      >
-                        <IconTrash size={16} />
-                      </ActionIcon>
-                    </Group>
-                  </Group>
-
-                  <Divider />
-
-                  {/* Service Status */}
-                  <Box>
-                    <Text size="xs" fw={600} c="dimmed" mb="xs">Services</Text>
-                    <Group gap="md" wrap="wrap">
-                      <Group gap="xs">
-                        <ThemeIcon size="sm" color={submission.hasElectricity ? 'green' : 'red'} variant="light">
-                          {submission.hasElectricity ? <IconCheck size={12} /> : <IconX size={12} />}
-                        </ThemeIcon>
-                        <Text size="xs" c={submission.hasElectricity ? 'green' : 'red'}>
-                          JPS: {submission.hasElectricity ? 'On' : 'Off'}
-                        </Text>
-                      </Group>
-
-                      {submission.flowService !== undefined && submission.flowService !== null && (
-                        <Group gap="xs">
-                          <ThemeIcon size="sm" color={submission.flowService ? 'green' : 'red'} variant="light">
-                            {submission.flowService ? <IconCheck size={12} /> : <IconX size={12} />}
-                          </ThemeIcon>
-                          <Text size="xs" c={submission.flowService ? 'green' : 'red'}>
-                            Flow: {submission.flowService ? 'Up' : 'Down'}
-                          </Text>
-                        </Group>
-                      )}
-
-                      {submission.digicelService !== undefined && submission.digicelService !== null && (
-                        <Group gap="xs">
-                          <ThemeIcon size="sm" color={submission.digicelService ? 'green' : 'red'} variant="light">
-                            {submission.digicelService ? <IconCheck size={12} /> : <IconX size={12} />}
-                          </ThemeIcon>
-                          <Text size="xs" c={submission.digicelService ? 'green' : 'red'}>
-                            Digicel: {submission.digicelService ? 'Up' : 'Down'}
-                          </Text>
-                        </Group>
-                      )}
-
-                      {submission.waterService !== undefined && submission.waterService !== null && (
-                        <Group gap="xs">
-                          <ThemeIcon size="sm" color={submission.waterService ? 'green' : 'red'} variant="light">
-                            {submission.waterService ? <IconCheck size={12} /> : <IconX size={12} />}
-                          </ThemeIcon>
-                          <Text size="xs" c={submission.waterService ? 'green' : 'red'}>
-                            Water: {submission.waterService ? 'Available' : 'Unavailable'}
-                          </Text>
-                        </Group>
-                      )}
-                    </Group>
-                  </Box>
-
-                  {/* Hazards */}
-                  {(submission.flooding || submission.downedPowerLines || submission.fallenTrees || submission.structuralDamage) && (
-                    <Box>
-                      <Text size="xs" fw={600} c="red" mb="xs">⚠️ Active Hazards</Text>
-                      <Group gap="xs" wrap="wrap">
-                        {submission.flooding && <Badge color="blue" variant="light" size="sm">💧 Flooding</Badge>}
-                        {submission.downedPowerLines && <Badge color="yellow" variant="light" size="sm">⚡ Power Lines Down</Badge>}
-                        {submission.fallenTrees && <Badge color="green" variant="light" size="sm">🌳 Fallen Trees</Badge>}
-                        {submission.structuralDamage && <Badge color="red" variant="light" size="sm">🏚️ Structural Damage</Badge>}
-                      </Group>
-                    </Box>
-                  )}
-
-                  {/* Emergency Help */}
-                  {submission.needsHelp && (
-                    <Box>
-                      <Badge color="red" variant="filled" size="lg" fullWidth>
-                        🆘 NEEDS HELP: {submission.helpType?.toUpperCase() || 'GENERAL'}
-                      </Badge>
-                    </Box>
-                  )}
-
-                  {submission.additionalInfo && (
-                    <>
-                      <Divider />
-                      <Text size="sm" c="dimmed">
-                        {submission.additionalInfo}
-                      </Text>
-                    </>
-                  )}
-
-                  {submission.imageUrl && (
-                    <>
-                      <Divider />
-                      <Box>
-                        <img 
-                          src={submission.imageUrl} 
-                          alt="Submission photo"
-                          style={{
-                            width: '100%',
-                            maxHeight: '400px',
-                            objectFit: 'cover',
-                            borderRadius: '8px'
-                          }}
-                        />
-                      </Box>
-                    </>
-                  )}
-                </Stack>
-              </Card>
-                ))}
-              </Stack>
+      {/* Drawer for updates panel */}
+      <Drawer
+        opened={drawerOpened}
+        onClose={closeDrawer}
+        position="right"
+        size={isDesktop ? "lg" : "xl"}
+        title={
+          <Group justify="space-between" style={{ width: '100%' }}>
+            <Title order={4}>Community Updates</Title>
+            {filterParish && (
+              <Badge color="teal" variant="light">
+                {filterParish}
+              </Badge>
             )}
-          </>
-        )}
-        
-        {/* Pagination */}
-        {submissionsData?.pagination && submissionsData.pagination.totalPages > 1 && (
+          </Group>
+        }
+        styles={{
+          content: {
+            display: 'flex',
+            flexDirection: 'column'
+          },
+          body: {
+            flex: 1,
+            overflow: 'auto',
+            display: 'flex',
+            flexDirection: 'column'
+          }
+        }}
+      >
+        <Stack gap="md" style={{ height: '100%' }}>
+          {/* Filter Controls */}
           <Card shadow="sm" padding="md" radius="md" withBorder>
-            <Group justify="center">
-              <Pagination
-                value={currentPage}
-                onChange={setCurrentPage}
-                total={submissionsData.pagination.totalPages}
-                size="sm"
-                withEdges
-              />
-            </Group>
-            <Text size="xs" c="dimmed" ta="center" mt="sm">
-              Showing {((currentPage - 1) * 10) + 1}-{Math.min(currentPage * 10, submissionsData.pagination.total)} of {submissionsData.pagination.total} updates
-            </Text>
+            <Stack gap="md">
+              <Group grow>
+                <Select
+                  label="Filter by Parish"
+                  placeholder="All Parishes"
+                  value={filterParish}
+                  onChange={(value) => {
+                    setFilterParish(value || '');
+                    setFilterCommunity('');
+                    setCommunitySearch('');
+                  }}
+                  data={[
+                    { value: '', label: 'All Parishes' },
+                    ...Object.keys(jamaicaLocations).map(parish => ({ value: parish, label: parish }))
+                  ]}
+                  clearable
+                />
+                <Box>
+                  <Text size="sm" fw={500} mb="xs">Filter by Community</Text>
+                  <Combobox
+                    store={combobox}
+                    onOptionSubmit={handleCommunitySelect}
+                    withinPortal={false}
+                  >
+                    <Combobox.Target>
+                      <TextInput
+                        placeholder="Type community name to search"
+                        value={communitySearch}
+                        onChange={(event) => handleCommunitySearch(event.currentTarget.value)}
+                        onClick={() => combobox.openDropdown()}
+                        onFocus={() => combobox.openDropdown()}
+                        onBlur={() => combobox.closeDropdown()}
+                        disabled={!filterParish}
+                      />
+                    </Combobox.Target>
+
+                    <Combobox.Dropdown>
+                      <Combobox.Options>
+                        {loadingCommunities ? (
+                          <Combobox.Empty>Searching...</Combobox.Empty>
+                        ) : communities.length > 0 ? (
+                          communities.map((community) => (
+                            <Combobox.Option value={community.name} key={community.id}>
+                              {community.name}
+                            </Combobox.Option>
+                          ))
+                        ) : communitySearch.length >= 1 ? (
+                          <Combobox.Empty>
+                            No communities found matching "{communitySearch}"
+                          </Combobox.Empty>
+                        ) : (
+                          <Combobox.Empty>Start typing to search communities</Combobox.Empty>
+                        )}
+                      </Combobox.Options>
+                    </Combobox.Dropdown>
+                  </Combobox>
+                </Box>
+              </Group>
+              <Group justify="space-between">
+                <Checkbox
+                  label="Images only"
+                  checked={showImagesOnly}
+                  onChange={(event) => setShowImagesOnly(event.currentTarget.checked)}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={clearFilters}
+                  disabled={!filterParish && !filterCommunity && !showImagesOnly}
+                >
+                  Clear Filters
+                </Button>
+              </Group>
+            </Stack>
           </Card>
-        )}
-      </Card>
+
+          {/* Submissions Feed */}
+          <Box style={{ flex: 1, overflow: 'auto' }}>
+            <Tabs value={feedType} onChange={(value) => setFeedType(value as 'responder' | 'citizen')}>
+              <Tabs.List mb="md">
+                <Tabs.Tab value="responder">Responder Updates</Tabs.Tab>
+                <Tabs.Tab value="citizen">Community Updates</Tabs.Tab>
+              </Tabs.List>
+            </Tabs>
+
+            <Group justify="space-between" align="center" mb="md">
+              <Box>
+                <Text size="xs" c="dimmed">
+                  Last updated: {new Date().toLocaleString('en-US', {
+                    month: 'short', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'America/Jamaica'
+                  })}
+                </Text>
+              </Box>
+              <Button
+                variant="outline"
+                size="sm"
+                leftSection={<IconRefresh />}
+                onClick={() => refetch()}
+                loading={isLoading}
+              >
+                Refresh
+              </Button>
+            </Group>
+
+            {isLoading ? (
+              <Center py="xl">
+                <Stack align="center" gap="md">
+                  <Loader size="md" />
+                  <Text c="dimmed">Loading community updates...</Text>
+                </Stack>
+              </Center>
+            ) : error ? (
+              <Alert color="red" title="Error" icon={<IconAlertTriangle />}>
+                {error instanceof Error ? error.message : 'Failed to fetch submissions'}
+                <Button mt="sm" onClick={() => refetch()} leftSection={<IconRefresh />}>
+                  Retry
+                </Button>
+              </Alert>
+            ) : !submissionsData?.data || submissionsData.data.length === 0 ? (
+              <Center py="xl">
+                <Stack align="center" gap="md">
+                  <Text c="dimmed">No updates found</Text>
+                  <Text size="sm" c="dimmed">Be the first to share your status!</Text>
+                </Stack>
+              </Center>
+            ) : (
+              <>
+                {/* Responsive Layout: Table on desktop, cards on mobile */}
+                {isDesktop ? (
+                  <ResponderUpdatesTable submissions={submissionsData.data} />
+                ) : (
+                  <Stack gap="sm">
+                    {submissionsData.data.map((submission: Submission) => (
+                  <Card key={submission.id} shadow="xs" padding="md" radius="md" withBorder>
+                    <Stack gap="sm">
+                      {/* Location Header */}
+                      <Group justify="space-between" align="flex-start">
+                        <Box style={{ flex: 1 }}>
+                          {/* Hierarchical Location */}
+                          <Group gap="xs" wrap="wrap">
+                            <Text size="xs" c="dimmed">
+                              {submission.placeName && `${submission.placeName}, `}
+                              {submission.streetName && `${submission.streetName}, `}
+                              {submission.community}, {submission.parish}
+                            </Text>
+                          </Group>
+
+                          {/* Timestamp */}
+                          <Group gap="xs" align="center" mt="xs">
+                            <Text size="xs" c="dimmed">
+                              {formatTimeAgo(submission.createdAt)}
+                            </Text>
+                          </Group>
+                        </Box>
+                        <Group gap="xs">
+                          <Badge color={getRoadStatusColor(submission.roadStatus)} variant="light">
+                            {getRoadStatusLabel(submission.roadStatus)}
+                          </Badge>
+                          <ActionIcon
+                            color="red"
+                            variant="subtle"
+                            onClick={() => handleDeleteClick(submission.id)}
+                            title="Delete submission (admin only)"
+                          >
+                            <IconTrash size={16} />
+                          </ActionIcon>
+                        </Group>
+                      </Group>
+
+                      <Divider />
+
+                      {/* Service Status */}
+                      <Box>
+                        <Text size="xs" fw={600} c="dimmed" mb="xs">Services</Text>
+                        <Group gap="md" wrap="wrap">
+                          <Group gap="xs">
+                            <ThemeIcon size="sm" color={submission.hasElectricity ? 'green' : 'red'} variant="light">
+                              {submission.hasElectricity ? <IconCheck size={12} /> : <IconX size={12} />}
+                            </ThemeIcon>
+                            <Text size="xs" c={submission.hasElectricity ? 'green' : 'red'}>
+                              JPS: {submission.hasElectricity ? 'On' : 'Off'}
+                            </Text>
+                          </Group>
+
+                          {submission.flowService !== undefined && submission.flowService !== null && (
+                            <Group gap="xs">
+                              <ThemeIcon size="sm" color={submission.flowService ? 'green' : 'red'} variant="light">
+                                {submission.flowService ? <IconCheck size={12} /> : <IconX size={12} />}
+                              </ThemeIcon>
+                              <Text size="xs" c={submission.flowService ? 'green' : 'red'}>
+                                Flow: {submission.flowService ? 'Up' : 'Down'}
+                              </Text>
+                            </Group>
+                          )}
+
+                          {submission.digicelService !== undefined && submission.digicelService !== null && (
+                            <Group gap="xs">
+                              <ThemeIcon size="sm" color={submission.digicelService ? 'green' : 'red'} variant="light">
+                                {submission.digicelService ? <IconCheck size={12} /> : <IconX size={12} />}
+                              </ThemeIcon>
+                              <Text size="xs" c={submission.digicelService ? 'green' : 'red'}>
+                                Digicel: {submission.digicelService ? 'Up' : 'Down'}
+                              </Text>
+                            </Group>
+                          )}
+
+                          {submission.waterService !== undefined && submission.waterService !== null && (
+                            <Group gap="xs">
+                              <ThemeIcon size="sm" color={submission.waterService ? 'green' : 'red'} variant="light">
+                                {submission.waterService ? <IconCheck size={12} /> : <IconX size={12} />}
+                              </ThemeIcon>
+                              <Text size="xs" c={submission.waterService ? 'green' : 'red'}>
+                                Water: {submission.waterService ? 'Available' : 'Unavailable'}
+                              </Text>
+                            </Group>
+                          )}
+                        </Group>
+                      </Box>
+
+                      {/* Hazards */}
+                      {(submission.flooding || submission.downedPowerLines || submission.fallenTrees || submission.structuralDamage) && (
+                        <Box>
+                          <Text size="xs" fw={600} c="red" mb="xs">⚠️ Active Hazards</Text>
+                          <Group gap="xs" wrap="wrap">
+                            {submission.flooding && <Badge color="blue" variant="light" size="sm">💧 Flooding</Badge>}
+                            {submission.downedPowerLines && <Badge color="yellow" variant="light" size="sm">⚡ Power Lines Down</Badge>}
+                            {submission.fallenTrees && <Badge color="green" variant="light" size="sm">🌳 Fallen Trees</Badge>}
+                            {submission.structuralDamage && <Badge color="red" variant="light" size="sm">🏚️ Structural Damage</Badge>}
+                          </Group>
+                        </Box>
+                      )}
+
+                      {/* Emergency Help */}
+                      {submission.needsHelp && (
+                        <Box>
+                          <Badge color="red" variant="filled" size="lg" fullWidth>
+                            🆘 NEEDS HELP: {submission.helpType?.toUpperCase() || 'GENERAL'}
+                          </Badge>
+                        </Box>
+                      )}
+
+                      {submission.additionalInfo && (
+                        <>
+                          <Divider />
+                          <Text size="sm" c="dimmed">
+                            {submission.additionalInfo}
+                          </Text>
+                        </>
+                      )}
+
+                      {submission.imageUrl && (
+                        <>
+                          <Divider />
+                          <Box>
+                            <img 
+                              src={submission.imageUrl} 
+                              alt="Submission photo"
+                              style={{
+                                width: '100%',
+                                maxHeight: '400px',
+                                objectFit: 'cover',
+                                borderRadius: '8px'
+                              }}
+                            />
+                          </Box>
+                        </>
+                      )}
+                    </Stack>
+                  </Card>
+                    ))}
+                  </Stack>
+                )}
+              </>
+            )}
+            
+            {/* Pagination */}
+            {submissionsData?.pagination && submissionsData.pagination.totalPages > 1 && (
+              <Box mt="md">
+                <Group justify="center">
+                  <Pagination
+                    value={currentPage}
+                    onChange={setCurrentPage}
+                    total={submissionsData.pagination.totalPages}
+                    size="sm"
+                    withEdges
+                  />
+                </Group>
+                <Text size="xs" c="dimmed" ta="center" mt="sm">
+                  Showing {((currentPage - 1) * 10) + 1}-{Math.min(currentPage * 10, submissionsData.pagination.total)} of {submissionsData.pagination.total} updates
+                </Text>
+              </Box>
+            )}
+          </Box>
+        </Stack>
+      </Drawer>
 
       {/* Admin Delete Modal */}
       <Modal
@@ -657,6 +722,6 @@ export default function CommunityFeed() {
           </Group>
         </Stack>
       </Modal>
-    </Stack>
+    </Box>
   );
 }

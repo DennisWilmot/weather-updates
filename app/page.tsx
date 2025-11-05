@@ -605,36 +605,46 @@ export default function HomePage() {
       </Drawer>
 
       {/* Main Content - Mobile */}
-      <Container size="md" py="xl" style={{ paddingBottom: activeTab === 'submit' ? '160px' : '120px' }} hiddenFrom="sm">
-        {activeTab === 'feed' && <CommunityFeed />}
-        {activeTab === 'submit' && <SubmitUpdateEnhanced />}
-        {activeTab === 'contacts' && (
-          data?.emergencyContacts ? (
-            <EmergencyContacts emergencyContacts={data.emergencyContacts} />
-          ) : (
-            <Center py="xl">
-              <Text>Loading emergency contacts...</Text>
-            </Center>
-          )
-        )}
-        {activeTab === 'news' && <NewsFeed />}
-      </Container>
+      {activeTab === 'feed' ? (
+        <Box hiddenFrom="sm" style={{ paddingBottom: '120px' }}>
+          <CommunityFeed />
+        </Box>
+      ) : (
+        <Container size="md" py="xl" style={{ paddingBottom: activeTab === 'submit' ? '160px' : '120px' }} hiddenFrom="sm">
+          {activeTab === 'submit' && <SubmitUpdateEnhanced />}
+          {activeTab === 'contacts' && (
+            data?.emergencyContacts ? (
+              <EmergencyContacts emergencyContacts={data.emergencyContacts} />
+            ) : (
+              <Center py="xl">
+                <Text>Loading emergency contacts...</Text>
+              </Center>
+            )
+          )}
+          {activeTab === 'news' && <NewsFeed />}
+        </Container>
+      )}
 
       {/* Main Content - Desktop */}
-      <Container size="md" py="xl" visibleFrom="sm">
-        {activeTab === 'feed' && <CommunityFeed />}
-        {activeTab === 'submit' && <SubmitUpdateEnhanced />}
-        {activeTab === 'contacts' && (
-          data?.emergencyContacts ? (
-            <EmergencyContacts emergencyContacts={data.emergencyContacts} />
-          ) : (
-            <Center py="xl">
-              <Text>Loading emergency contacts...</Text>
-            </Center>
-          )
-        )}
-        {activeTab === 'news' && <NewsFeed />}
-      </Container>
+      {activeTab === 'feed' ? (
+        <Box visibleFrom="sm">
+          <CommunityFeed />
+        </Box>
+      ) : (
+        <Container size="md" py="xl" visibleFrom="sm">
+          {activeTab === 'submit' && <SubmitUpdateEnhanced />}
+          {activeTab === 'contacts' && (
+            data?.emergencyContacts ? (
+              <EmergencyContacts emergencyContacts={data.emergencyContacts} />
+            ) : (
+              <Center py="xl">
+                <Text>Loading emergency contacts...</Text>
+              </Center>
+            )
+          )}
+          {activeTab === 'news' && <NewsFeed />}
+        </Container>
+      )}
 
       {/* Mobile Floating Action Button - Only show if user is signed in */}
       {isLoaded && isSignedIn && (
