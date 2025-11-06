@@ -12,8 +12,6 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
-    "@clerk/clerk-sdk-node": "^4.13.23",
-    "@clerk/nextjs": "^4.31.8",
     "@mantine/core": "^7.3.2",
     "@mantine/hooks": "^7.3.2",
     "@mantine/notifications": "^7.3.2",

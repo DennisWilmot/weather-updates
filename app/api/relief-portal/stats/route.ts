@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
 import { parishes, submissions } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -81,16 +80,6 @@ function calculateActionsNeeded(stats: Omit<ParishReliefStats, 'actionsNeeded'>)
 
 export async function GET() {
   try {
-    // Protect route with Clerk authentication
-    const { userId } = await auth();
-    
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized - Authentication required' },
-        { status: 401 }
-      );
-    }
-
     // Get all parishes
     const allParishes = await db.select().from(parishes);
 

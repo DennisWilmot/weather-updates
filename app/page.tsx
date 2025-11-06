@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { SignedIn, SignedOut, SignInButton, useUser, useAuth, UserButton } from '@clerk/nextjs';
 import {
   Container,
   Stack,
@@ -72,10 +71,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'feed' | 'submit' | 'contacts' | 'news'>('feed');
   const [opened, { open, close }] = useDisclosure(false);
-  const [canSubmit, setCanSubmit] = useState<boolean | null>(null);
   const router = useRouter();
-  const { isSignedIn } = useUser();
-  const { isLoaded } = useAuth();
 
   const fetchData = async () => {
     try {
@@ -118,44 +114,6 @@ export default function HomePage() {
   useEffect(() => {
     fetchData();
   }, []);
-
-  // Check permissions for submit tab
-  useEffect(() => {
-    const checkPermissions = async () => {
-      if (!isSignedIn) {
-        setCanSubmit(false);
-        return;
-      }
-
-      try {
-        // Sync user to database first
-        const syncResponse = await fetch('/api/users/sync', { method: 'POST' });
-        if (!syncResponse.ok) {
-          console.error('Failed to sync user:', syncResponse.status);
-        }
-        
-        // Check if user can submit
-        const response = await fetch('/api/users/check-permissions');
-        if (response.ok) {
-          const data = await response.json();
-          console.log('Permission check result:', data);
-          setCanSubmit(data.canSubmit || false);
-        } else {
-          console.error('Failed to check permissions:', response.status);
-          // If permissions check fails, allow anyway for now
-          setCanSubmit(true);
-        }
-      } catch (error) {
-        console.error('Error checking permissions:', error);
-        // If permissions check fails, allow anyway for now
-        setCanSubmit(true);
-      }
-    };
-
-    if (isLoaded) {
-      checkPermissions();
-    }
-  }, [isSignedIn, isLoaded]);
 
   const formatLastUpdated = (dateString: string) => {
     return new Date(dateString).toLocaleString('en-US', {
@@ -204,21 +162,6 @@ export default function HomePage() {
               <Group gap="xs" visibleFrom="sm">
                 <Button variant="outline" color="teal" size="sm" leftSection="📋" disabled>Feed</Button>
                 <Button variant="outline" color="coral" size="sm" leftSection="📞" disabled>Contacts</Button>
-                {isLoaded && !isSignedIn && (
-                  <SignInButton mode="modal">
-                    <Button 
-                      variant="filled" 
-                      size="sm"
-                      style={{ 
-                        backgroundColor: 'white',
-                        color: '#0f0f23',
-                        border: 'none'
-                      }}
-                    >
-                      Sign In
-                    </Button>
-                  </SignInButton>
-                )}
               </Group>
             </Flex>
           </Container>
@@ -272,21 +215,6 @@ export default function HomePage() {
               <Group gap="xs" visibleFrom="sm">
                 <Button variant="outline" color="teal" size="sm" leftSection="📋" disabled>Feed</Button>
                 <Button variant="outline" color="coral" size="sm" leftSection="📞" disabled>Contacts</Button>
-                {isLoaded && !isSignedIn && (
-                  <SignInButton mode="modal">
-                    <Button 
-                      variant="filled" 
-                      size="sm"
-                      style={{ 
-                        backgroundColor: 'white',
-                        color: '#0f0f23',
-                        border: 'none'
-                      }}
-                    >
-                      Sign In
-                    </Button>
-                  </SignInButton>
-                )}
               </Group>
             </Flex>
           </Container>
@@ -340,21 +268,6 @@ export default function HomePage() {
               <Group gap="xs" visibleFrom="sm">
                 <Button variant="outline" color="teal" size="sm" leftSection="📋" disabled>Feed</Button>
                 <Button variant="outline" color="coral" size="sm" leftSection="📞" disabled>Contacts</Button>
-                {isLoaded && !isSignedIn && (
-                  <SignInButton mode="modal">
-                    <Button 
-                      variant="filled" 
-                      size="sm"
-                      style={{ 
-                        backgroundColor: 'white',
-                        color: '#0f0f23',
-                        border: 'none'
-                      }}
-                    >
-                      Sign In
-                    </Button>
-                  </SignInButton>
-                )}
               </Group>
             </Flex>
           </Container>
@@ -438,17 +351,15 @@ export default function HomePage() {
                 >
                   Feed
                 </Button>
-                {isLoaded && isSignedIn && (
-                  <Button
-                    variant={activeTab === 'submit' ? 'filled' : 'outline'}
-                    color="electricBlue"
-                    size="sm"
-                    onClick={() => setActiveTab('submit')}
-                    leftSection="📢"
-                  >
-                    Submit Update
-                  </Button>
-                )}
+                <Button
+                  variant={activeTab === 'submit' ? 'filled' : 'outline'}
+                  color="electricBlue"
+                  size="sm"
+                  onClick={() => setActiveTab('submit')}
+                  leftSection="📢"
+                >
+                  Submit Update
+                </Button>
                 <Button
                   variant={activeTab === 'contacts' ? 'filled' : 'outline'}
                   color="coral"
@@ -467,28 +378,6 @@ export default function HomePage() {
                 >
                   Retailers
                 </Button>
-                {isLoaded && !isSignedIn && (
-                  <SignInButton mode="modal" afterSignInUrl="/">
-                    <button
-                      style={{
-                        backgroundColor: 'white',
-                        color: '#0f0f23',
-                        border: 'none',
-                        padding: '6px 12px',
-                        borderRadius: '4px',
-                        fontSize: '14px',
-                        fontWeight: 500,
-                        cursor: 'pointer',
-                        fontFamily: 'inherit'
-                      }}
-                    >
-                      Sign In
-                    </button>
-                  </SignInButton>
-                )}
-                {isLoaded && isSignedIn && (
-                  <UserButton afterSignOutUrl="/" />
-                )}
               </Group>
             </Group>
           </Flex>
@@ -530,20 +419,18 @@ export default function HomePage() {
           >
             Community Feed
           </Button>
-          {isLoaded && isSignedIn && (
-            <Button
-              variant={activeTab === 'submit' ? 'filled' : 'subtle'}
-              color="electricBlue"
-              fullWidth
-              onClick={() => {
-                setActiveTab('submit');
-                close();
-              }}
-              leftSection="📢"
-            >
-              Submit Responder Update
-            </Button>
-          )}
+          <Button
+            variant={activeTab === 'submit' ? 'filled' : 'subtle'}
+            color="electricBlue"
+            fullWidth
+            onClick={() => {
+              setActiveTab('submit');
+              close();
+            }}
+            leftSection="📢"
+          >
+            Submit Update
+          </Button>
           <Button
             variant={activeTab === 'contacts' ? 'filled' : 'subtle'}
             color="coral"
@@ -568,27 +455,6 @@ export default function HomePage() {
           >
             Online Retailers
           </Button>
-          {isLoaded && !isSignedIn && (
-            <SignInButton mode="modal" afterSignInUrl="/">
-              <Button 
-                variant="filled" 
-                fullWidth 
-                onClick={close}
-                style={{ 
-                  backgroundColor: 'white',
-                  color: '#0f0f23',
-                  border: 'none'
-                }}
-              >
-                Sign In
-              </Button>
-            </SignInButton>
-          )}
-          {isLoaded && isSignedIn && (
-            <Box style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '8px 0' }}>
-              <UserButton afterSignOutUrl="/" />
-            </Box>
-          )}
         </Stack>
         <Box mt="auto" pt="xl" style={{ borderTop: '1px solid rgba(20, 120, 255, 0.2)' }}>
           <Stack gap={4} align="center" mb="md">
@@ -646,79 +512,75 @@ export default function HomePage() {
         </Container>
       )}
 
-      {/* Mobile Floating Action Button - Only show if user is signed in */}
-      {isLoaded && isSignedIn && (
-        <Box
-          hiddenFrom="sm"
+      {/* Mobile Floating Action Button */}
+      <Box
+        hiddenFrom="sm"
+        style={{
+          position: 'fixed',
+          bottom: '100px', // Higher up to avoid bottom nav overlap
+          right: '20px',
+          zIndex: 1000
+        }}
+      >
+        <ActionIcon
+          size="xl"
+          radius="xl"
+          color="electricBlue"
+          variant="filled"
+          onClick={() => setActiveTab('submit')}
           style={{
-            position: 'fixed',
-            bottom: '100px', // Higher up to avoid bottom nav overlap
-            right: '20px',
-            zIndex: 1000
+            boxShadow: '0 4px 12px rgba(20, 120, 255, 0.3)',
+            transition: 'all 0.2s ease',
+            width: '56px',
+            height: '56px'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(20, 120, 255, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(20, 120, 255, 0.3)';
           }}
         >
-          <ActionIcon
-            size="xl"
-            radius="xl"
-            color="electricBlue"
-            variant="filled"
-            onClick={() => setActiveTab('submit')}
-            style={{
-              boxShadow: '0 4px 12px rgba(20, 120, 255, 0.3)',
-              transition: 'all 0.2s ease',
-              width: '56px',
-              height: '56px'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'scale(1.1)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(20, 120, 255, 0.4)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(20, 120, 255, 0.3)';
-            }}
-          >
-            <Text size="xl" fw={700}>+</Text>
-          </ActionIcon>
-        </Box>
-      )}
+          <Text size="xl" fw={700}>+</Text>
+        </ActionIcon>
+      </Box>
 
-      {/* Desktop Floating Action Button - Only show if user is signed in */}
-      {isLoaded && isSignedIn && (
-        <Box
-          visibleFrom="sm"
+      {/* Desktop Floating Action Button */}
+      <Box
+        visibleFrom="sm"
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          zIndex: 1000
+        }}
+      >
+        <ActionIcon
+          size="xl"
+          radius="xl"
+          color="electricBlue"
+          variant="filled"
+          onClick={() => setActiveTab('submit')}
           style={{
-            position: 'fixed',
-            bottom: '20px',
-            right: '20px',
-            zIndex: 1000
+            boxShadow: '0 4px 12px rgba(20, 120, 255, 0.3)',
+            transition: 'all 0.2s ease',
+            width: '56px',
+            height: '56px'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(20, 120, 255, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(20, 120, 255, 0.3)';
           }}
         >
-          <ActionIcon
-            size="xl"
-            radius="xl"
-            color="electricBlue"
-            variant="filled"
-            onClick={() => setActiveTab('submit')}
-            style={{
-              boxShadow: '0 4px 12px rgba(20, 120, 255, 0.3)',
-              transition: 'all 0.2s ease',
-              width: '56px',
-              height: '56px'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'scale(1.1)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(20, 120, 255, 0.4)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(20, 120, 255, 0.3)';
-            }}
-          >
-            <Text size="xl" fw={700}>+</Text>
-          </ActionIcon>
-        </Box>
-      )}
+          <Text size="xl" fw={700}>+</Text>
+        </ActionIcon>
+      </Box>
 
       {/* Mobile Bottom Navigation */}
       <Paper
@@ -768,37 +630,35 @@ export default function HomePage() {
             }}>Feed</Text>
           </Button>
 
-          {isLoaded && isSignedIn && (
-            <Button
-              variant="subtle"
-              color="gray"
-              size="sm"
-              onClick={() => setActiveTab('submit')}
-              style={{
-                flex: 1,
-                flexDirection: 'column',
-                height: 'auto',
-                padding: '8px 4px',
-                minHeight: '56px',
-                borderRadius: '12px',
-                backgroundColor: activeTab === 'submit' ? 'rgba(20, 120, 255, 0.15)' : 'transparent',
-                border: activeTab === 'submit' ? '1px solid rgba(20, 120, 255, 0.3)' : '1px solid transparent',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                transform: activeTab === 'submit' ? 'translateY(-2px)' : 'translateY(0)',
-                boxShadow: activeTab === 'submit' ? '0 4px 12px rgba(20, 120, 255, 0.2)' : 'none'
-              }}
-            >
-              <Text size="xl" style={{
-                color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
-                transition: 'color 0.3s ease'
-              }}>📢</Text>
-              <Text size="xs" style={{
-                color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
-                transition: 'color 0.3s ease',
-                marginTop: '2px'
-              }}>Submit Update</Text>
-            </Button>
-          )}
+          <Button
+            variant="subtle"
+            color="gray"
+            size="sm"
+            onClick={() => setActiveTab('submit')}
+            style={{
+              flex: 1,
+              flexDirection: 'column',
+              height: 'auto',
+              padding: '8px 4px',
+              minHeight: '56px',
+              borderRadius: '12px',
+              backgroundColor: activeTab === 'submit' ? 'rgba(20, 120, 255, 0.15)' : 'transparent',
+              border: activeTab === 'submit' ? '1px solid rgba(20, 120, 255, 0.3)' : '1px solid transparent',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              transform: activeTab === 'submit' ? 'translateY(-2px)' : 'translateY(0)',
+              boxShadow: activeTab === 'submit' ? '0 4px 12px rgba(20, 120, 255, 0.2)' : 'none'
+            }}
+          >
+            <Text size="xl" style={{
+              color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
+              transition: 'color 0.3s ease'
+            }}>📢</Text>
+            <Text size="xs" style={{
+              color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
+              transition: 'color 0.3s ease',
+              marginTop: '2px'
+            }}>Submit Update</Text>
+          </Button>
 
           <Button
             variant="subtle"

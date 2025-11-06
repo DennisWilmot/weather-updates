@@ -42,8 +42,6 @@ Fill in your credentials:
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 DATABASE_URL=your_postgres_connection_string
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-CLERK_SECRET_KEY=your_clerk_secret_key
 ```
 
 ### 3. Supabase Setup
@@ -116,8 +114,6 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `DATABASE_URL`
-   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` (from Clerk Dashboard → API Keys)
-   - `CLERK_SECRET_KEY` (from Clerk Dashboard → API Keys)
 4. Deploy
 
 The application will be automatically deployed and available at your Vercel URL.

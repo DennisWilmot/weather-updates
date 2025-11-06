@@ -25,7 +25,7 @@ export async function PATCH(request: NextRequest) {
     const [updatedUser] = await db
       .update(users)
       .set({ role, updatedAt: new Date() })
-      .where(eq(users.clerkUserId, userId))
+      .where(eq(users.id, userId))
       .returning();
     
     if (!updatedUser) {
@@ -39,7 +39,6 @@ export async function PATCH(request: NextRequest) {
       success: true,
       user: {
         id: updatedUser.id,
-        clerkUserId: updatedUser.clerkUserId,
         email: updatedUser.email,
         role: updatedUser.role
       }

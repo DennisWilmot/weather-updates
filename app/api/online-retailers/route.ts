@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { onlineRetailers, users } from '@/lib/db/schema';
+import { onlineRetailers } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { currentUser } from '@clerk/nextjs/server';
 
 // GET /api/online-retailers - Get all verified and active retailers
 export async function GET(request: Request) {
@@ -56,24 +55,7 @@ export async function POST(request: Request) {
 
     // Get current user if authenticated (gracefully handle errors)
     let submittedByUserId = null;
-    try {
-      const user = await currentUser();
-      if (user) {
-        // Try to get user ID from database
-        const dbUser = await db
-          .select({ id: users.id })
-          .from(users)
-          .where(eq(users.clerkUserId, user.id))
-          .limit(1);
-        
-        if (dbUser.length > 0) {
-          submittedByUserId = dbUser[0].id;
-        }
-      }
-    } catch (authError) {
-      // Clerk might not be configured or user not authenticated - continue without user ID
-      console.log('No authenticated user or Clerk not configured:', authError);
-    }
+    // No authentication system - skip user lookup
 
     // Insert new retailer with verified = false and status = pending
     const [newRetailer] = await db

@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from '@clerk/nextjs';
 import {
   Container,
   Stack,
@@ -88,9 +87,6 @@ export default function ReliefPortal() {
     queryFn: async () => {
       const response = await fetch('/api/relief-portal/stats');
       if (!response.ok) {
-        if (response.status === 401) {
-          throw new Error('Unauthorized - Please sign in');
-        }
         throw new Error('Failed to fetch parish statistics');
       }
       return response.json();
@@ -270,24 +266,14 @@ export default function ReliefPortal() {
               >
                 Contacts
               </Button>
-              <SignedOut>
-                <SignInButton mode="modal" redirectUrl="/relief-portal">
-                  <Button variant="outline" color="blue" size="sm" leftSection="🛟">
-                    Relief Portal
-                  </Button>
-                </SignInButton>
-              </SignedOut>
-              <SignedIn>
-                <Button
-                  variant="filled"
-                  color="blue"
-                  size="sm"
-                  leftSection="🛟"
-                >
-                  Relief Portal
-                </Button>
-                <UserButton />
-              </SignedIn>
+              <Button
+                variant="filled"
+                color="blue"
+                size="sm"
+                leftSection="🛟"
+              >
+                Relief Portal
+              </Button>
             </Group>
           </Flex>
         </Container>
@@ -344,34 +330,13 @@ export default function ReliefPortal() {
             Storm Updates
           </Button>
           <Button
-            variant="subtle"
-            color="coral"
+            variant="filled"
+            color="blue"
             fullWidth
-            onClick={() => { router.push('/'); close(); }}
-            leftSection="📞"
+            leftSection="🛟"
           >
-            Emergency Contacts
+            Relief Portal
           </Button>
-          <SignedOut>
-            <SignInButton mode="modal" redirectUrl="/relief-portal">
-              <Button variant="outline" color="blue" fullWidth leftSection="🛟" onClick={close}>
-                Relief Portal
-              </Button>
-            </SignInButton>
-          </SignedOut>
-          <SignedIn>
-            <Button
-              variant="filled"
-              color="blue"
-              fullWidth
-              leftSection="🛟"
-            >
-              Relief Portal
-            </Button>
-            <Box style={{ display: 'flex', justifyContent: 'center', paddingTop: '1rem' }}>
-              <UserButton />
-            </Box>
-          </SignedIn>
         </Stack>
         <Box mt="auto" pt="xl" style={{ borderTop: '1px solid rgba(20, 120, 255, 0.2)' }}>
           <Stack gap={4} align="center" mb="md">
@@ -387,38 +352,10 @@ export default function ReliefPortal() {
         </Box>
       </Drawer>
 
-      <SignedOut>
-        <Container size="md" py="xl">
-          <Stack align="center" gap="lg" mt="xl">
-            <Paper shadow="sm" p="xl" radius="md" style={{ backgroundColor: '#1478FF', maxWidth: 600 }}>
-              <Stack align="center" gap="md">
-                <IconAlertTriangle size={48} color="white" />
-                <Title order={1} c="white" ta="center">Relief Portal</Title>
-                <Text c="white" size="lg" ta="center">
-                  First Responder Access
-                </Text>
-                <Text c="white" size="sm" ta="center" mt="xs">
-                  Sign in to access sensitive emergency response data
-                </Text>
-                <Group justify="center" mt="md">
-                  <SignInButton mode="modal">
-                    <Button variant="white" size="lg">Sign In</Button>
-                  </SignInButton>
-                  <SignUpButton mode="modal">
-                    <Button variant="white" size="lg">Sign Up</Button>
-                  </SignUpButton>
-                </Group>
-              </Stack>
-            </Paper>
-          </Stack>
-        </Container>
-      </SignedOut>
-
-      <SignedIn>
-        <Container size="xl" py="xl">
-          <Stack gap="lg">
-            {/* Two Column Layout */}
-            <Flex gap="lg" direction={{ base: 'column', lg: 'row' }}>
+      <Container size="xl" py="xl">
+        <Stack gap="lg">
+          {/* Two Column Layout */}
+          <Flex gap="lg" direction={{ base: 'column', lg: 'row' }}>
               {/* Left Column - Dashboard Table */}
               <Box style={{ flex: '0 0 50%' }}>
                 <Card shadow="sm" padding="md" radius="md" withBorder>
@@ -706,7 +643,6 @@ export default function ReliefPortal() {
             </Flex>
           </Stack>
         </Container>
-      </SignedIn>
     </>
   );
 }

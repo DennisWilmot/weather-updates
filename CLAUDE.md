@@ -117,7 +117,7 @@ Boolean flags for infrastructure hazards:
   - 3-state service toggles for JPS, Flow, Digicel, Water
   - Image upload with automatic compression to 200KB max
   - Emergency help request fields (name, phone, description)
-  - Authentication required via Clerk
+  - Public access - no authentication required
 - `HierarchicalLocationPicker` - Location selector with geolocation auto-detection
 - `StormUpdates` - Storm tracking information
 - `EmergencyContacts` - Contact directory
@@ -154,8 +154,8 @@ The schema has evolved to support hierarchical locations. Key fields:
 
 ### Additional Tables
 
-**users** - Stores Clerk user data with app-specific metadata:
-- Links via `clerkUserId` (unique)
+**users** - Stores user data with app-specific metadata:
+- User ID (UUID primary key)
 - Roles: admin, coordinator, responder, viewer
 - Permissions: canViewSensitiveData, canExportData, canManageUsers
 - Organization/department metadata for first responders
@@ -206,32 +206,28 @@ All UI consolidation follows mobile-first approach:
 
 ## Authentication & Authorization
 
-The app uses **Clerk** for user authentication and role-based access control.
+The app has **no authentication** - all routes are publicly accessible.
 
-### User Roles
+### User Roles (for future use)
 - **admin** - Full system access, can manage users
 - **coordinator** - Can manage submissions, view sensitive data
 - **responder** - Can submit updates, view contact info (first responders)
 - **viewer** - Read-only access
 
-### Permissions
+### Permissions (for future use)
 - `canViewSensitiveData` - Access to requester contact information (default: true for responders)
 - `canExportData` - Export submissions data (default: false)
 - `canManageUsers` - User management access (admins only)
 
 ### Implementation Details
-- User sync happens on first sign-in via `syncUserToDb()` in [lib/auth-helpers.ts](lib/auth-helpers.ts)
-- Submissions require authentication - checked via Clerk's `currentUser()`
+- All API routes are publicly accessible
+- Submissions can be created by anyone
 - Admin operations (delete) use `ADMIN_SECRET_KEY` for additional security layer
 
 ## Environment Variables
 
 Required in `.env.local`:
 ```
-# Clerk Authentication
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-CLERK_SECRET_KEY=your_clerk_secret_key
-
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key

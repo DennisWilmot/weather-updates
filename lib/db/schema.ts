@@ -128,16 +128,15 @@ export const locationStatus = pgTable('location_status', {
   createdAt: timestamp('created_at').defaultNow().notNull()
 });
 
-// Users table - Links Clerk authentication with app-specific user data
+// Users table - Stores app-specific user data
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
-  clerkUserId: text('clerk_user_id').notNull().unique(), // Clerk's user ID
   email: text('email'),
   firstName: text('first_name'),
   lastName: text('last_name'),
   fullName: text('full_name'),
   phoneNumber: text('phone_number'),
-  imageUrl: text('image_url'), // Profile image from Clerk
+  imageUrl: text('image_url'),
   
   // App-specific user metadata
   role: text('role', {
