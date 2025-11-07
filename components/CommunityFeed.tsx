@@ -306,9 +306,23 @@ export default function CommunityFeed() {
   const filterCommunities = filterParish ? jamaicaLocations[filterParish as keyof typeof jamaicaLocations] || [] : [];
 
   return (
-    <Box style={{ position: 'relative', width: '100%', height: 'calc(100vh - 14.28vh)', overflow: 'hidden' }}>
+    <Box style={{ 
+      position: 'relative', 
+      width: '100%', 
+      height: 'calc(100vh - 14.28vh)', 
+      overflow: 'hidden',
+      // Enable touch interactions on mobile
+      touchAction: 'pan-x pan-y pinch-zoom'
+    }}>
       {/* Full-screen map */}
-      <Box style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <Box style={{ 
+        width: '100%', 
+        height: '100%', 
+        position: 'relative',
+        // Ensure touch events pass through to map
+        touchAction: 'pan-x pan-y pinch-zoom',
+        pointerEvents: 'auto'
+      }}>
         <JamaicaParishMap 
           selectedParish={filterParish}
           onParishClick={(parish) => {

@@ -45,15 +45,23 @@ export default function JamaicaParishMap({ selectedParish, onParishClick }: Jama
       },
       center: [-77.2975, 18.1096], // Jamaica center
       zoom: 7,
-      maxBounds: [
-        [-78.5, 17.7], // Southwest corner
-        [-76.0, 18.6]  // Northeast corner
-      ] as maplibregl.LngLatBoundsLike,
+      // Remove maxBounds to allow free panning in all directions
+      // maxBounds: [
+      //   [-78.5, 17.7], // Southwest corner
+      //   [-76.0, 18.6]  // Northeast corner
+      // ] as maplibregl.LngLatBoundsLike,
       interactive: true,
-      scrollZoom: false, // Disable scroll zoom for better UX in constrained space
-      doubleClickZoom: false,
-      dragRotate: false,
-      touchZoomRotate: false
+      // Enable mobile touch interactions
+      scrollZoom: true, // Enable scroll zoom for mobile
+      doubleClickZoom: true, // Enable double-click zoom
+      dragRotate: false, // Keep rotation disabled for better UX
+      touchZoomRotate: true, // Enable pinch-to-zoom on mobile
+      touchPitch: true, // Enable touch pitch gestures
+      dragPan: true, // Enable pan/drag in all directions
+      boxZoom: true, // Enable box zoom
+      keyboard: true, // Enable keyboard controls
+      // Ensure touch events work properly
+      cooperativeGestures: false // Allow independent touch gestures
     });
 
     map.current.on('load', () => {
@@ -310,7 +318,17 @@ export default function JamaicaParishMap({ selectedParish, onParishClick }: Jama
         width: '100%', 
         height: '100%',
         overflow: 'hidden',
-        borderRadius: '4px'
+        borderRadius: '4px',
+        // Enable touch interactions on mobile - allow panning in all directions
+        touchAction: 'pan-x pan-y pinch-zoom',
+        // Ensure no interference with touch events
+        WebkitTouchCallout: 'none',
+        WebkitUserSelect: 'none',
+        userSelect: 'none',
+        // Prevent any default browser behaviors that might interfere
+        WebkitTapHighlightColor: 'transparent',
+        // Ensure pointer events work
+        pointerEvents: 'auto'
       }}
     />
   );

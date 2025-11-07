@@ -49,6 +49,8 @@ export default function HurricaneMap({ className, stormPosition }: HurricaneMapP
     const lon = stormPosition?.lon || -76.8;
     const zoom = 6;
 
+    // Note: Windy.com embed handles its own touch interactions
+    // The iframe will allow panning in all directions by default
     return `https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&width=650&height=520&zoom=${zoom}&level=surface&overlay=${overlay}&product=ecmwf&menu=&message=&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=true&metricWind=kt&metricTemp=%C2%B0C&radarRange=-1`;
   };
 
@@ -131,7 +133,15 @@ export default function HurricaneMap({ className, stormPosition }: HurricaneMapP
         )}
 
         {/* Map Container */}
-        <div style={{ position: 'relative', height: '520px', borderRadius: '8px', overflow: 'hidden' }}>
+        <div style={{ 
+          position: 'relative', 
+          height: '520px', 
+          borderRadius: '8px', 
+          overflow: 'hidden',
+          // Enable touch interactions on mobile
+          touchAction: 'pan-x pan-y pinch-zoom',
+          WebkitOverflowScrolling: 'touch'
+        }}>
           {loading && (
             <Center style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.9)', zIndex: 1000 }}>
               <Stack align="center" gap="sm">
@@ -147,7 +157,17 @@ export default function HurricaneMap({ className, stormPosition }: HurricaneMapP
             height="100%"
             src={getWindyUrl()}
             frameBorder="0"
-            style={{ borderRadius: '8px' }}
+            style={{ 
+              borderRadius: '8px',
+              // Enable touch events in iframe
+              touchAction: 'pan-x pan-y pinch-zoom',
+              pointerEvents: 'auto',
+              // Prevent text selection interference
+              WebkitUserSelect: 'none',
+              userSelect: 'none'
+            }}
+            allow="geolocation"
+            allowFullScreen
             title="Hurricane Tracking Map - Windy.com"
           />
         </div>

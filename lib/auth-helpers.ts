@@ -1,6 +1,9 @@
-// User role types (no authentication - kept for potential future use)
+// User role types
 export type UserRole = 'admin' | 'coordinator' | 'responder' | 'viewer';
 
-// Note: All authentication functions have been removed.
-// This file is kept for type definitions only.
+// Better Auth types
+export type { InferSession, InferUser } from 'better-auth';
+
+// Re-export auth client for convenience
+export { authClient, signIn, signOut, signUp, useSession } from './auth-client';
 
