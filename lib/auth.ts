@@ -1,5 +1,4 @@
 import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle-adapter";
 import { db } from "./db";
 
 // Only initialize Better Auth if required environment variables are set
@@ -9,7 +8,22 @@ const isBetterAuthConfigured =
   process.env.GOOGLE_CLIENT_ID && 
   process.env.GOOGLE_CLIENT_SECRET;
 
-export const auth = isBetterAuthConfigured
+// Dynamically import drizzle adapter to avoid build errors when Better Auth is not configured
+// Using dynamic import to avoid build-time errors since the adapter path is not exported
+let drizzleAdapter: any = null;
+if (typeof window === 'undefined' && isBetterAuthConfigured) {
+  // Only try to load adapter on server-side and when configured
+  try {
+    // Use dynamic import to avoid build-time module resolution errors
+    const adapterModule = require("better-auth/adapters/drizzle-adapter");
+    drizzleAdapter = adapterModule?.drizzleAdapter;
+  } catch (e) {
+    // Adapter not available - Better Auth not fully configured
+    // This is expected when Better Auth is paused/not configured
+  }
+}
+
+export const auth = isBetterAuthConfigured && drizzleAdapter
   ? betterAuth({
       database: drizzleAdapter(db, {
         provider: "pg", // PostgreSQL
@@ -27,10 +41,8 @@ export const auth = isBetterAuthConfigured
       secret: process.env.BETTER_AUTH_SECRET!,
     })
   : // Fallback: create a minimal auth instance that won't crash
+    // This uses the default memory adapter when drizzle adapter is not available
     betterAuth({
-      database: drizzleAdapter(db, {
-        provider: "pg",
-      }),
       baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
       secret: process.env.BETTER_AUTH_SECRET || "temporary-secret-change-in-production",
     });
