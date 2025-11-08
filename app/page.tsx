@@ -349,7 +349,7 @@ export default function HomePage() {
                   onClick={() => setActiveTab('feed')}
                   leftSection="📋"
                 >
-                  Feed
+                  Community Feed
                 </Button>
                 <Button
                   variant={activeTab === 'submit' ? 'filled' : 'outline'}
@@ -358,16 +358,7 @@ export default function HomePage() {
                   onClick={() => setActiveTab('submit')}
                   leftSection="📢"
                 >
-                  Submit Update
-                </Button>
-                <Button
-                  variant={activeTab === 'contacts' ? 'filled' : 'outline'}
-                  color="coral"
-                  size="sm"
-                  onClick={() => setActiveTab('contacts')}
-                  leftSection="📞"
-                >
-                  Contacts
+                  Report Incident
                 </Button>
                 <Button
                   variant="outline"
@@ -377,6 +368,24 @@ export default function HomePage() {
                   leftSection="🛒"
                 >
                   Retailers
+                </Button>
+                <Button
+                  variant="outline"
+                  color="blue"
+                  size="sm"
+                  onClick={() => router.push('/maps')}
+                  leftSection="🗺️"
+                >
+                  Maps
+                </Button>
+                <Button
+                  variant={activeTab === 'contacts' ? 'filled' : 'outline'}
+                  color="coral"
+                  size="sm"
+                  onClick={() => setActiveTab('contacts')}
+                  leftSection="📞"
+                >
+                  Contacts
                 </Button>
               </Group>
             </Group>
@@ -432,18 +441,6 @@ export default function HomePage() {
             Submit Update
           </Button>
           <Button
-            variant={activeTab === 'contacts' ? 'filled' : 'subtle'}
-            color="coral"
-            fullWidth
-            onClick={() => {
-              setActiveTab('contacts');
-              close();
-            }}
-            leftSection="📞"
-          >
-            Emergency Contacts
-          </Button>
-          <Button
             variant="subtle"
             color="yellow"
             fullWidth
@@ -453,7 +450,31 @@ export default function HomePage() {
             }}
             leftSection="🛒"
           >
-            Online Retailers
+            Retailers
+          </Button>
+          <Button
+            variant="subtle"
+            color="blue"
+            fullWidth
+            onClick={() => {
+              router.push('/maps');
+              close();
+            }}
+            leftSection="🗺️"
+          >
+            Maps
+          </Button>
+          <Button
+            variant={activeTab === 'contacts' ? 'filled' : 'subtle'}
+            color="coral"
+            fullWidth
+            onClick={() => {
+              setActiveTab('contacts');
+              close();
+            }}
+            leftSection="📞"
+          >
+            Contacts
           </Button>
         </Stack>
         <Box mt="auto" pt="xl" style={{ borderTop: '1px solid rgba(20, 120, 255, 0.2)' }}>

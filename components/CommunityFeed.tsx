@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   Stack,
@@ -35,7 +36,8 @@ import {
   IconRefresh,
   IconAlertTriangle,
   IconTrash,
-  IconList
+  IconList,
+  IconMap
 } from '@tabler/icons-react';
 import { notifications } from '@mantine/notifications';
 import jamaicaLocations from '../data/jamaica-locations.json';
@@ -84,6 +86,7 @@ interface ParishStats {
 }
 
 export default function CommunityFeed() {
+  const router = useRouter();
   // Media query for responsive layout
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
@@ -342,32 +345,61 @@ export default function CommunityFeed() {
         />
       </Box>
 
-      {/* Floating toggle button */}
-      <ActionIcon
-        size="xl"
-        radius="xl"
-        color="teal"
-        variant="filled"
-        onClick={openDrawer}
+      {/* Floating buttons */}
+      <Group
+        gap="sm"
         style={{
           position: 'absolute',
           top: '20px',
           right: '20px',
-          zIndex: 1000,
-          boxShadow: '0 4px 12px rgba(17, 221, 176, 0.3)',
-          transition: 'all 0.2s ease'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.1)';
-          e.currentTarget.style.boxShadow = '0 6px 16px rgba(17, 221, 176, 0.4)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(17, 221, 176, 0.3)';
+          zIndex: 1000
         }}
       >
-        <IconList size={24} />
-      </ActionIcon>
+        <ActionIcon
+          size="xl"
+          radius="xl"
+          color="blue"
+          variant="filled"
+          onClick={() => router.push('/maps')}
+          style={{
+            boxShadow: '0 4px 12px rgba(20, 120, 255, 0.3)',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(20, 120, 255, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(20, 120, 255, 0.3)';
+          }}
+          title="View Maps"
+        >
+          <IconMap size={24} />
+        </ActionIcon>
+        <ActionIcon
+          size="xl"
+          radius="xl"
+          color="teal"
+          variant="filled"
+          onClick={openDrawer}
+          style={{
+            boxShadow: '0 4px 12px rgba(17, 221, 176, 0.3)',
+            transition: 'all 0.2s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(17, 221, 176, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(17, 221, 176, 0.3)';
+          }}
+          title="View Updates"
+        >
+          <IconList size={24} />
+        </ActionIcon>
+      </Group>
 
       {/* Drawer for updates panel */}
       <Drawer
