@@ -27,12 +27,13 @@ import SheltersJDFMap from '@/components/SheltersJDFMap';
 export default function MapsPage() {
   const [showShelters, setShowShelters] = useState(true);
   const [showJDFBases, setShowJDFBases] = useState(true);
-  const [locationPermission, setLocationPermission] = useState<'granted' | 'denied' | 'prompt' | 'checking'>('checking');
+  const [locationPermission, setLocationPermission] = useState<'granted' | 'denied' | 'prompt' | 'checking'>('prompt');
+  const [enableLocation, setEnableLocation] = useState(false);
   const [controlsExpanded, setControlsExpanded] = useState(true);
   const [opened, { open, close }] = useDisclosure(false);
   const router = useRouter();
 
-  // Check location permission status
+  // Check location permission status on mount
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.permissions?.query({ name: 'geolocation' }).then((result) => {
@@ -51,6 +52,11 @@ export default function MapsPage() {
       setLocationPermission('denied');
     }
   }, []);
+
+  const handleEnableLocation = () => {
+    setEnableLocation(true);
+    setLocationPermission('checking');
+  };
 
   return (
     <>
@@ -238,6 +244,8 @@ export default function MapsPage() {
           <SheltersJDFMap 
             showShelters={showShelters}
             showJDFBases={showJDFBases}
+            enableLocation={enableLocation}
+            onLocationStatusChange={setLocationPermission}
           />
         </Box>
 
@@ -377,16 +385,32 @@ export default function MapsPage() {
 
                 <Divider size="xs" />
 
-                {/* Location Status - Compact */}
-                <Group gap={4} style={{ alignItems: 'center' }}>
-                  <IconMapPin size={12} style={{ color: '#666', flexShrink: 0 }} />
-                  <Text size="xs" c="dimmed" style={{ lineHeight: 1.2 }}>
-                    {locationPermission === 'granted' && 'Location active'}
-                    {locationPermission === 'denied' && 'Location denied'}
-                    {locationPermission === 'prompt' && 'Permission needed'}
-                    {locationPermission === 'checking' && 'Checking...'}
-                  </Text>
-                </Group>
+                {/* Location Controls */}
+                <Stack gap={6}>
+                  {!enableLocation && locationPermission !== 'granted' && (
+                    <Button
+                      size="xs"
+                      color="green"
+                      variant="light"
+                      leftSection={<IconMapPin size={14} />}
+                      onClick={handleEnableLocation}
+                      fullWidth
+                    >
+                      Enable Location
+                    </Button>
+                  )}
+                  
+                  {/* Location Status - Compact */}
+                  <Group gap={4} style={{ alignItems: 'center' }}>
+                    <IconMapPin size={12} style={{ color: '#666', flexShrink: 0 }} />
+                    <Text size="xs" c="dimmed" style={{ lineHeight: 1.2 }}>
+                      {locationPermission === 'granted' && 'Location active'}
+                      {locationPermission === 'denied' && 'Location denied'}
+                      {locationPermission === 'prompt' && 'Click button to enable'}
+                      {locationPermission === 'checking' && 'Requesting permission...'}
+                    </Text>
+                  </Group>
+                </Stack>
               </>
             )}
           </Stack>

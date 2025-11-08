@@ -8,6 +8,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 interface SheltersJDFMapProps {
   showShelters: boolean;
   showJDFBases: boolean;
+  enableLocation?: boolean;
+  onLocationStatusChange?: (status: 'granted' | 'denied' | 'prompt' | 'checking') => void;
 }
 
 // Utility functions for calculating intermediate points
@@ -128,7 +130,7 @@ function generateCheckpoints(
   };
 }
 
-export default function SheltersJDFMap({ showShelters, showJDFBases }: SheltersJDFMapProps) {
+export default function SheltersJDFMap({ showShelters, showJDFBases, enableLocation = false, onLocationStatusChange }: SheltersJDFMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -185,206 +187,6 @@ export default function SheltersJDFMap({ showShelters, showJDFBases }: SheltersJ
 
     map.current.on('load', () => {
       if (!map.current) return;
-
-      // Start user location tracking immediately after map loads
-      if (navigator.geolocation) {
-        const options = {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0
-        };
-
-        // First try to get current position immediately
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude, accuracy } = position.coords;
-            
-            if (!map.current) return;
-
-            console.log('User location received:', { latitude, longitude, accuracy });
-
-            const userLocation: [number, number] = [longitude, latitude];
-
-            // Create user location marker (green dot)
-            const el = document.createElement('div');
-            el.className = 'user-location-marker';
-            el.style.width = '16px';
-            el.style.height = '16px';
-            el.style.borderRadius = '50%';
-            el.style.backgroundColor = '#22c55e';
-            el.style.border = '3px solid #ffffff';
-            el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-            el.style.cursor = 'pointer';
-
-            userLocationMarker.current = new maplibregl.Marker({ element: el })
-              .setLngLat(userLocation)
-              .addTo(map.current);
-
-            console.log('User location marker added at:', userLocation);
-
-            // Create accuracy circle
-            const accuracyRadius = accuracy || 50;
-            const latRad = latitude * Math.PI / 180;
-            const metersPerDegreeLat = 111320;
-            const metersPerDegreeLng = 111320 * Math.cos(latRad);
-            const radiusLat = accuracyRadius / metersPerDegreeLat;
-            const radiusLng = accuracyRadius / metersPerDegreeLng;
-
-            const circleGeoJSON = {
-              type: 'Feature' as const,
-              geometry: {
-                type: 'Polygon' as const,
-                coordinates: [[
-                  ...Array.from({ length: 64 }, (_, i) => {
-                    const angle = (i / 64) * 2 * Math.PI;
-                    return [
-                      longitude + radiusLng * Math.cos(angle),
-                      latitude + radiusLat * Math.sin(angle)
-                    ];
-                  }),
-                  [longitude + radiusLng, latitude]
-                ]]
-              },
-              properties: {}
-            };
-
-            map.current.addSource('user-location-circle', {
-              type: 'geojson',
-              data: circleGeoJSON
-            });
-
-            map.current.addLayer({
-              id: 'user-location-circle-layer',
-              type: 'fill',
-              source: 'user-location-circle',
-              paint: {
-                'fill-color': '#22c55e',
-                'fill-opacity': 0.2
-              }
-            });
-
-            map.current.addLayer({
-              id: 'user-location-circle-outline',
-              type: 'line',
-              source: 'user-location-circle',
-              paint: {
-                'line-color': '#22c55e',
-                'line-width': 2,
-                'line-opacity': 0.5
-              }
-            });
-          },
-          (error) => {
-            console.error('Geolocation error:', error);
-            if (error.code === error.PERMISSION_DENIED) {
-              console.error('User denied geolocation permission');
-            } else if (error.code === error.POSITION_UNAVAILABLE) {
-              console.error('Location information unavailable');
-            } else if (error.code === error.TIMEOUT) {
-              console.error('Location request timed out');
-            }
-          },
-          options
-        );
-
-        // Then watch for position updates
-        watchId.current = navigator.geolocation.watchPosition(
-          (position) => {
-            const { latitude, longitude, accuracy } = position.coords;
-            
-            if (!map.current) return;
-
-            const userLocation: [number, number] = [longitude, latitude];
-
-            // Remove existing marker and circle layers
-            if (userLocationMarker.current) {
-              userLocationMarker.current.remove();
-            }
-            if (map.current.getLayer('user-location-circle-layer')) {
-              map.current.removeLayer('user-location-circle-layer');
-            }
-            if (map.current.getLayer('user-location-circle-outline')) {
-              map.current.removeLayer('user-location-circle-outline');
-            }
-            if (map.current.getSource('user-location-circle')) {
-              map.current.removeSource('user-location-circle');
-            }
-
-            // Create user location marker (green dot)
-            const el = document.createElement('div');
-            el.className = 'user-location-marker';
-            el.style.width = '16px';
-            el.style.height = '16px';
-            el.style.borderRadius = '50%';
-            el.style.backgroundColor = '#22c55e';
-            el.style.border = '3px solid #ffffff';
-            el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
-            el.style.cursor = 'pointer';
-
-            userLocationMarker.current = new maplibregl.Marker({ element: el })
-              .setLngLat(userLocation)
-              .addTo(map.current);
-
-            // Create accuracy circle
-            const accuracyRadius = accuracy || 50;
-            const latRad = latitude * Math.PI / 180;
-            const metersPerDegreeLat = 111320;
-            const metersPerDegreeLng = 111320 * Math.cos(latRad);
-            const radiusLat = accuracyRadius / metersPerDegreeLat;
-            const radiusLng = accuracyRadius / metersPerDegreeLng;
-
-            const circleGeoJSON = {
-              type: 'Feature' as const,
-              geometry: {
-                type: 'Polygon' as const,
-                coordinates: [[
-                  ...Array.from({ length: 64 }, (_, i) => {
-                    const angle = (i / 64) * 2 * Math.PI;
-                    return [
-                      longitude + radiusLng * Math.cos(angle),
-                      latitude + radiusLat * Math.sin(angle)
-                    ];
-                  }),
-                  [longitude + radiusLng, latitude]
-                ]]
-              },
-              properties: {}
-            };
-
-            map.current.addSource('user-location-circle', {
-              type: 'geojson',
-              data: circleGeoJSON
-            });
-
-            map.current.addLayer({
-              id: 'user-location-circle-layer',
-              type: 'fill',
-              source: 'user-location-circle',
-              paint: {
-                'fill-color': '#22c55e',
-                'fill-opacity': 0.2
-              }
-            });
-
-            map.current.addLayer({
-              id: 'user-location-circle-outline',
-              type: 'line',
-              source: 'user-location-circle',
-              paint: {
-                'line-color': '#22c55e',
-                'line-width': 2,
-                'line-opacity': 0.5
-              }
-            });
-          },
-          (error) => {
-            console.error('Geolocation watch error:', error);
-          },
-          options
-        );
-      } else {
-        console.warn('Geolocation is not supported by this browser');
-      }
 
       // Load both GeoJSON files and generate checkpoints
       Promise.all([
@@ -570,6 +372,245 @@ export default function SheltersJDFMap({ showShelters, showJDFBases }: SheltersJ
       map.current.setLayoutProperty('jdf-bases-layer', 'visibility', showJDFBases ? 'visible' : 'none');
     }
   }, [showShelters, showJDFBases, mapLoaded]);
+
+  // Handle location tracking when enableLocation changes
+  useEffect(() => {
+    if (!enableLocation || !map.current || !mapLoaded) {
+      // Clean up if location is disabled
+      if (watchId.current !== null) {
+        navigator.geolocation.clearWatch(watchId.current);
+        watchId.current = null;
+      }
+      if (userLocationMarker.current) {
+        userLocationMarker.current.remove();
+        userLocationMarker.current = null;
+      }
+      if (map.current) {
+        if (map.current.getLayer('user-location-circle-layer')) {
+          map.current.removeLayer('user-location-circle-layer');
+        }
+        if (map.current.getLayer('user-location-circle-outline')) {
+          map.current.removeLayer('user-location-circle-outline');
+        }
+        if (map.current.getSource('user-location-circle')) {
+          map.current.removeSource('user-location-circle');
+        }
+      }
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      console.warn('Geolocation is not supported by this browser');
+      onLocationStatusChange?.('denied');
+      return;
+    }
+
+    onLocationStatusChange?.('checking');
+
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    };
+
+    // First try to get current position immediately
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        
+        if (!map.current) return;
+
+        onLocationStatusChange?.('granted');
+
+        const userLocation: [number, number] = [longitude, latitude];
+
+        // Create user location marker (green dot)
+        const el = document.createElement('div');
+        el.className = 'user-location-marker';
+        el.style.width = '16px';
+        el.style.height = '16px';
+        el.style.borderRadius = '50%';
+        el.style.backgroundColor = '#22c55e';
+        el.style.border = '3px solid #ffffff';
+        el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+        el.style.cursor = 'pointer';
+
+        userLocationMarker.current = new maplibregl.Marker({ element: el })
+          .setLngLat(userLocation)
+          .addTo(map.current);
+
+        // Create accuracy circle
+        const accuracyRadius = accuracy || 50;
+        const latRad = latitude * Math.PI / 180;
+        const metersPerDegreeLat = 111320;
+        const metersPerDegreeLng = 111320 * Math.cos(latRad);
+        const radiusLat = accuracyRadius / metersPerDegreeLat;
+        const radiusLng = accuracyRadius / metersPerDegreeLng;
+
+        const circleGeoJSON = {
+          type: 'Feature' as const,
+          geometry: {
+            type: 'Polygon' as const,
+            coordinates: [[
+              ...Array.from({ length: 64 }, (_, i) => {
+                const angle = (i / 64) * 2 * Math.PI;
+                return [
+                  longitude + radiusLng * Math.cos(angle),
+                  latitude + radiusLat * Math.sin(angle)
+                ];
+              }),
+              [longitude + radiusLng, latitude]
+            ]]
+          },
+          properties: {}
+        };
+
+        map.current.addSource('user-location-circle', {
+          type: 'geojson',
+          data: circleGeoJSON
+        });
+
+        map.current.addLayer({
+          id: 'user-location-circle-layer',
+          type: 'fill',
+          source: 'user-location-circle',
+          paint: {
+            'fill-color': '#22c55e',
+            'fill-opacity': 0.2
+          }
+        });
+
+        map.current.addLayer({
+          id: 'user-location-circle-outline',
+          type: 'line',
+          source: 'user-location-circle',
+          paint: {
+            'line-color': '#22c55e',
+            'line-width': 2,
+            'line-opacity': 0.5
+          }
+        });
+      },
+      (error) => {
+        console.error('Geolocation error:', error);
+        if (error.code === error.PERMISSION_DENIED) {
+          onLocationStatusChange?.('denied');
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          onLocationStatusChange?.('denied');
+        } else if (error.code === error.TIMEOUT) {
+          onLocationStatusChange?.('denied');
+        } else {
+          onLocationStatusChange?.('denied');
+        }
+      },
+      options
+    );
+
+    // Then watch for position updates
+    watchId.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, accuracy } = position.coords;
+        
+        if (!map.current) return;
+
+        const userLocation: [number, number] = [longitude, latitude];
+
+        // Remove existing marker and circle layers
+        if (userLocationMarker.current) {
+          userLocationMarker.current.remove();
+        }
+        if (map.current.getLayer('user-location-circle-layer')) {
+          map.current.removeLayer('user-location-circle-layer');
+        }
+        if (map.current.getLayer('user-location-circle-outline')) {
+          map.current.removeLayer('user-location-circle-outline');
+        }
+        if (map.current.getSource('user-location-circle')) {
+          map.current.removeSource('user-location-circle');
+        }
+
+        // Create user location marker (green dot)
+        const el = document.createElement('div');
+        el.className = 'user-location-marker';
+        el.style.width = '16px';
+        el.style.height = '16px';
+        el.style.borderRadius = '50%';
+        el.style.backgroundColor = '#22c55e';
+        el.style.border = '3px solid #ffffff';
+        el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+        el.style.cursor = 'pointer';
+
+        userLocationMarker.current = new maplibregl.Marker({ element: el })
+          .setLngLat(userLocation)
+          .addTo(map.current);
+
+        // Create accuracy circle
+        const accuracyRadius = accuracy || 50;
+        const latRad = latitude * Math.PI / 180;
+        const metersPerDegreeLat = 111320;
+        const metersPerDegreeLng = 111320 * Math.cos(latRad);
+        const radiusLat = accuracyRadius / metersPerDegreeLat;
+        const radiusLng = accuracyRadius / metersPerDegreeLng;
+
+        const circleGeoJSON = {
+          type: 'Feature' as const,
+          geometry: {
+            type: 'Polygon' as const,
+            coordinates: [[
+              ...Array.from({ length: 64 }, (_, i) => {
+                const angle = (i / 64) * 2 * Math.PI;
+                return [
+                  longitude + radiusLng * Math.cos(angle),
+                  latitude + radiusLat * Math.sin(angle)
+                ];
+              }),
+              [longitude + radiusLng, latitude]
+            ]]
+          },
+          properties: {}
+        };
+
+        map.current.addSource('user-location-circle', {
+          type: 'geojson',
+          data: circleGeoJSON
+        });
+
+        map.current.addLayer({
+          id: 'user-location-circle-layer',
+          type: 'fill',
+          source: 'user-location-circle',
+          paint: {
+            'fill-color': '#22c55e',
+            'fill-opacity': 0.2
+          }
+        });
+
+        map.current.addLayer({
+          id: 'user-location-circle-outline',
+          type: 'line',
+          source: 'user-location-circle',
+          paint: {
+            'line-color': '#22c55e',
+            'line-width': 2,
+            'line-opacity': 0.5
+          }
+        });
+      },
+      (error) => {
+        console.error('Geolocation watch error:', error);
+        onLocationStatusChange?.('denied');
+      },
+      options
+    );
+
+    // Cleanup function
+    return () => {
+      if (watchId.current !== null) {
+        navigator.geolocation.clearWatch(watchId.current);
+        watchId.current = null;
+      }
+    };
+  }, [enableLocation, mapLoaded, onLocationStatusChange]);
 
   return (
     <Box 
