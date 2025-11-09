@@ -3,6 +3,9 @@ import { db } from '@/lib/db';
 import { parishes, communities, locations } from '@/lib/db/schema';
 import { ilike, or, sql } from 'drizzle-orm';
 
+// Force dynamic rendering - this route uses request.url
+export const dynamic = 'force-dynamic';
+
 // GET /api/search?q=query&type=parish|community|location
 export async function GET(request: Request) {
   try {

@@ -4,6 +4,9 @@ import { db } from '@/lib/db';
 import { userLocations, user } from '@/lib/db/schema';
 import { eq, desc, gte } from 'drizzle-orm';
 
+// Force dynamic rendering - this is a streaming endpoint
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   let controllerRef: ReadableStreamDefaultController<string> | null = null;
 

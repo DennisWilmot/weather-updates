@@ -31,6 +31,9 @@ function formatDirection(direction: number): string {
   return directions[index];
 }
 
+// Force dynamic rendering - this route fetches external data with no-store
+export const dynamic = 'force-dynamic';
+
 export async function GET() {
   try {
     let response: Response;

@@ -3,6 +3,9 @@ import { db } from '@/lib/db';
 import { submissions } from '@/lib/db/schema';
 import { eq, gte, and, sql } from 'drizzle-orm';
 
+// Force dynamic rendering - this route uses request.url
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);

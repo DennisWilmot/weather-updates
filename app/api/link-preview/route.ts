@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 
+// Force dynamic rendering - this route uses request.url and fetches external data
+export const dynamic = 'force-dynamic';
+
 // GET /api/link-preview?url=... - Fetch Open Graph data for link previews
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);

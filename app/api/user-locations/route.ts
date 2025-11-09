@@ -5,6 +5,9 @@ import { userLocations, user } from '@/lib/db/schema';
 import { sseConnections } from '@/lib/sse-connections';
 import { eq } from 'drizzle-orm';
 
+// Force dynamic rendering - this route uses auth session
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     // Verify user session

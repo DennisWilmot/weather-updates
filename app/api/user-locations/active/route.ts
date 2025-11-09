@@ -3,6 +3,9 @@ import { db } from '@/lib/db';
 import { userLocations, user } from '@/lib/db/schema';
 import { eq, desc, gte } from 'drizzle-orm';
 
+// Force dynamic rendering - this route uses request.url
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
