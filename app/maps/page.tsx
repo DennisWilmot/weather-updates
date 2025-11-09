@@ -85,8 +85,20 @@ export default function MapsPage() {
         const data = JSON.parse(event.data);
         
         if (data.type === 'initial' && data.locations) {
-          // Initial state - set all locations
-          setUserLocations(data.locations);
+          // Initial state - merge with existing locations to avoid race condition
+          // Only update if we don't already have locations, or if SSE has more recent data
+          setUserLocations((prev) => {
+            if (prev.length === 0) {
+              return data.locations;
+            }
+            // Merge: keep existing, add new, update existing by userId
+            const merged = new Map();
+            prev.forEach(loc => merged.set(loc.userId, loc));
+            data.locations.forEach((loc: UserLocation) => {
+              merged.set(loc.userId, loc);
+            });
+            return Array.from(merged.values());
+          });
         } else if (data.userId) {
           // Single location update
           setUserLocations((prev) => {
