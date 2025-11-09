@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, boolean, timestamp, unique, jsonb, integer, decimal } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, boolean, timestamp, unique, jsonb, integer, decimal, index } from 'drizzle-orm/pg-core';
 
 // Parish table - Top level (14 parishes of Jamaica)
 export const parishes = pgTable('parishes', {
@@ -131,7 +131,8 @@ export const locationStatus = pgTable('location_status', {
 // Users table - Stores app-specific user data
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
-  email: text('email'),
+  username: text('username').notNull().unique(), // Username for login (unique)
+  email: text('email'), // Used by Better Auth (format: username@system.local)
   firstName: text('first_name'),
   lastName: text('last_name'),
   fullName: text('full_name'),
@@ -178,3 +179,70 @@ export const onlineRetailers = pgTable('online_retailers', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
   updatedAt: timestamp('updated_at').defaultNow().notNull()
 });
+
+// User Locations table - Stores user location updates for real-time tracking
+export const userLocations = pgTable('user_locations', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: text('user_id').references(() => user.id).notNull(),
+  latitude: decimal('latitude', { precision: 10, scale: 7 }).notNull(),
+  longitude: decimal('longitude', { precision: 10, scale: 7 }).notNull(),
+  accuracy: integer('accuracy'), // Accuracy in meters
+  timestamp: timestamp('timestamp').defaultNow().notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull()
+});
+
+// Better Auth tables - Required for authentication
+// These tables are used by Better Auth for user authentication and session management
+export const user = pgTable('user', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull().unique(),
+  emailVerified: boolean('email_verified').notNull().default(false),
+  image: text('image'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  emailIdx: index('user_email_idx').on(table.email),
+}));
+
+export const session = pgTable('session', {
+  id: text('id').primaryKey(),
+  expiresAt: timestamp('expires_at').notNull(),
+  token: text('token').notNull().unique(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index('session_user_id_idx').on(table.userId),
+  tokenIdx: index('session_token_idx').on(table.token),
+}));
+
+export const account = pgTable('account', {
+  id: text('id').primaryKey(),
+  accountId: text('account_id').notNull(),
+  providerId: text('provider_id').notNull(),
+  userId: text('user_id').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  idToken: text('id_token'),
+  expiresAt: timestamp('expires_at'),
+  password: text('password'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index('account_user_id_idx').on(table.userId),
+  providerIdx: index('account_provider_idx').on(table.providerId, table.accountId),
+}));
+
+export const verification = pgTable('verification', {
+  id: text('id').primaryKey(),
+  identifier: text('identifier').notNull(),
+  value: text('value').notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  identifierIdx: index('verification_identifier_idx').on(table.identifier),
+}));

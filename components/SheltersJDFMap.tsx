@@ -5,11 +5,25 @@ import { useEffect, useRef, useState } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
+interface UserLocation {
+  userId: string;
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+  timestamp: string;
+  user?: {
+    name?: string | null;
+    email?: string | null;
+  };
+}
+
 interface SheltersJDFMapProps {
   showShelters: boolean;
   showJDFBases: boolean;
+  showUserLocations?: boolean;
   enableLocation?: boolean;
   onLocationStatusChange?: (status: 'granted' | 'denied' | 'prompt' | 'checking') => void;
+  userLocations?: UserLocation[];
 }
 
 // Utility functions for calculating intermediate points
@@ -130,13 +144,14 @@ function generateCheckpoints(
   };
 }
 
-export default function SheltersJDFMap({ showShelters, showJDFBases, enableLocation = false, onLocationStatusChange }: SheltersJDFMapProps) {
+export default function SheltersJDFMap({ showShelters, showJDFBases, showUserLocations = true, enableLocation = false, onLocationStatusChange, userLocations = [] }: SheltersJDFMapProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const userLocationMarker = useRef<maplibregl.Marker | null>(null);
   const popup = useRef<maplibregl.Popup | null>(null);
   const watchId = useRef<number | null>(null);
+  const userLocationMarkers = useRef<Map<string, maplibregl.Marker>>(new Map());
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -290,7 +305,17 @@ export default function SheltersJDFMap({ showShelters, showJDFBases, enableLocat
             source: 'jdf-bases',
             paint: {
               'circle-radius': 8,
-              'circle-color': '#ff6b35',
+              // Color specific bases red: SAVANNA LA MAR WESTMORELAND, BLUEFIELDS WESTMORELAND, and LUANA
+              'circle-color': [
+                'case',
+                ['==', ['get', 'Name'], 'SAVANNA LA MAR WESTMORELAND'],
+                '#ef4444', // Red
+                ['==', ['get', 'Name'], 'BLUEFIELDS WESTMORELAND'],
+                '#ef4444', // Red
+                ['==', ['get', 'Name'], 'LUANA'],
+                '#ef4444', // Red
+                '#22c55e' // Default green
+              ],
               'circle-stroke-width': 2,
               'circle-stroke-color': '#ffffff',
               'circle-opacity': 0.8
@@ -372,6 +397,74 @@ export default function SheltersJDFMap({ showShelters, showJDFBases, enableLocat
       map.current.setLayoutProperty('jdf-bases-layer', 'visibility', showJDFBases ? 'visible' : 'none');
     }
   }, [showShelters, showJDFBases, mapLoaded]);
+
+  // Update user location markers
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    // Remove old markers
+    userLocationMarkers.current.forEach((marker) => {
+      marker.remove();
+    });
+    userLocationMarkers.current.clear();
+
+    // Only add markers if showUserLocations is true
+    if (showUserLocations) {
+      // Add new markers for each user location
+      userLocations.forEach((location) => {
+        const { userId, latitude, longitude, user } = location;
+
+        // Create marker element
+        const el = document.createElement('div');
+        el.className = 'user-location-marker';
+        el.style.width = '14px';
+        el.style.height = '14px';
+        el.style.borderRadius = '50%';
+        el.style.backgroundColor = '#9333ea'; // Purple color for user locations
+        el.style.border = '2px solid #ffffff';
+        el.style.boxShadow = '0 2px 8px rgba(0,0,0,0.3)';
+        el.style.cursor = 'pointer';
+
+        // Create marker
+        const marker = new maplibregl.Marker({ element: el })
+          .setLngLat([longitude, latitude])
+          .addTo(map.current!);
+
+        // Add click handler
+        el.addEventListener('click', () => {
+          if (!popup.current) return;
+
+          const userName = user?.name || user?.email || 'Unknown User';
+          const timestamp = new Date(location.timestamp).toLocaleString();
+
+          const html = `
+          <div style="padding: 8px;">
+            <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold;">${userName}</h3>
+            <p style="margin: 4px 0; font-size: 14px;"><strong>Last Updated:</strong> ${timestamp}</p>
+            ${location.accuracy ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Accuracy:</strong> ${location.accuracy}m</p>` : ''}
+          </div>
+        `;
+
+          popup.current
+            .setLngLat([longitude, latitude])
+            .setHTML(html)
+            .addTo(map.current!);
+        });
+
+        userLocationMarkers.current.set(userId, marker);
+      });
+    }
+  }, [userLocations, mapLoaded, showUserLocations]);
+
+  // Cleanup user location markers on unmount
+  useEffect(() => {
+    return () => {
+      userLocationMarkers.current.forEach((marker) => {
+        marker.remove();
+      });
+      userLocationMarkers.current.clear();
+    };
+  }, []);
 
   // Handle location tracking when enableLocation changes
   useEffect(() => {

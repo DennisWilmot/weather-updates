@@ -20,18 +20,36 @@ import {
   Divider
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconMapPin, IconAlertTriangle, IconChevronUp, IconChevronDown } from '@tabler/icons-react';
+import { IconMapPin, IconAlertTriangle, IconChevronUp, IconChevronDown, IconLogout } from '@tabler/icons-react';
+import { notifications } from '@mantine/notifications';
 import Image from 'next/image';
 import SheltersJDFMap from '@/components/SheltersJDFMap';
+import { useSession, signOut } from '@/lib/auth-client';
+
+interface UserLocation {
+  userId: string;
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+  timestamp: string;
+  user?: {
+    name?: string | null;
+    email?: string | null;
+  };
+}
 
 export default function MapsPage() {
   const [showShelters, setShowShelters] = useState(true);
   const [showJDFBases, setShowJDFBases] = useState(true);
+  const [showUserLocations, setShowUserLocations] = useState(true);
   const [locationPermission, setLocationPermission] = useState<'granted' | 'denied' | 'prompt' | 'checking'>('prompt');
   const [enableLocation, setEnableLocation] = useState(false);
   const [controlsExpanded, setControlsExpanded] = useState(true);
   const [opened, { open, close }] = useDisclosure(false);
+  const [userLocations, setUserLocations] = useState<UserLocation[]>([]);
+  const [updatingLocation, setUpdatingLocation] = useState(false);
   const router = useRouter();
+  const { data: session } = useSession();
 
   // Check location permission status on mount
   useEffect(() => {
@@ -56,6 +74,142 @@ export default function MapsPage() {
   const handleEnableLocation = () => {
     setEnableLocation(true);
     setLocationPermission('checking');
+  };
+
+  // SSE connection for real-time location updates
+  useEffect(() => {
+    const eventSource = new EventSource('/api/user-locations/stream');
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        
+        if (data.type === 'initial' && data.locations) {
+          // Initial state - set all locations
+          setUserLocations(data.locations);
+        } else if (data.userId) {
+          // Single location update
+          setUserLocations((prev) => {
+            // Update or add location for this user
+            const filtered = prev.filter((loc) => loc.userId !== data.userId);
+            return [...filtered, data];
+          });
+        }
+      } catch (error) {
+        console.error('Error parsing SSE message:', error);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      // EventSource will automatically reconnect
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, []);
+
+  // Load initial locations
+  useEffect(() => {
+    fetch('/api/user-locations/active')
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setUserLocations(data);
+        }
+      })
+      .catch((error) => {
+        console.error('Error loading initial locations:', error);
+      });
+  }, []);
+
+  const handleUpdateLocation = async () => {
+    if (!navigator.geolocation) {
+      notifications.show({
+        title: 'Error',
+        message: 'Geolocation is not supported by your browser',
+        color: 'red',
+      });
+      return;
+    }
+
+    setUpdatingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude, accuracy } = position.coords;
+
+          const response = await fetch('/api/user-locations', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              latitude,
+              longitude,
+              accuracy: Math.round(accuracy),
+            }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to update location');
+          }
+
+          notifications.show({
+            title: 'Success',
+            message: 'Location updated successfully',
+            color: 'green',
+          });
+
+          // Immediately refresh locations to show updated position
+          try {
+            const refreshResponse = await fetch('/api/user-locations/active');
+            if (refreshResponse.ok) {
+              const refreshData = await refreshResponse.json();
+              if (Array.isArray(refreshData)) {
+                setUserLocations(refreshData);
+              }
+            }
+          } catch (refreshError) {
+            console.error('Error refreshing locations:', refreshError);
+            // Don't show error to user - SSE will eventually update
+          }
+        } catch (error: any) {
+          notifications.show({
+            title: 'Error',
+            message: error.message || 'Failed to update location',
+            color: 'red',
+          });
+        } finally {
+          setUpdatingLocation(false);
+        }
+      },
+      (error) => {
+        setUpdatingLocation(false);
+        let errorMessage = 'Failed to get location';
+        if (error.code === error.PERMISSION_DENIED) {
+          errorMessage = 'Location permission denied';
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          errorMessage = 'Location unavailable';
+        } else if (error.code === error.TIMEOUT) {
+          errorMessage = 'Location request timed out';
+        }
+        notifications.show({
+          title: 'Error',
+          message: errorMessage,
+          color: 'red',
+        });
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      }
+    );
   };
 
   return (
@@ -244,8 +398,10 @@ export default function MapsPage() {
           <SheltersJDFMap 
             showShelters={showShelters}
             showJDFBases={showJDFBases}
+            showUserLocations={showUserLocations}
             enableLocation={enableLocation}
             onLocationStatusChange={setLocationPermission}
+            userLocations={userLocations}
           />
         </Box>
 
@@ -313,7 +469,7 @@ export default function MapsPage() {
                               width: '10px',
                               height: '10px',
                               borderRadius: '50%',
-                              backgroundColor: '#ff6b35',
+                              backgroundColor: '#22c55e',
                               border: '1.5px solid #ffffff',
                               boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
                               flexShrink: 0
@@ -324,6 +480,28 @@ export default function MapsPage() {
                       }
                       checked={showJDFBases}
                       onChange={(event) => setShowJDFBases(event.currentTarget.checked)}
+                      size="xs"
+                    />
+                    
+                    <Checkbox
+                      label={
+                        <Group gap={4}>
+                          <Box
+                            style={{
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '50%',
+                              backgroundColor: '#9333ea',
+                              border: '1.5px solid #ffffff',
+                              boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
+                              flexShrink: 0
+                            }}
+                          />
+                          <Text size="xs">User Locations</Text>
+                        </Group>
+                      }
+                      checked={showUserLocations}
+                      onChange={(event) => setShowUserLocations(event.currentTarget.checked)}
                       size="xs"
                     />
                   </Stack>
@@ -357,13 +535,28 @@ export default function MapsPage() {
                           width: '12px',
                           height: '12px',
                           borderRadius: '50%',
-                          backgroundColor: '#ff6b35',
+                          backgroundColor: '#22c55e',
                           border: '1.5px solid #ffffff',
                           boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
                           flexShrink: 0
                         }}
                       />
                       <Text size="xs">JDF Bases</Text>
+                    </Group>
+                    
+                    <Group gap={6} style={{ alignItems: 'center' }}>
+                      <Box
+                        style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          backgroundColor: '#ef4444',
+                          border: '1.5px solid #ffffff',
+                          boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
+                          flexShrink: 0
+                        }}
+                      />
+                      <Text size="xs">JDF Bases (Priority)</Text>
                     </Group>
 
                     <Group gap={6} style={{ alignItems: 'center' }}>
@@ -372,13 +565,13 @@ export default function MapsPage() {
                           width: '12px',
                           height: '12px',
                           borderRadius: '50%',
-                          backgroundColor: '#22c55e',
+                          backgroundColor: '#9333ea',
                           border: '2px solid #ffffff',
                           boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
                           flexShrink: 0
                         }}
                       />
-                      <Text size="xs">Your Location</Text>
+                      <Text size="xs">User Locations</Text>
                     </Group>
                   </Stack>
                 </Box>
@@ -387,6 +580,60 @@ export default function MapsPage() {
 
                 {/* Location Controls */}
                 <Stack gap={6}>
+                  {session?.user && (
+                    <>
+                      <Button
+                        size="xs"
+                        color="blue"
+                        variant="filled"
+                        leftSection={<IconMapPin size={14} />}
+                        onClick={handleUpdateLocation}
+                        loading={updatingLocation}
+                        fullWidth
+                      >
+                        Update Location
+                      </Button>
+                      <Button
+                        size="xs"
+                        color="red"
+                        variant="light"
+                        leftSection={<IconLogout size={14} />}
+                        onClick={async () => {
+                          try {
+                            await signOut();
+                            notifications.show({
+                              title: 'Success',
+                              message: 'Signed out successfully',
+                              color: 'green',
+                            });
+                            router.push('/');
+                          } catch (error: any) {
+                            notifications.show({
+                              title: 'Error',
+                              message: error.message || 'Failed to sign out',
+                              color: 'red',
+                            });
+                          }
+                        }}
+                        fullWidth
+                      >
+                        Sign Out
+                      </Button>
+                    </>
+                  )}
+                  
+                  {!session?.user && (
+                    <Button
+                      size="xs"
+                      color="blue"
+                      variant="light"
+                      onClick={() => router.push('/login')}
+                      fullWidth
+                    >
+                      Login to Update Location
+                    </Button>
+                  )}
+
                   {!enableLocation && locationPermission !== 'granted' && (
                     <Button
                       size="xs"

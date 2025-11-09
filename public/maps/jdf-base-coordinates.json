@@ -1,0 +1,102 @@
+[
+  {
+    "name": "BURNT SAVANNAH ST ELIZABETH",
+    "community": "BURNT SAVANNAH ST ELIZABETH",
+    "longitude": -77.7569889,
+    "latitude": 18.0615259,
+    "coordinates": [
+      -77.7569889,
+      18.0615259
+    ]
+  },
+  {
+    "name": "NEW MARKET ST ELIZABETH",
+    "community": "NEW MARKET ST ELIZABETH",
+    "longitude": -77.9250912,
+    "latitude": 18.1494784,
+    "coordinates": [
+      -77.9250912,
+      18.1494784
+    ]
+  },
+  {
+    "name": "SPRINGFIELD ST ELIZABETH",
+    "community": "SPRINGFIELD ST ELIZABETH",
+    "longitude": -77.8713443,
+    "latitude": 18.1741217,
+    "coordinates": [
+      -77.8713443,
+      18.1741217
+    ]
+  },
+  {
+    "name": "SAVANNA LA MAR WESTMORELAND",
+    "community": "SAVANNA LA MAR WESTMORELAND",
+    "longitude": -78.1324313,
+    "latitude": 18.2224783,
+    "coordinates": [
+      -78.1324313,
+      18.2224783
+    ]
+  },
+  {
+    "name": "DARLISTON WESTMORELAND",
+    "community": "DARLISTON WESTMORELAND",
+    "longitude": -77.9860706,
+    "latitude": 18.2386239,
+    "coordinates": [
+      -77.9860706,
+      18.2386239
+    ]
+  },
+  {
+    "name": "BIGWOOD WESTMORELAND",
+    "community": "BIGWOOD WESTMORELAND",
+    "longitude": -77.9897163,
+    "latitude": 18.2142111,
+    "coordinates": [
+      -77.9897163,
+      18.2142111
+    ]
+  },
+  {
+    "name": "LENNOX WESTMORELAND",
+    "community": "LENNOX WESTMORELAND",
+    "longitude": -77.944608,
+    "latitude": 18.1834462,
+    "coordinates": [
+      -77.944608,
+      18.1834462
+    ]
+  },
+  {
+    "name": "BLUEFIELDS WESTMORELAND",
+    "community": "BLUEFIELDS WESTMORELAND",
+    "longitude": -78.0267258,
+    "latitude": 18.1661147,
+    "coordinates": [
+      -78.0267258,
+      18.1661147
+    ]
+  },
+  {
+    "name": "THATCH VALLEY WESTMORELAND",
+    "community": "THATCH VALLEY WESTMORELAND",
+    "longitude": -77.9618759,
+    "latitude": 18.2371574,
+    "coordinates": [
+      -77.9618759,
+      18.2371574
+    ]
+  },
+  {
+    "name": "CONTENT WESTMORELAND",
+    "community": "CONTENT WESTMORELAND",
+    "longitude": -77.9997876,
+    "latitude": 18.1802035,
+    "coordinates": [
+      -77.9997876,
+      18.1802035
+    ]
+  }
+]
