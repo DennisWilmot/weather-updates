@@ -32,43 +32,14 @@ const getBaseURL = (request?: Request) => {
 
 // Import drizzle adapter for Better Auth
 // Better Auth v1.3+ includes drizzle adapter
+// Use package import path which works in both dev and serverless (Vercel) environments
 let drizzleAdapter: any = null;
 if (typeof window === 'undefined' && isBetterAuthConfigured) {
   try {
-    const path = require('path');
-    const fs = require('fs');
-    const { createRequire } = require('module');
-    
-    // Use process.cwd() to get the real file system path (bypasses webpack)
-    // This works because webpack doesn't intercept process.cwd()
-    const projectRoot = process.cwd();
-    const adapterPath = path.join(
-      projectRoot,
-      'node_modules',
-      'better-auth',
-      'dist',
-      'adapters',
-      'drizzle-adapter',
-      'index.cjs'
-    );
-    
-    // Verify file exists using real file system
-    if (!fs.existsSync(adapterPath)) {
-      throw new Error(`Adapter file not found at ${adapterPath}`);
-    }
-    
-    // Get the absolute path
-    const absoluteAdapterPath = path.resolve(adapterPath);
-    
-    // Use createRequire with project's package.json (real file system path)
-    // This ensures proper module resolution context
-    const projectPackageJson = path.join(process.cwd(), 'package.json');
-    const adapterRequire = createRequire(projectPackageJson);
-    
-    // Load the adapter module
-    const adapterModule = adapterRequire(absoluteAdapterPath);
-    
-    drizzleAdapter = adapterModule.drizzleAdapter || adapterModule.default || adapterModule;
+    // Use package import path - this works in Vercel/serverless environments
+    // The package.json exports should handle the path resolution
+    const adapterModule = require('better-auth/adapters/drizzle');
+    drizzleAdapter = adapterModule.drizzleAdapter; // This is the correct export name
     
     if (!drizzleAdapter || typeof drizzleAdapter !== 'function') {
       console.warn('[Better Auth] Drizzle adapter not found, using memory adapter');
@@ -89,6 +60,11 @@ if (typeof window === 'undefined' && isBetterAuthConfigured) {
 // Create auth instance factory that can use request-specific baseURL
 const createAuthInstance = (request?: Request) => {
   const baseURL = getBaseURL(request);
+  
+  // Determine trusted origins based on environment
+  const trustedOrigins = process.env.NODE_ENV === 'production'
+    ? ['https://atlas.tm', 'https://www.atlas.tm']
+    : ['http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002'];
   
   if (isBetterAuthConfigured && drizzleAdapter) {
     return betterAuth({
@@ -114,6 +90,7 @@ const createAuthInstance = (request?: Request) => {
       }),
       baseURL,
       secret: process.env.BETTER_AUTH_SECRET!,
+      trustedOrigins,
     });
   }
   
@@ -124,6 +101,7 @@ const createAuthInstance = (request?: Request) => {
     },
     baseURL,
     secret: process.env.BETTER_AUTH_SECRET || "temporary-secret-change-in-production",
+    trustedOrigins,
   });
 };
 

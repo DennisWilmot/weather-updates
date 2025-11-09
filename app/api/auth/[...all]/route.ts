@@ -26,9 +26,20 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Log request details for debugging
+    const url = request.url;
+    const origin = request.headers.get('origin');
+    const referer = request.headers.get('referer');
+    console.log('[Better Auth] POST request:', {
+      url,
+      origin,
+      referer,
+      pathname: request.nextUrl.pathname,
+    });
+
     const auth = createAuthInstance(request);
     if (!auth?.handler) {
-      console.error('Auth handler not available');
+      console.error('[Better Auth] Auth handler not available');
       return NextResponse.json(
         { error: 'Auth handler not available' },
         { status: 500 }
@@ -42,23 +53,27 @@ export async function POST(request: NextRequest) {
       
       // If response is empty or undefined, return an error
       if (!response) {
-        console.error('Empty response from auth handler');
+        console.error('[Better Auth] Empty response from auth handler');
         return NextResponse.json(
           { error: 'Empty response from auth handler' },
           { status: 500 }
         );
       }
       
+      // Log response status for debugging
+      console.log('[Better Auth] Response status:', response.status);
+      
       return response;
     } catch (handlerError: any) {
-      console.error('Handler.POST error:', handlerError);
-      console.error('Handler error stack:', handlerError.stack);
+      console.error('[Better Auth] Handler.POST error:', handlerError);
+      console.error('[Better Auth] Handler error message:', handlerError.message);
+      console.error('[Better Auth] Handler error stack:', handlerError.stack);
       throw handlerError;
     }
   } catch (error: any) {
-    console.error('Better Auth POST error:', error);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
+    console.error('[Better Auth] POST error:', error);
+    console.error('[Better Auth] Error message:', error.message);
+    console.error('[Better Auth] Error stack:', error.stack);
     
     // Return proper error response
     return NextResponse.json(
