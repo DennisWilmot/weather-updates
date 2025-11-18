@@ -1,0 +1,5 @@
+parish_id,community_id,latitude,longitude,needs,contact_name,contact_phone,contact_email,number_of_people,urgency,description,status
+parish-uuid-here,community-uuid-here,18.0,-76.8,"Food,Water",Jane Smith,876-555-5678,jane@email.com,4,high,Family of 4 needs immediate assistance,pending
+
+
+

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Container,
   Title,
@@ -17,12 +17,16 @@ import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { signIn } from '@/lib/auth-client';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  // Get redirect URL from query params
+  const redirectTo = searchParams.get('redirect') || '/maps';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,8 +53,21 @@ export default function LoginPage() {
         icon: <IconCheck size={16} />,
       });
 
-      // Redirect to maps page
-      router.push('/maps');
+      // CRITICAL FIX: Wait for session to be available before redirect
+      // Better Auth's signIn sets the cookie via HTTP response headers, but we need to ensure
+      // the cookie is persisted and the session can be fetched before redirecting
+      
+      // Refresh router to ensure server components pick up the new session state
+      router.refresh();
+      
+      // Wait longer to ensure cookie is set and session can be fetched
+      // The cookie is set via HTTP-only Set-Cookie header, so we need to give the browser
+      // time to persist it before redirecting
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Now redirect - the cookie should be set and available
+      // Using window.location.href ensures a full page reload that picks up the session cookie
+      window.location.href = redirectTo;
     } catch (err: any) {
       setError(err.message || 'Invalid username or password');
       notifications.show({
@@ -132,6 +149,25 @@ export default function LoginPage() {
         </Card>
       </Container>
     </Box>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <Box style={{ 
+        minHeight: '100vh', 
+        backgroundColor: '#0f0f23', 
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2rem'
+      }}>
+        <Text c="white">Loading...</Text>
+      </Box>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }
 

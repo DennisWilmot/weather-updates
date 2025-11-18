@@ -100,7 +100,8 @@ export default function HierarchicalLocationPicker({
       placeName: useCustomPlace ? placeSearch : null,
       streetName: streetName || null
     });
-  }, [selectedParishId, selectedCommunityId, communitySearch, selectedLocationId, placeSearch, streetName, useCustomPlace, parishesData, communitiesData, onLocationChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedParishId, selectedCommunityId, communitySearch, selectedLocationId, placeSearch, streetName, useCustomPlace, parishesData, communitiesData]);
 
   // Handle parish change
   const handleParishChange = (value: string | null) => {

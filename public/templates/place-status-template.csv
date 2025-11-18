@@ -1,0 +1,5 @@
+parish_id,community_id,town,electricity_status,water_status,wifi_status,shelter_name,shelter_capacity,shelter_max_capacity,shelter_at_capacity,notes
+parish-uuid-here,community-uuid-here,Kingston,operational,outage,partial,Community Center,150,200,false,Water expected back tomorrow
+
+
+

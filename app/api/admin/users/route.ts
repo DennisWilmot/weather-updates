@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
-import { db } from '@/lib/db';
-import { users } from '@/lib/db/schema';
 import { verifyAdminAuth } from '@/lib/admin-auth';
 
+/**
+ * Admin endpoint to create users
+ * Now uses Better Auth directly - no separate users table needed
+ * If user needs role/organization, create a 'people' entry with type='aid_worker'
+ */
 export async function POST(request: Request) {
   try {
     // Verify admin authentication
@@ -93,26 +95,18 @@ export async function POST(request: Request) {
         );
       }
 
-      // Create user record in our users table
-      const [newUser] = await db
-        .insert(users)
-        .values({
-          id: authUserId, // Use same ID as Better Auth user
-          username: username, // Store username
-          email: email, // Store email for Better Auth compatibility
-          fullName: fullName || username,
-          role: 'responder',
-        })
-        .returning();
-
+      // User is now created in Better Auth 'user' table
+      // If role/organization is needed, create a 'people' entry separately
       return NextResponse.json(
         {
           success: true,
           user: {
-            id: newUser.id,
+            id: authUserId,
             username,
-            fullName: newUser.fullName,
+            fullName: fullName || username,
+            email,
           },
+          note: 'User created in Better Auth. Create a "people" entry if role/organization is needed.',
         },
         { status: 201 }
       );

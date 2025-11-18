@@ -1,0 +1,5 @@
+organization_name,distribution_date,organization_entity,parish_id,community_id,latitude,longitude,items_distributed,recipient_first_name,recipient_middle_names,recipient_last_name,recipient_alias,recipient_date_of_birth,recipient_sex,recipient_trn,recipient_phone,recipient_signature
+Red Cross,2024-01-15,Ministry of Health,parish-uuid-here,community-uuid-here,18.0,-76.8,"Food Kit,Hygiene Kit",John,Michael,Doe,,1990-05-15,Male,123-456-789,876-555-1234,
+
+
+

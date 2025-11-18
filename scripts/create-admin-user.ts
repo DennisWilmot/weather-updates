@@ -1,63 +1,75 @@
-import * as dotenv from 'dotenv';
-import * as path from 'path';
+/**
+ * Script to create an admin user using Better Auth sign-up API
+ * Usage: tsx scripts/create-admin-user.ts
+ * 
+ * Note: This uses the HTTP API endpoint, so the Next.js server should be running
+ * or you can use the server-side API approach instead
+ */
 
-// Load environment variables
-dotenv.config({ path: path.join(__dirname, '../.env.local') });
+import 'dotenv/config';
 
 async function createAdminUser() {
+  const username = 'admin1';
+  const password = 'changeme';
+  const name = 'Admin User';
+  
+  // Create email format for Better Auth (requires email field)
+  // Using @system.local format like the admin users route
+  const email = `${username}@system.local`;
+  
+  console.log(`Creating user: ${username}`);
+  console.log(`Email: ${email}`);
+  
   try {
-    const username = 'admin';
-    const password = 'Intellibus@123!';
-    const fullName = 'Admin User';
-    
-    // Get admin key from environment or prompt
-    const adminKey = process.env.ADMIN_SECRET_KEY;
-    
-    if (!adminKey) {
-      console.error('❌ ADMIN_SECRET_KEY not found in environment variables.');
-      console.error('Please set ADMIN_SECRET_KEY in .env.local or provide it as an argument.');
-      process.exit(1);
-    }
-
-    console.log('Creating admin user via API...');
-    console.log(`Username: ${username}`);
-
-    // Use the API endpoint to create the user
+    // Use Better Auth HTTP API endpoint (same as admin users route)
     const baseURL = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'http://localhost:3000';
-    const response = await fetch(`${baseURL}/api/admin/users`, {
+    const signUpUrl = `${baseURL}/api/auth/sign-up/email`;
+    
+    console.log(`Calling: ${signUpUrl}`);
+    
+    const signUpResponse = await fetch(signUpUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${adminKey}`,
       },
       body: JSON.stringify({
-        username,
+        email,
         password,
-        fullName,
+        name,
       }),
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to create admin user');
+    
+    let signUpData: any;
+    try {
+      signUpData = await signUpResponse.json();
+    } catch (e) {
+      const text = await signUpResponse.text();
+      console.error('Failed to parse JSON response:', text);
+      process.exit(1);
     }
-
-    console.log('✅ Admin user created successfully!');
-    console.log(`Username: ${username}`);
-    console.log(`Password: ${password}`);
-    console.log(`User ID: ${data.user?.id}`);
-    console.log('\nYou can now log in at /login');
-    console.log('\nNote: After creation, you may want to update the user role to "admin" in the database.');
-
-    process.exit(0);
+    
+    if (!signUpResponse.ok) {
+      console.error('Error creating user:', signUpData);
+      console.error('Status:', signUpResponse.status);
+      process.exit(1);
+    }
+    
+    // Get the Better Auth user ID
+    const authUserId = signUpData.data?.user?.id || 
+                       signUpData.user?.id || 
+                       signUpData.data?.id ||
+                       signUpData.id;
+    
+    console.log('User created successfully!');
+    console.log('User ID:', authUserId);
+    console.log('Email:', email);
+    console.log('Name:', name);
+    console.log('Full response:', JSON.stringify(signUpData, null, 2));
   } catch (error: any) {
-    console.error('❌ Error creating admin user:', error.message);
-    
-    if (error.message?.includes('already exists') || error.message?.includes('duplicate')) {
-      console.error('User already exists. If you need to reset, delete the user first.');
+    console.error('Failed to create user:', error.message);
+    if (error.stack) {
+      console.error(error.stack);
     }
-    
     process.exit(1);
   }
 }
