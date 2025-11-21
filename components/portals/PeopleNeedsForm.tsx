@@ -120,12 +120,6 @@ export default function PeopleNeedsForm({
     return res.json();
   }
 
-  // Generate AI suggestions based on description
-  const generateSuggestions = async (description: string) => {
-    setNeedsSuggestions(COMMON_NEEDS);
-    setSkillsSuggestions(COMMON_SKILLS);
-  };
-
 
   const handleVideoDrop = async (files: File[]) => {
     const file = files[0];

@@ -1,626 +1,773 @@
+/**
+ * Dashboard Page - Main map dashboard with all layers and controls
+ * Integrates EnhancedMap, MapLayerPanel, MapFilters, and StatisticsPanel
+ */
+
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Container,
-  Stack,
-  Title,
-  Text,
   Box,
-  Center,
-  Loader,
+  Container,
+  Flex,
   Group,
   Button,
   Burger,
   Drawer,
-  Flex,
+  Stack,
+  Title,
+  Badge,
   ActionIcon,
-  Affix,
   Paper,
-  ThemeIcon,
-  Card,
-  Alert,
-  Badge
+  Text,
+  Collapse,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
-import { IconAlertTriangle, IconRefresh } from '@tabler/icons-react';
-import StormUpdates from '../components/StormUpdates';
-import EmergencyContacts from '../components/EmergencyContacts';
-import CommunityFeed from '../components/CommunityFeed';
-import SubmitUpdateEnhanced from '../components/SubmitUpdateEnhanced';
-import NewsFeed from '../components/NewsFeed';
+import {
+  IconX,
+  IconFilter,
+  IconStack,
+  IconChartBar,
+  IconChevronDown,
+  IconChevronUp,
+  IconUser,
+  IconMapPin,
+  IconBox,
+} from '@tabler/icons-react';
 import Image from 'next/image';
+import maplibregl from 'maplibre-gl';
+import EnhancedMap from '@/components/EnhancedMap';
+import MapLayerPanel from '@/components/MapLayerPanel';
+import MapFilters from '@/components/MapFilters';
+import StatisticsPanel from '@/components/dashboard/StatisticsPanel';
+import { useMapLayerManager } from '@/components/MapLayerManager';
+import { MapFilters as MapFiltersType, deserializeFilters, serializeFilters } from '@/lib/maps/filters';
+import { createRealtimeConnection, ConnectionStatus } from '@/lib/maps/realtime';
+import { LayerConfig } from '@/lib/maps/layer-types';
+import { transformToGeoJSON } from './../components/transform';
+import { generatePopupHTML } from './../components/mapPopUp';
+import DashboardNavigation from '@/components/DashboardNavigation';
 
-interface StormData {
-  status: 'active' | 'not_found' | 'error';
-  storm?: {
-    name: string;
-    type: string;
-    windSpeed: string;
-    position: {
-      lat: number;
-      lon: number;
-      distance: number;
-      distanceUnit: string;
-    };
-    movement?: {
-      direction: string;
-      speed: string;
-      eta: string;
-    };
-    lastAdvisory: string | null;
-    isCloseApproach: boolean;
-  };
-  jamaica?: {
-    coordinates: {
-      lat: number;
-      lon: number;
-    };
-  };
-  lastUpdated: string;
-  emergencyContacts: any;
-  message?: string;
-  error?: string;
-}
-
-export default function HomePage() {
-  const [data, setData] = useState<StormData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'feed' | 'submit' | 'contacts' | 'news'>('feed');
-  const [opened, { open, close }] = useDisclosure(false);
+function DashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const mapRef = useRef<maplibregl.Map | null>(null);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log('Fetching data from /api/melissa...');
-      
-      // Add timeout to prevent hanging
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-      
-      const response = await fetch('/api/melissa', {
-        signal: controller.signal,
-        cache: 'no-store'
-      });
-      
-      clearTimeout(timeoutId);
-      console.log('Response status:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      console.log('Data received:', result);
-      setData(result);
-    } catch (err) {
-      console.error('Error fetching data:', err);
-      if (err instanceof Error && err.name === 'AbortError') {
-        setError('Request timed out. Please try again.');
-      } else {
-        setError(`Failed to fetch storm data: ${err instanceof Error ? err.message : 'Unknown error'}`);
-      }
-    } finally {
-      setLoading(false);
+  // UI State
+  const [layersDrawerOpened, { open: openLayersDrawer, close: closeLayersDrawer }] = useDisclosure(false);
+  const [filtersDrawerOpened, { open: openFiltersDrawer, close: closeFiltersDrawer }] = useDisclosure(false);
+  const [mobileMenuOpened, { toggle: toggleMobileMenu, close: closeMobileMenu }] = useDisclosure(false);
+  const [filtersExpanded, { toggle: toggleFiltersExpanded }] = useDisclosure(true);
+
+  // Map State
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
+  const [visibleLayers, setVisibleLayers] = useState<Set<string>>(new Set(['people', 'places', 'assets']));
+  const [layerCounts, setLayerCounts] = useState<Map<string, number>>(new Map());
+  const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
+  const [activeLayers, setActiveLayers] = useState<LayerConfig[]>([]);
+
+  // MapLayerManager hook
+  const {
+    manager,
+    registerLayer,
+    setLayerVisibility,
+    addSource,
+    updateLayerData,
+  } = useMapLayerManager(mapInstance);
+
+  // Filter State
+  const [filters, setFilters] = useState<MapFiltersType>(() => {
+    // Initialize from URL params
+    if (typeof window !== 'undefined') {
+      return deserializeFilters(new URLSearchParams(window.location.search));
     }
-  };
+    return {};
+  });
 
+  // Real-time State
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected');
+  const realtimeConnectionRef = useRef<ReturnType<typeof createRealtimeConnection> | null>(null);
 
+  // Initialize filters from URL on mount
   useEffect(() => {
-    fetchData();
-  }, []);
+    const urlFilters = deserializeFilters(new URLSearchParams(searchParams.toString()));
+    if (Object.keys(urlFilters).length > 0) {
+      setFilters(urlFilters);
+    }
+  }, [searchParams]);
 
-  const formatLastUpdated = (dateString: string) => {
-    return new Date(dateString).toLocaleString('en-US', {
-      timeZone: 'America/Jamaica',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+  const setCategoryVisibility = (category: string, visible: boolean) => {
+    if (!mapRef.current) return;
+
+    const map = mapRef.current;
+
+    const ids = [
+      category,                    // base layer
+      `${category}-cluster`,       // clusters
+      `${category}-cluster-count`  // cluster numbers
+    ];
+
+    ids.forEach(id => {
+      if (map.getLayer(id)) {
+        map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+      }
     });
   };
 
-  if (loading) {
-    return (
-      <>
-        {/* Header */}
-        <Box 
-          style={{ 
-            backgroundColor: '#0f0f23', 
-            borderBottom: '2px solid #1478FF',
-            height: '14.28vh',
-            display: 'flex',
-            alignItems: 'center'
-          }}
-        >
-          <Container size="xl">
-            <Flex align="center" justify="space-between" gap="lg">
-              <Burger
-                opened={opened}
-                onClick={open}
-                color="white"
-                size="sm"
-                aria-label="Toggle navigation"
-                hiddenFrom="sm"
-              />
-              <Image 
-                src="/White_Icon_Blue_Bkg-removebg-preview.png" 
-                alt="Intellibus" 
-                width={40} 
-                height={40}
-                style={{ objectFit: 'contain' }}
-              />
-              <Title order={1} c="white" fw={800} size="xl" style={{ flex: '1 1 auto', textAlign: 'center' }}>
-                  Hurricane Response
-              </Title>
-              <Group gap="xs" visibleFrom="sm">
-                <Button variant="outline" color="coral" size="sm" leftSection="📞" disabled>Contacts</Button>
-              </Group>
-            </Flex>
-          </Container>
-        </Box>
+  // Handle map load
+  const handleMapLoad = useCallback((map: maplibregl.Map) => {
+    mapRef.current = map;
+    setMapInstance(map);
+    setMapLoaded(true);
 
-        <Container size="md" py="xl">
-          <Center>
-            <Stack align="center" gap="md">
-              <Loader size="lg" color="white" />
-              <Text c="white">Loading storm data...</Text>
-            </Stack>
-          </Center>
-        </Container>
-      </>
-    );
-  }
+    map.on('dblclick', (e) => {
+      map.easeTo({
+        center: e.lngLat,
+        zoom: map.getZoom() + 400,
+        duration: 500,
+      });
+    });
 
-  if (error) {
-    return (
-      <>
-        {/* Header */}
-        <Box 
-          style={{ 
-            backgroundColor: '#0f0f23', 
-            borderBottom: '2px solid #1478FF',
-            height: '14.28vh',
-            display: 'flex',
-            alignItems: 'center'
-          }}
-        >
-          <Container size="xl">
-            <Flex align="center" justify="space-between" gap="lg">
-              <Burger
-                opened={opened}
-                onClick={open}
-                color="white"
-                size="sm"
-                aria-label="Toggle navigation"
-                hiddenFrom="sm"
-              />
-              <Image 
-                src="/White_Icon_Blue_Bkg-removebg-preview.png" 
-                alt="Intellibus" 
-                width={40} 
-                height={40}
-                style={{ objectFit: 'contain' }}
-              />
-              <Title order={1} c="white" fw={800} size="xl" style={{ flex: '1 1 auto', textAlign: 'center' }}>
-                  Hurricane Response
-              </Title>
-              <Group gap="xs" visibleFrom="sm">
-                <Button variant="outline" color="coral" size="sm" leftSection="📞" disabled>Contacts</Button>
-              </Group>
-            </Flex>
-          </Container>
-        </Box>
 
-        <Container size="md" py="xl">
-          <Alert color="red" title="Error" icon={<IconAlertTriangle />}>
-            {error}
-            <Button mt="sm" onClick={fetchData} leftSection={<IconRefresh />}>
-              Retry
-            </Button>
-          </Alert>
-        </Container>
-      </>
-    );
-  }
 
-  if (!data) {
-    return (
-      <>
-        {/* Header */}
-        <Box 
-          style={{ 
-            backgroundColor: '#0f0f23', 
-            borderBottom: '2px solid #1478FF',
-            height: '14.28vh',
-            display: 'flex',
-            alignItems: 'center'
-          }}
-        >
-          <Container size="xl">
-            <Flex align="center" justify="space-between" gap="lg">
-              <Burger
-                opened={opened}
-                onClick={open}
-                color="white"
-                size="sm"
-                aria-label="Toggle navigation"
-                hiddenFrom="sm"
-              />
-              <Image 
-                src="/White_Icon_Blue_Bkg-removebg-preview.png" 
-                alt="Intellibus" 
-                width={40} 
-                height={40}
-                style={{ objectFit: 'contain' }}
-              />
-              <Title order={1} c="white" fw={800} size="xl" style={{ flex: '1 1 auto', textAlign: 'center' }}>
-                  Hurricane Response
-              </Title>
-              <Group gap="xs" visibleFrom="sm">
-                <Button variant="outline" color="coral" size="sm" leftSection="📞" disabled>Contacts</Button>
-              </Group>
-            </Flex>
-          </Container>
-        </Box>
 
-        <Container size="md" py="xl">
-          <Alert color="red" title="No Data">
-            Unable to load storm data.
-          </Alert>
-        </Container>
-      </>
-    );
-  }
+    // Add click handlers for each layer
+    const setupClickHandlers = () => {
+      ['people', 'places', 'assets'].forEach(layerId => {
+        map.on('click', layerId, (e) => {
+          if (e.features && e.features.length > 0) {
+            const feature = e.features[0];
+            const properties = feature.properties || {};
+            const layer = properties.layer as 'people' | 'places' | 'assets';
+
+            if (!layer) return;
+
+            // Create popup
+            const popupHTML = generatePopupHTML(properties, layer);
+
+            new maplibregl.Popup()
+              .setLngLat((feature.geometry as any).coordinates)
+              .setHTML(popupHTML)
+              .addTo(map);
+          }
+        });
+
+        // Change cursor on hover
+        map.on('mouseenter', layerId, () => {
+          map.getCanvas().style.cursor = 'pointer';
+        });
+
+        map.on('mouseleave', layerId, () => {
+          map.getCanvas().style.cursor = '';
+        });
+      });
+
+      // Handle cluster clicks
+      ['people', 'places', 'assets'].forEach(layerId => {
+        map.on('click', layerId, (e) => {
+          const features = map.queryRenderedFeatures(e.point, {
+            layers: [layerId]
+          });
+
+          if (features.length > 0) {
+            const clusterId = features[0].properties?.cluster_id;
+
+            if (clusterId) {
+              const source = map.getSource(layerId) as maplibregl.GeoJSONSource;
+              // getClusterExpansionZoom now takes only the clusterId and returns a Promise in maplibregl >=3.0
+              const getExpansionZoom = (src: maplibregl.GeoJSONSource, cid: number) => {
+                // Fallback for both callback and promise APIs
+                if (typeof src.getClusterExpansionZoom === 'function') {
+                  try {
+                    // Check if API returns a Promise
+                    const res = src.getClusterExpansionZoom(cid);
+                    if (res && typeof (res as Promise<number>).then === 'function') {
+                      // Promise API
+                      (res as Promise<number>).then((zoom) => {
+                        map.easeTo({
+                          center: (features[0].geometry as any).coordinates,
+                          zoom: zoom || map.getZoom() + 2,
+                        });
+                      }).catch((err) => {
+                        // handle error if promise rejected
+                        // optionally log error
+                      });
+                      return;
+                    }
+                  } catch (e) {
+                    // fallback
+                  }
+                  // Fallback to callback API
+                  (src.getClusterExpansionZoom as any)(cid, (err: any, zoom: any) => {
+                    if (err) return;
+                    map.easeTo({
+                      center: (features[0].geometry as any).coordinates,
+                      zoom: zoom || map.getZoom() + 2,
+                    });
+                  });
+                }
+              };
+
+              getExpansionZoom(source, clusterId);
+            }
+          }
+        });
+      });
+    };
+
+    // Setup click handlers after a brief delay to ensure layers are added
+    setTimeout(setupClickHandlers, 500);
+  }, []);
+
+  // Initialize layers
+  useEffect(() => {
+    if (!mapLoaded || !manager || !mapInstance) return;
+
+    // Create layer configurations
+    const layerConfigs: LayerConfig[] = [];
+
+    // Define base layers with colors and icons
+    const baseLayerDefs = [
+      { id: 'people', name: 'People', color: '#FF6B6B', icon: 'user', endpoint: '/api/people' },
+      { id: 'places', name: 'Places', color: '#4ECDC4', icon: 'map-pin', endpoint: '/api/places' },
+      { id: 'assets', name: 'Assets', color: '#45B7D1', icon: 'box', endpoint: '/api/assets' },
+    ];
+
+    baseLayerDefs.forEach(({ id, name, color, icon, endpoint }) => {
+      const sourceId = id;
+
+      // Add source with empty GeoJSON (only once per source)
+      if (!mapInstance.getSource(sourceId)) {
+        addSource(sourceId, {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+          cluster: true,
+          clusterRadius: 50,
+          clusterMaxZoom: 14,
+        });
+      }
+
+      // Register layer with clustering support
+      const config: LayerConfig = {
+        id,
+        name,
+        type: 'circle',
+        sourceId,
+        style: {
+          type: 'circle',
+          paint: {
+            'circle-radius': [
+              'case',
+              ['has', 'point_count'],
+              ['interpolate', ['linear'], ['get', 'point_count'], 10, 20, 100, 30, 500, 40],
+              8
+            ],
+            'circle-color': color,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#fff',
+            'circle-opacity': 0.8,
+          },
+        },
+        metadata: {
+          icon,
+          color,
+          endpoint,
+        },
+        visible: true,
+      };
+
+      registerLayer(config);
+      layerConfigs.push(config);
+
+      // Add cluster count layer
+      if (mapInstance) {
+        const clusterCountLayerId = `${id}-cluster-count`;
+        if (!mapInstance.getLayer(clusterCountLayerId)) {
+          mapInstance.addLayer({
+            id: clusterCountLayerId,
+            type: 'symbol',
+            source: sourceId,
+            filter: ['has', 'point_count'],
+            layout: {
+              'text-field': '{point_count_abbreviated}',
+              'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+              'text-size': 12,
+            },
+            paint: {
+              'text-color': '#ffffff',
+            },
+          });
+        }
+      }
+    });
+
+    setActiveLayers(layerConfigs);
+  }, [mapLoaded, manager, mapInstance, addSource, registerLayer]);
+
+  // Load layer data when visibility changes or filters change
+  useEffect(() => {
+    if (!mapLoaded || !mapInstance) return;
+
+    const loadLayerData = async (layerId: string) => {
+      setLoadingLayers((prev) => new Set(prev).add(layerId));
+
+      try {
+        const layer = activeLayers.find(l => l.id === layerId);
+        const endpoint = layer?.metadata?.endpoint;
+        if (!endpoint) {
+          console.warn(`No endpoint for layer: ${layerId}`);
+          return;
+        }
+
+        // Build query params from filters
+        const params = new URLSearchParams();
+
+        if (filters.dateRange) {
+          params.set('startDate', filters.dateRange.start.toISOString());
+          params.set('endDate', filters.dateRange.end.toISOString());
+        }
+        if (filters.locations?.parishIds && filters.locations.parishIds.length > 0) {
+          params.set('parishId', filters.locations.parishIds[0]);
+        }
+        if (filters.locations?.communityIds && filters.locations.communityIds.length > 0) {
+          params.set('communityId', filters.locations.communityIds[0]);
+        }
+
+        const url = `${(layer?.metadata as { endpoint?: string })?.endpoint}${params.toString() ? `?${params.toString()}` : ''}`;
+        console.log(`Loading data for ${layerId} from ${url}`);
+
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const apiData = await response.json();
+        console.log(`Received API data for ${layerId}:`, apiData);
+
+        // Transform API response to GeoJSON
+        const geoJSON = transformToGeoJSON(apiData, layerId as 'people' | 'places' | 'assets');
+        console.log(`Transformed to ${geoJSON.features?.length || 0} features for ${layerId}`);
+
+        // Update layer data
+        if (mapRef.current && manager) {
+          updateLayerData(layerId, geoJSON);
+
+          // Update count
+          const count = geoJSON.features?.length || 0;
+          setLayerCounts((prev) => {
+            const next = new Map(prev);
+            next.set(layerId, count);
+            return next;
+          });
+        }
+      } catch (error) {
+        console.error(`Error loading data for layer ${layerId}:`, error);
+      } finally {
+        setLoadingLayers((prev) => {
+          const next = new Set(prev);
+          next.delete(layerId);
+          return next;
+        });
+      }
+    };
+
+    // Load data for all visible layers
+    visibleLayers.forEach((layerId) => {
+      loadLayerData(layerId);
+    });
+  }, [visibleLayers, filters, mapLoaded, activeLayers, mapInstance, manager, updateLayerData]);
+
+  // Handle layer toggle
+  const handleLayerToggle = useCallback((layerId: string, visible: boolean) => {
+    setVisibleLayers((prev) => {
+      const next = new Set(prev);
+      if (visible) {
+        next.add(layerId);
+      } else {
+        next.delete(layerId);
+      }
+      return next;
+    });
+
+    // Update map layer visibility
+    if (mapRef.current && manager) {
+      setCategoryVisibility(layerId, visible);
+
+    }
+  }, [manager, setLayerVisibility]);
+
+  // Handle filter change
+  const handleFiltersChange = useCallback((newFilters: MapFiltersType) => {
+    setFilters(newFilters);
+
+    // Update URL with filters
+    const params = serializeFilters(newFilters);
+    router.push(`/dashboard?${params.toString()}`, { scroll: false });
+  }, [router]);
+
+  // Initialize real-time connection
+  useEffect(() => {
+    if (!mapLoaded || visibleLayers.size === 0) return;
+
+    // Get subscribed layer types
+    const subscribedLayers = Array.from(visibleLayers)
+      .filter((layerId): layerId is 'assets' | 'places' | 'people' =>
+        ['assets', 'places', 'people'].includes(layerId)
+      );
+
+    if (subscribedLayers.length === 0) return;
+
+    // Create real-time connection
+    const connection = createRealtimeConnection({
+      layers: subscribedLayers as ('assets' | 'places' | 'people' | 'aid_workers')[],
+      onUpdate: (event) => {
+        console.log('Real-time update:', event);
+        // Reload the updated layer
+        if (visibleLayers.has(event.layerType)) {
+          // Trigger reload by clearing loading state
+          setLoadingLayers((prev) => new Set(prev).add(event.layerType));
+        }
+      },
+      onStatusChange: (status) => {
+        setConnectionStatus(status);
+      },
+    });
+
+    realtimeConnectionRef.current = connection;
+
+    return () => {
+      connection.disconnect();
+    };
+  }, [mapLoaded, visibleLayers]);
+
+  // Get visible layer configs for legend and stats
+  const visibleLayerConfigs = activeLayers.filter((layer) =>
+    visibleLayers.has(layer.id)
+  );
 
   return (
     <>
       {/* Header */}
-      <Box 
-        style={{ 
-          backgroundColor: '#0f0f23', 
-          borderBottom: '2px solid #1478FF',
-          height: '14.28vh', // 1/7 of viewport height
-          display: 'flex',
-          alignItems: 'center'
-        }}
-      >
-        <Box style={{ width: '100%', paddingLeft: 'var(--mantine-spacing-md)', paddingRight: 'var(--mantine-spacing-md)' }}>
-          <Flex align="center" justify="space-between" gap="lg" style={{ width: '100%', maxWidth: '1400px', margin: '0 auto' }}>
-            {/* Left side - Logo and Title */}
-            <Group gap="md" visibleFrom="sm" style={{ flex: '0 0 auto' }}>
-              <Image 
-                src="/White_Icon_Blue_Bkg-removebg-preview.png" 
-                alt="Intellibus" 
-                width={40} 
-                height={40}
-                style={{ objectFit: 'contain' }}
-              />
-              <Link href="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-                <Title order={1} c="white" fw={800} size="xl" style={{ cursor: 'pointer' }}>
-                  Hurricane Response
-                </Title>
-              </Link>
-            </Group>
 
-            {/* Mobile Logo and Title */}
-            <Group gap="xs" hiddenFrom="sm" style={{ flex: '1 1 auto', justifyContent: 'center' }}>
-              <Image 
-                src="/White_Icon_Blue_Bkg-removebg-preview.png" 
-                alt="Intellibus" 
-                width={32} 
-                height={32}
-                style={{ objectFit: 'contain' }}
-              />
-              <Link href="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-                <Title order={1} c="white" fw={800} size="lg" style={{ cursor: 'pointer' }}>
-                  Hurricane Response
-                </Title>
-              </Link>
-            </Group>
-            
-            {/* Right side - Navigation Tabs */}
-            <Group gap="xs" style={{ flex: '0 0 auto' }}>
-              {/* Mobile Hamburger Menu */}
-              <Burger
-                opened={opened}
-                onClick={open}
-                color="white"
-                size="sm"
-                aria-label="Toggle navigation"
-                hiddenFrom="sm"
-              />
-              
-              {/* Desktop Navigation */}
-              <Group gap="xs" visibleFrom="sm">
-               
-                <Button
-                  variant="outline"
-                  color="blue"
-                  size="sm"
-                  onClick={() => router.push('/maps')}
-                  leftSection="🗺️"
-                >
-                  Maps
-                </Button>
-                <Button
-                  variant={activeTab === 'contacts' ? 'filled' : 'outline'}
-                  color="coral"
-                  size="sm"
-                  onClick={() => setActiveTab('contacts')}
-                  leftSection="📞"
-                >
-                  Contacts
-                </Button>
-              </Group>
-            </Group>
-          </Flex>
-        </Box>
-      </Box>
 
-      {/* Mobile Navigation Drawer */}
+      {/* Mobile Menu Drawer */}
       <Drawer
-        opened={opened}
-        onClose={close}
+        opened={mobileMenuOpened}
+        onClose={closeMobileMenu}
         title="Navigation"
         position="left"
         size="sm"
         hiddenFrom="sm"
-        styles={{
-          content: {
-            backgroundColor: '#0f0f23',
-            color: 'white'
-          },
-          header: {
-            backgroundColor: '#0f0f23',
-            borderBottom: '1px solid #1478FF'
-          },
-          title: {
-            color: 'white'
-          }
-        }}
       >
-        <Stack gap="md" mt="md">
-          
+        <Stack gap="md">
           <Button
             variant="subtle"
-            color="blue"
             fullWidth
+            leftSection={<IconStack size={18} />}
             onClick={() => {
-              router.push('/maps');
-              close();
+              openLayersDrawer();
+              closeMobileMenu();
             }}
-            leftSection="🗺️"
           >
-            Maps
+            Layers
           </Button>
           <Button
-            variant={activeTab === 'contacts' ? 'filled' : 'subtle'}
-            color="coral"
+            variant="subtle"
             fullWidth
+            leftSection={<IconFilter size={18} />}
             onClick={() => {
-              setActiveTab('contacts');
-              close();
+              openFiltersDrawer();
+              closeMobileMenu();
             }}
-            leftSection="📞"
           >
-            Contacts
+            Filters
           </Button>
         </Stack>
-        <Box mt="auto" pt="xl" style={{ borderTop: '1px solid rgba(20, 120, 255, 0.2)' }}>
-          <Stack gap={4} align="center" mb="md">
-            <Text size="xs" c="dimmed">Powered by:</Text>
-            <Image 
-              src="/white_logo.png" 
-              alt="Intellibus" 
-              width={240} 
-              height={180}
-              style={{ objectFit: 'contain', marginTop: '-20px' }}
-            />
-          </Stack>
-        </Box>
       </Drawer>
 
-      {/* Main Content - Mobile */}
-      {activeTab === 'feed' ? (
-        <Box hiddenFrom="sm" style={{ paddingBottom: '120px' }}>
-          <CommunityFeed />
-        </Box>
-      ) : (
-        <Container size="md" py="xl" style={{ paddingBottom: activeTab === 'submit' ? '160px' : '120px' }} hiddenFrom="sm">
-          {activeTab === 'submit' && <SubmitUpdateEnhanced />}
-          {activeTab === 'contacts' && (
-            data?.emergencyContacts ? (
-              <EmergencyContacts emergencyContacts={data.emergencyContacts} />
-            ) : (
-              <Center py="xl">
-                <Text>Loading emergency contacts...</Text>
-              </Center>
-            )
-          )}
-          {activeTab === 'news' && <NewsFeed />}
-        </Container>
-      )}
-
-      {/* Main Content - Desktop */}
-      {activeTab === 'feed' ? (
-        <Box visibleFrom="sm">
-          <CommunityFeed />
-        </Box>
-      ) : (
-        <Container size="md" py="xl" visibleFrom="sm">
-          {activeTab === 'submit' && <SubmitUpdateEnhanced />}
-          {activeTab === 'contacts' && (
-            data?.emergencyContacts ? (
-              <EmergencyContacts emergencyContacts={data.emergencyContacts} />
-            ) : (
-              <Center py="xl">
-                <Text>Loading emergency contacts...</Text>
-              </Center>
-            )
-          )}
-          {activeTab === 'news' && <NewsFeed />}
-        </Container>
-      )}
-
-      {/* Mobile Floating Action Button */}
+      {/* Main Content */}
       <Box
-        hiddenFrom="sm"
         style={{
-          position: 'fixed',
-          bottom: '100px', // Higher up to avoid bottom nav overlap
-          right: '20px',
-          zIndex: 1000
+          position: 'relative',
+          width: '100%',
+          height: 'calc(100vh - 9.28vh)',
+          overflow: 'hidden',
         }}
       >
-        <ActionIcon
-          size="xl"
-          radius="xl"
-          color="electricBlue"
-          variant="filled"
-          onClick={() => setActiveTab('submit')}
+        {/* Map */}
+        <Box
           style={{
-            boxShadow: '0 4px 12px rgba(20, 120, 255, 0.3)',
-            transition: 'all 0.2s ease',
-            width: '56px',
-            height: '56px'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'scale(1.1)';
-            e.currentTarget.style.boxShadow = '0 6px 16px rgba(20, 120, 255, 0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(20, 120, 255, 0.3)';
+            width: '100%',
+            height: '100%',
+            position: 'relative',
           }}
         >
-          <Text size="xl" fw={700}>+</Text>
-        </ActionIcon>
-      </Box>
+          <EnhancedMap
+            onMapLoad={handleMapLoad}
+            initialLayers={activeLayers}
+          />
+        </Box>
 
-      {/* Desktop Floating Action Button */}
-      <Box
-        visibleFrom="sm"
-        style={{
-          position: 'fixed',
-          bottom: '20px',
-          right: '20px',
-          zIndex: 1000
-        }}
-      >
-        <ActionIcon
-          size="xl"
-          radius="xl"
-          color="electricBlue"
-          variant="filled"
-          onClick={() => setActiveTab('submit')}
+        {/* Floating Desktop Panels */}
+        <Box
+          visibleFrom="md"
           style={{
-            boxShadow: '0 4px 12px rgba(20, 120, 255, 0.3)',
-            transition: 'all 0.2s ease',
-            width: '56px',
-            height: '56px'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'scale(1.1)';
-            e.currentTarget.style.boxShadow = '0 6px 16px rgba(20, 120, 255, 0.4)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(20, 120, 255, 0.3)';
+            position: 'absolute',
+            top: '20px',
+            left: '20px',
+            bottom: '20px',
+            width: '320px',
+            zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
-          <Text size="xl" fw={700}>+</Text>
-        </ActionIcon>
+          <Paper
+            p={0}
+            withBorder
+            shadow="lg"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              minHeight: 0,
+              overflow: 'hidden',
+              backgroundColor: 'white',
+            }}
+          >
+            <div style={{ padding: '16px', flexShrink: 0, borderBottom: '1px solid #e9ecef' }}>
+              <Text size="lg" fw={600}>
+                Map Layers
+              </Text>
+            </div>
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                minHeight: 0,
+                padding: '16px',
+              }}
+            >
+              <MapLayerPanel
+                visibleLayers={visibleLayers}
+                layerCounts={layerCounts}
+                loadingLayers={loadingLayers}
+                onLayerToggle={handleLayerToggle}
+              />
+            </div>
+
+            {/* Legend */}
+            <div style={{ padding: '16px', flexShrink: 0, borderTop: '1px solid #e9ecef' }}>
+              <Text size="sm" fw={600} mb="xs">Legend</Text>
+              <Stack gap="xs">
+                {activeLayers.map(layer => (
+                  <Group key={layer.id} gap="xs">
+                    <Box
+                      style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: '50%',
+                        backgroundColor: layer.metadata?.color || '#666',
+                        border: '2px solid #fff',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
+                      }}
+                    />
+                    <Text size="sm">{layer.name}</Text>
+                    {layerCounts.has(layer.id) && (
+                      <Badge size="xs" color="gray" variant="light">
+                        {layerCounts.get(layer.id)}
+                      </Badge>
+                    )}
+                  </Group>
+                ))}
+              </Stack>
+            </div>
+          </Paper>
+        </Box>
+
+        <Box
+          visibleFrom="md"
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '20px',
+            ...(filtersExpanded ? { bottom: '20px' } : {}),
+            width: filtersExpanded ? '320px' : '280px',
+            maxHeight: filtersExpanded ? 'calc(100vh - 14.28vh - 40px)' : 'auto',
+            zIndex: 1000,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <Paper
+            p={filtersExpanded ? 0 : "md"}
+            withBorder
+            shadow="lg"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              ...(filtersExpanded ? { flex: 1, minHeight: 0 } : {}),
+              backgroundColor: 'white',
+            }}
+          >
+            {filtersExpanded ? (
+              <>
+                {/* Collapsible Header */}
+                <div
+                  style={{
+                    padding: '16px',
+                    flexShrink: 0,
+                    borderBottom: '1px solid #e9ecef',
+                    cursor: 'pointer',
+                  }}
+                  onClick={toggleFiltersExpanded}
+                >
+                  <Group justify="space-between" gap="xs">
+                    <Group gap="xs">
+                      <IconFilter size={20} />
+                      <Text size="lg" fw={600}>
+                        Filters
+                      </Text>
+                    </Group>
+                    <IconChevronUp size={16} />
+                  </Group>
+                </div>
+
+                {/* Collapsible Content */}
+                <div
+                  style={{
+                    flex: 1,
+                    minHeight: 0,
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    padding: '16px',
+                  }}
+                >
+                  <MapFilters filters={filters} onFiltersChange={handleFiltersChange} hideHeader />
+                </div>
+              </>
+            ) : (
+              <Group
+                justify="space-between"
+                gap="xs"
+                style={{ cursor: 'pointer' }}
+                onClick={toggleFiltersExpanded}
+              >
+                <Group gap="xs">
+                  <IconFilter size={20} />
+                  <Text size="lg" fw={600}>
+                    Filters
+                  </Text>
+                </Group>
+                <IconChevronDown size={16} />
+              </Group>
+            )}
+          </Paper>
+        </Box>
+
+        {/* Mobile Drawers */}
+        <Drawer
+          opened={layersDrawerOpened}
+          onClose={closeLayersDrawer}
+          title="Map Layers"
+          position="left"
+          size="sm"
+          hiddenFrom="md"
+        >
+          <MapLayerPanel
+            visibleLayers={visibleLayers}
+            layerCounts={layerCounts}
+            loadingLayers={loadingLayers}
+            onLayerToggle={handleLayerToggle}
+          />
+
+          {/* Legend in mobile drawer */}
+          <Box mt="xl" pt="xl" style={{ borderTop: '1px solid #e9ecef' }}>
+            <Text size="sm" fw={600} mb="xs">Legend</Text>
+            <Stack gap="xs">
+              {activeLayers.map(layer => (
+                <Group key={layer.id} gap="xs">
+                  <Box
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: '50%',
+                      backgroundColor: layer.metadata?.color || '#666',
+                      border: '2px solid #fff',
+                      boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
+                    }}
+                  />
+                  <Text size="sm">{layer.name}</Text>
+                  {layerCounts.has(layer.id) && (
+                    <Badge size="xs" color="gray" variant="light">
+                      {layerCounts.get(layer.id)}
+                    </Badge>
+                  )}
+                </Group>
+              ))}
+            </Stack>
+          </Box>
+        </Drawer>
+
+        <Drawer
+          opened={filtersDrawerOpened}
+          onClose={closeFiltersDrawer}
+          title="Filters"
+          position="right"
+          size="sm"
+          hiddenFrom="md"
+        >
+          <MapFilters filters={filters} onFiltersChange={handleFiltersChange} />
+        </Drawer>
+
+        {/* Floating Statistics Panel */}
+        <Box
+          style={{
+            position: 'absolute',
+            top: '20px',
+            left: '360px',
+            zIndex: 1001,
+            width: '280px',
+            maxHeight: 'calc(100vh - 40px)',
+          }}
+          visibleFrom="md"
+        >
+          <Paper p="md" withBorder shadow="lg" style={{ backgroundColor: 'white', maxHeight: '100%', overflowY: 'auto' }}>
+            <StatisticsPanel activeLayers={visibleLayerConfigs} filters={filters} />
+          </Paper>
+        </Box>
+
+        <Box
+          style={{
+            position: 'absolute',
+            top: '20px',
+            right: '20px',
+            zIndex: 1001,
+            width: '280px',
+          }}
+          hiddenFrom="md"
+        >
+          <Paper p="md" withBorder shadow="lg" style={{ backgroundColor: 'white' }}>
+            <StatisticsPanel activeLayers={visibleLayerConfigs} filters={filters} />
+          </Paper>
+        </Box>
+
       </Box>
+    </>
+  );
+}
 
-      {/* Mobile Bottom Navigation */}
-      <Paper
-        hiddenFrom="sm"
-        style={{
-          position: 'fixed',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: 1000,
-          backgroundColor: 'rgba(15, 15, 35, 0.95)',
-          backdropFilter: 'blur(10px)',
-          borderTop: '1px solid rgba(20, 120, 255, 0.2)',
-          padding: '12px 8px 16px 8px',
-          borderRadius: '20px 20px 0 0',
-          boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.15)'
-        }}
-      >
-        <Group justify="space-between" gap="xs">
-         
+export default function DashboardPage() {
+  return (
+    <>
+      <DashboardNavigation />
 
-          <Button
-            variant="subtle"
-            color="gray"
-            size="sm"
-            onClick={() => setActiveTab('submit')}
-            style={{
-              flex: 1,
-              flexDirection: 'column',
-              height: 'auto',
-              padding: '8px 4px',
-              minHeight: '56px',
-              borderRadius: '12px',
-              backgroundColor: activeTab === 'submit' ? 'rgba(20, 120, 255, 0.15)' : 'transparent',
-              border: activeTab === 'submit' ? '1px solid rgba(20, 120, 255, 0.3)' : '1px solid transparent',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: activeTab === 'submit' ? 'translateY(-2px)' : 'translateY(0)',
-              boxShadow: activeTab === 'submit' ? '0 4px 12px rgba(20, 120, 255, 0.2)' : 'none'
-            }}
-          >
-            <Text size="xl" style={{
-              color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
-              transition: 'color 0.3s ease'
-            }}>📢</Text>
-            <Text size="xs" style={{
-              color: activeTab === 'submit' ? '#1478FF' : '#8B8B8B',
-              transition: 'color 0.3s ease',
-              marginTop: '2px'
-            }}>Submit Update</Text>
-          </Button>
-
-          <Button
-            variant="subtle"
-            color="gray"
-            size="sm"
-            onClick={() => setActiveTab('contacts')}
-            style={{
-              flex: 1,
-              flexDirection: 'column',
-              height: 'auto',
-              padding: '8px 4px',
-              minHeight: '56px',
-              borderRadius: '12px',
-              backgroundColor: activeTab === 'contacts' ? 'rgba(255, 104, 109, 0.15)' : 'transparent',
-              border: activeTab === 'contacts' ? '1px solid rgba(255, 104, 109, 0.3)' : '1px solid transparent',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: activeTab === 'contacts' ? 'translateY(-2px)' : 'translateY(0)',
-              boxShadow: activeTab === 'contacts' ? '0 4px 12px rgba(255, 104, 109, 0.2)' : 'none'
-            }}
-          >
-            <Text size="xl" style={{
-              color: activeTab === 'contacts' ? '#FF686D' : '#8B8B8B',
-              transition: 'color 0.3s ease'
-            }}>📞</Text>
-            <Text size="xs" style={{
-              color: activeTab === 'contacts' ? '#FF686D' : '#8B8B8B',
-              transition: 'color 0.3s ease',
-              marginTop: '2px'
-            }}>Contacts</Text>
-          </Button>
-
-        </Group>
-      </Paper>
+      <Suspense fallback={<div>Loading...</div>}>
+        <DashboardContent />
+      </Suspense>
     </>
   );
 }

@@ -46,7 +46,7 @@ import { MapFilters as MapFiltersType, deserializeFilters, serializeFilters } fr
 import { createRealtimeConnection, ConnectionStatus } from '@/lib/maps/realtime';
 import { LayerConfig } from '@/lib/maps/layer-types';
 import { transformToGeoJSON } from './transform';
-import { generatePopupHTML } from './mapPopUp';
+import { generatePopupHTML } from '../../components/mapPopUp';
 
 function DashboardContent() {
   const router = useRouter();
