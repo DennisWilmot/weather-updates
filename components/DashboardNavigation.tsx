@@ -10,9 +10,10 @@ export default function DashboardNavigation() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
     const tabs = [
-        { name: "Dashboard", href: "/dashboard" },
-        { name: "Asset Matching", href: "/dashboard/supervisor/maps" },
+        { name: "Dashboard", href: "/" },
+        { name: "Asset Matching", href: "/supervisor/maps" },
         { name: "Aid Forms", href: "/portal" },
+        { name: "Data View ", href: "/sa" },
         // { name: "Settings", href: "/dashboard/settings" },
     ];
 
@@ -22,9 +23,9 @@ export default function DashboardNavigation() {
                 <div className="flex justify-between h-16 items-center">
 
                     {/* Logo (always visible) */}
-                    <Link href="/dashboard" className="flex items-center gap-2">
+                    <Link href="/" className="flex items-center gap-2">
                         <Image
-                            src="/White_Icon_Blue_Bkg-removebg-preview.png"
+                            src="/intellibusLgo.png"
                             alt="Atlas.TM"
                             width={40}
                             height={40}

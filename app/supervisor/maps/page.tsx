@@ -1,11 +1,8 @@
 'use client';
 import { useEffect, useRef, useState, useCallback } from 'react';
-import maplibregl from 'maplibre-gl';
+import { Map, NavigationControl, Popup } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { X, ChevronLeft, ChevronRight, MapPin, Users, Box, Briefcase, Zap } from 'lucide-react';
-import EnhancedMap from '@/components/EnhancedMap';
-import { useMapLayerManager } from '@/components/MapLayerManager';
-import { LayerConfig } from '@/lib/maps/layer-types';
 
 interface LayerItem {
     id: string;
@@ -15,201 +12,146 @@ interface LayerItem {
     count: number;
 }
 
-// Dashboard's popup HTML generation function
-const generatePopupHTML = (properties: any, layer: string): string => {
-    const getTypeLabel = (type: string) => {
-        return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    };
-
-    const color = layer === 'people' ? '#FF6B6B' : layer === 'places' ? '#4ECDC4' : '#45B7D1';
-
-    let html = `
-    <div style="padding: 12px; min-width: 250px; max-width: 350px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-        <div style="width: 20px; height: 20px; background: ${color}; border-radius: 50%;"></div>
-        <h3 style="margin: 0; font-size: 18px; font-weight: 600;">${properties.name || 'Unknown'}</h3>
-      </div>
-      
-      <div style="margin-bottom: 8px;">
-        <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
-          ${getTypeLabel(properties.type || 'unknown')}
-        </span>
-      </div>
-  `;
-
-    // People-specific
-    if (layer === 'people') {
-        if (properties.contactName) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">👤 ${properties.contactName}</div>`;
-        }
-        if (properties.contactPhone) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">📞 ${properties.contactPhone}</div>`;
-        }
-        if (properties.contactEmail) {
-            html += `<div style="margin: 6px 0; font-size: 14px; word-break: break-word;">✉️ ${properties.contactEmail}</div>`;
-        }
-        if (properties.organization) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">🏢 ${properties.organization}</div>`;
-        }
-    }
-
-    // Places-specific
-    if (layer === 'places') {
-        if (properties.address) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">📍 ${properties.address}</div>`;
-        }
-        if (properties.maxCapacity) {
-            html += `<div style="margin: 6px 0; font-size: 14px;"><strong>Capacity:</strong> ${properties.maxCapacity}</div>`;
-        }
-        if (properties.description) {
-            html += `<div style="margin: 6px 0; font-size: 13px; color: #666;">${properties.description}</div>`;
-        }
-        if (properties.verified) {
-            html += `<div style="margin: 6px 0;"><span style="background: #51cf66; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">✓ Verified</span></div>`;
-        }
-    }
-
-    // Assets-specific
-    if (layer === 'assets') {
-        if (properties.serialNumber) {
-            html += `<div style="margin: 6px 0; font-size: 14px;"><strong>Serial:</strong> ${properties.serialNumber}</div>`;
-        }
-        if (properties.status) {
-            const statusColors: Record<string, string> = {
-                available: '#51cf66',
-                in_use: '#ffd43b',
-                maintenance: '#ff922b',
-                retired: '#868e96',
-            };
-            const statusColor = statusColors[properties.status] || '#868e96';
-            html += `<div style="margin: 6px 0;"><span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${getTypeLabel(properties.status)}</span></div>`;
-        }
-        if (properties.currentLocation) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">📍 ${properties.currentLocation}</div>`;
-        }
-        if (properties.organization) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">🏢 ${properties.organization}</div>`;
-        }
-    }
-
-    // Location (common)
-    if (properties.communityName || properties.parishName) {
-        html += `<div style="border-top: 1px solid #e9ecef; margin-top: 12px; padding-top: 8px;">`;
-        if (properties.communityName) {
-            html += `<div style="font-size: 12px; color: #868e96;">${properties.communityName}${properties.parishName ? `, ${properties.parishName}` : ''}</div>`;
-        } else if (properties.parishName) {
-            html += `<div style="font-size: 12px; color: #868e96;">${properties.parishName}</div>`;
-        }
-        html += `</div>`;
-    }
-
-    html += `</div>`;
-    return html;
-};
-
-// Dashboard's transformToGeoJSON function
-const transformToGeoJSON = (data: any, layerId: string): any => {
-    let items: any[] = [];
-
-    // Try different possible response structures
-    if (layerId === 'people') {
-        items = data.people || data.data || data || [];
-    } else if (layerId === 'places') {
-        items = data.places || data.data || data || [];
-    } else if (layerId === 'assets') {
-        items = data.assets || data.data || data || [];
-    }
-
-    // Ensure items is an array
-    if (!Array.isArray(items)) {
-        console.warn(`Expected array for ${layerId}, got:`, typeof items);
-        items = [];
-    }
-
-    console.log(`Transforming ${items.length} items for ${layerId}`);
-
-    const features = items
-        .filter((item: any) => {
-            const hasCoords = item.latitude != null && item.longitude != null;
-            if (!hasCoords) {
-                console.warn(`Item missing coordinates in ${layerId}:`, item);
-            }
-            return hasCoords;
-        })
-        .map((item: any) => {
-            const lng = parseFloat(item.longitude);
-            const lat = parseFloat(item.latitude);
-
-            if (isNaN(lng) || isNaN(lat)) {
-                console.warn(`Invalid coordinates for item in ${layerId}:`, item);
-                return null;
-            }
-
-            return {
-                type: 'Feature',
-                id: item.id,
-                geometry: {
-                    type: 'Point',
-                    coordinates: [lng, lat],
-                },
-                properties: {
-                    ...item,
-                    layer: layerId,
-                },
-            };
-        })
-        .filter((feature: any) => feature !== null);
-
-    return {
-        type: 'FeatureCollection',
-        features,
-    };
-};
-
 export default function SupervisorMapPage() {
+    const mapContainer = useRef<HTMLDivElement>(null);
+    const mapRef = useRef<Map | null>(null);
     const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true);
     const [isRightPanelOpen, setIsRightPanelOpen] = useState(true);
     const [mapLoaded, setMapLoaded] = useState(false);
-    const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
 
     const [layers, setLayers] = useState<LayerItem[]>([
         { id: 'people', name: 'People', enabled: true, color: '#FF6B6B', count: 0 },
-        { id: 'places', name: 'Places', enabled: true, color: '#4ECDC4', count: 0 },
         { id: 'assets', name: 'Assets', enabled: true, color: '#45B7D1', count: 0 },
+        { id: 'skills', name: 'Skills', enabled: true, color: '#A78BFA', count: 0 },
     ]);
 
     const [loading, setLoading] = useState<Set<string>>(new Set());
-    const [visibleLayers, setVisibleLayers] = useState<Set<string>>(new Set(['people', 'places', 'assets']));
-    const [activeLayers, setActiveLayers] = useState<LayerConfig[]>([]);
 
-    // MapLayerManager hook
-    const {
-        manager,
-        registerLayer,
-        setLayerVisibility,
-        addSource,
-        updateLayerData,
-    } = useMapLayerManager(mapInstance);
+    const onMapLoad = useCallback((map: Map) => {
+        console.log('Map loaded successfully');
 
-    // Dashboard's click handlers setup
-    const setupClickHandlers = useCallback((map: maplibregl.Map) => {
-        ['people', 'places', 'assets'].forEach(layerId => {
+        // Add sources for each layer
+        ['people', 'assets', 'skills'].forEach(layerId => {
+            const layer = layers.find(l => l.id === layerId);
+            if (!layer) return;
+
+            // Add source
+            map.addSource(layerId, {
+                type: 'geojson',
+                data: { type: 'FeatureCollection', features: [] },
+                cluster: true,
+                clusterRadius: 50,
+                clusterMaxZoom: 14,
+            });
+
+            // Add unclustered points layer
+            map.addLayer({
+                id: layerId,
+                type: 'circle',
+                source: layerId,
+                filter: ['!', ['has', 'point_count']],
+                paint: {
+                    'circle-radius': 8,
+                    'circle-color': layer.color,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#fff',
+                    'circle-opacity': 0.8,
+                },
+            });
+
+            // Add cluster layer
+            map.addLayer({
+                id: `${layerId}-cluster`,
+                type: 'circle',
+                source: layerId,
+                filter: ['has', 'point_count'],
+                paint: {
+                    'circle-radius': [
+                        'step',
+                        ['get', 'point_count'],
+                        20, 10,
+                        30, 100,
+                        40
+                    ],
+                    'circle-color': layer.color,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#fff',
+                    'circle-opacity': 0.8,
+                },
+            });
+
+            // Add cluster count layer
+            map.addLayer({
+                id: `${layerId}-cluster-count`,
+                type: 'symbol',
+                source: layerId,
+                filter: ['has', 'point_count'],
+                layout: {
+                    'text-field': '{point_count_abbreviated}',
+                    'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+                    'text-size': 12,
+                },
+                paint: {
+                    'text-color': '#ffffff',
+                },
+            });
+        });
+
+        // Load initial data
+        loadLayerData(map);
+
+        // Setup click handlers
+        setupClickHandlers(map);
+    }, [layers]);
+
+    const setupClickHandlers = (map: Map) => {
+        ['people', 'assets', 'skills'].forEach(layerId => {
             // Click on unclustered point
             map.on('click', layerId, (e) => {
                 if (e.features && e.features.length > 0) {
                     const feature = e.features[0];
                     const properties = feature.properties || {};
-                    const layer = properties.layer as 'people' | 'places' | 'assets';
 
-                    if (!layer) return;
+                    // Zoom to the point first
+                    map.easeTo({
+                        center: (feature.geometry as any).coordinates,
+                        zoom: Math.max(map.getZoom() + 2, 14),
+                        duration: 500,
+                    });
 
-                    // Create popup using Dashboard's popup HTML
-                    const popupHTML = generatePopupHTML(properties, layer);
+                    const popupHTML = generatePopupHTML(properties, layerId);
 
-                    new maplibregl.Popup()
+                    new Popup({
+                        closeButton: true,
+                        closeOnClick: true,
+                        maxWidth: '350px'
+                    })
                         .setLngLat((feature.geometry as any).coordinates)
                         .setHTML(popupHTML)
                         .addTo(map);
+                }
+            });
+
+            // Click on cluster
+            map.on('click', `${layerId}-cluster`, (e) => {
+                const features = map.queryRenderedFeatures(e.point, {
+                    layers: [`${layerId}-cluster`]
+                });
+
+                if (features.length > 0) {
+                    const clusterId = features[0].properties?.cluster_id;
+                    const source = map.getSource(layerId) as any;
+
+                    if (clusterId && source) {
+                        source.getClusterExpansionZoom(clusterId, (err: any, zoom: number) => {
+                            if (err) return;
+                            map.easeTo({
+                                center: (features[0].geometry as any).coordinates,
+                                zoom: zoom || map.getZoom() + 2,
+                                duration: 500,
+                            });
+                        });
+                    }
                 }
             });
 
@@ -221,57 +163,7 @@ export default function SupervisorMapPage() {
             map.on('mouseleave', layerId, () => {
                 map.getCanvas().style.cursor = '';
             });
-        });
 
-        // Dashboard's cluster click logic
-        ['people', 'places', 'assets'].forEach(layerId => {
-            map.on('click', `${layerId}-cluster`, (e) => {
-                const features = map.queryRenderedFeatures(e.point, {
-                    layers: [`${layerId}-cluster`]
-                });
-
-                if (features.length > 0) {
-                    const clusterId = features[0].properties?.cluster_id;
-
-                    if (clusterId) {
-                        const source = map.getSource(layerId) as maplibregl.GeoJSONSource;
-                        // Handle both callback and promise APIs
-                        const getExpansionZoom = (src: maplibregl.GeoJSONSource, cid: number) => {
-                            if (typeof src.getClusterExpansionZoom === 'function') {
-                                try {
-                                    const res = src.getClusterExpansionZoom(cid);
-                                    if (res && typeof (res as Promise<number>).then === 'function') {
-                                        // Promise API
-                                        (res as Promise<number>).then((zoom) => {
-                                            map.easeTo({
-                                                center: (features[0].geometry as any).coordinates,
-                                                zoom: zoom || map.getZoom() + 2,
-                                            });
-                                        }).catch(() => {
-                                            // Handle error silently
-                                        });
-                                        return;
-                                    }
-                                } catch (e) {
-                                    // fallback
-                                }
-                                // Fallback to callback API
-                                (src.getClusterExpansionZoom as any)(cid, (err: any, zoom: any) => {
-                                    if (err) return;
-                                    map.easeTo({
-                                        center: (features[0].geometry as any).coordinates,
-                                        zoom: zoom || map.getZoom() + 2,
-                                    });
-                                });
-                            }
-                        };
-
-                        getExpansionZoom(source, clusterId);
-                    }
-                }
-            });
-
-            // Cursor changes for clusters
             map.on('mouseenter', `${layerId}-cluster`, () => {
                 map.getCanvas().style.cursor = 'pointer';
             });
@@ -280,172 +172,253 @@ export default function SupervisorMapPage() {
                 map.getCanvas().style.cursor = '';
             });
         });
-    }, []);
+    };
 
-    // Dashboard's map load handler
-    const handleMapLoad = useCallback((map: maplibregl.Map) => {
-        setMapInstance(map);
-        setMapLoaded(true);
+    const generatePopupHTML = (properties: any, layerId: string): string => {
+        const getTypeLabel = (type: string) => {
+            return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+        };
 
-        map.on('dblclick', (e) => {
-            map.easeTo({
-                center: e.lngLat,
-                zoom: map.getZoom() + 1,
-                duration: 500,
-            });
-        });
+        const color = layerId === 'people' ? '#FF6B6B' : layerId === 'assets' ? '#45B7D1' : '#A78BFA';
 
-        // Setup click handlers after a brief delay to ensure layers are added
-        setTimeout(() => setupClickHandlers(map), 500);
-    }, [setupClickHandlers]);
+        let html = `
+        <div style="padding: 12px; min-width: 250px; max-width: 350px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <div style="width: 20px; height: 20px; background: ${color}; border-radius: 50%;"></div>
+            <h3 style="margin: 0; font-size: 18px; font-weight: 600;">${properties.name || 'Unknown'}</h3>
+          </div>
+          
+          <div style="margin-bottom: 8px;">
+            <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+              ${getTypeLabel(properties.type || 'unknown')}
+            </span>
+          </div>
+        `;
 
-    // Initialize layers using Dashboard's endpoints
-    useEffect(() => {
-        if (!mapLoaded || !manager || !mapInstance) return;
-
-        const layerConfigs: LayerConfig[] = [];
-
-        // Dashboard's layer definitions with endpoints
-        const baseLayerDefs = [
-            { id: 'people', name: 'People', color: '#FF6B6B', icon: 'user', endpoint: '/api/people' },
-            { id: 'places', name: 'Places', color: '#4ECDC4', icon: 'map-pin', endpoint: '/api/places' },
-            { id: 'assets', name: 'Assets', color: '#45B7D1', icon: 'box', endpoint: '/api/assets' },
-        ];
-
-        baseLayerDefs.forEach(({ id, name, color, icon, endpoint }) => {
-            const sourceId = id;
-
-            // Add source with empty GeoJSON
-            if (!mapInstance.getSource(sourceId)) {
-                addSource(sourceId, {
-                    type: 'geojson',
-                    data: { type: 'FeatureCollection', features: [] },
-                    cluster: true,
-                    clusterRadius: 50,
-                    clusterMaxZoom: 14,
-                });
+        // People-specific
+        if (layerId === 'people') {
+            if (properties.contactName) {
+                html += `<div style="margin: 6px 0; font-size: 14px;">👤 ${properties.contactName}</div>`;
             }
-
-            // Register layer with clustering support
-            const config: LayerConfig = {
-                id,
-                name,
-                type: 'circle',
-                sourceId,
-                style: {
-                    type: 'circle',
-                    paint: {
-                        'circle-radius': [
-                            'case',
-                            ['has', 'point_count'],
-                            ['interpolate', ['linear'], ['get', 'point_count'], 10, 20, 100, 30, 500, 40],
-                            8
-                        ],
-                        'circle-color': color,
-                        'circle-stroke-width': 2,
-                        'circle-stroke-color': '#fff',
-                        'circle-opacity': 0.8,
-                    },
-                },
-                metadata: {
-                    icon,
-                    color,
-                    endpoint,
-                },
-                visible: true,
-            };
-
-            registerLayer(config);
-            layerConfigs.push(config);
-
-            // Add cluster count layer
-            if (mapInstance) {
-                const clusterCountLayerId = `${id}-cluster-count`;
-                if (!mapInstance.getLayer(clusterCountLayerId)) {
-                    mapInstance.addLayer({
-                        id: clusterCountLayerId,
-                        type: 'symbol',
-                        source: sourceId,
-                        filter: ['has', 'point_count'],
-                        layout: {
-                            'text-field': '{point_count_abbreviated}',
-                            'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-                            'text-size': 12,
-                        },
-                        paint: {
-                            'text-color': '#ffffff',
-                        },
-                    });
-                }
+            if (properties.contactPhone) {
+                html += `<div style="margin: 6px 0; font-size: 14px;">📞 ${properties.contactPhone}</div>`;
             }
-        });
+            if (properties.contactEmail) {
+                html += `<div style="margin: 6px 0; font-size: 14px; word-break: break-word;">✉️ ${properties.contactEmail}</div>`;
+            }
+            if (properties.organization) {
+                html += `<div style="margin: 6px 0; font-size: 14px;">🏢 ${properties.organization}</div>`;
+            }
+        }
 
-        setActiveLayers(layerConfigs);
-    }, [mapLoaded, manager, mapInstance, addSource, registerLayer]);
+        // Assets-specific
+        if (layerId === 'assets') {
+            if (properties.serialNumber) {
+                html += `<div style="margin: 6px 0; font-size: 14px;"><strong>Serial:</strong> ${properties.serialNumber}</div>`;
+            }
+            if (properties.status) {
+                const statusColors: Record<string, string> = {
+                    available: '#51cf66',
+                    in_use: '#ffd43b',
+                    maintenance: '#ff922b',
+                    retired: '#868e96',
+                };
+                const statusColor = statusColors[properties.status] || '#868e96';
+                html += `<div style="margin: 6px 0;"><span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${getTypeLabel(properties.status)}</span></div>`;
+            }
+            if (properties.currentLocation) {
+                html += `<div style="margin: 6px 0; font-size: 14px;">📍 ${properties.currentLocation}</div>`;
+            }
+        }
 
-    // Load layer data when visibility changes - using Dashboard's logic
-    useEffect(() => {
-        if (!mapLoaded || !mapInstance) return;
+        // Skills-specific
+        if (layerId === 'skills') {
+            if (properties.category) {
+                html += `<div style="margin: 6px 0; font-size: 14px;"><strong>Category:</strong> ${properties.category}</div>`;
+            }
+            if (properties.description) {
+                html += `<div style="margin: 6px 0; font-size: 13px; color: #666;">${properties.description}</div>`;
+            }
+        }
 
-        const loadLayerData = async (layerId: string) => {
-            setLoading((prev) => new Set(prev).add(layerId));
+        // Location (common)
+        if (properties.communityName || properties.parishName) {
+            html += `<div style="border-top: 1px solid #e9ecef; margin-top: 12px; padding-top: 8px;">`;
+            if (properties.communityName) {
+                html += `<div style="font-size: 12px; color: #868e96;">${properties.communityName}${properties.parishName ? `, ${properties.parishName}` : ''}</div>`;
+            } else if (properties.parishName) {
+                html += `<div style="font-size: 12px; color: #868e96;">${properties.parishName}</div>`;
+            }
+            html += `</div>`;
+        }
+
+        html += `</div>`;
+        return html;
+    };
+
+    const loadLayerData = async (map: Map) => {
+        const endpoints = {
+            people: '/api/people',
+            assets: '/api/assets',
+            skills: '/api/skills',
+        };
+
+        for (const [layerId, endpoint] of Object.entries(endpoints)) {
+            const layer = layers.find(l => l.id === layerId);
+            if (!layer || !layer.enabled) continue;
+
+            setLoading(prev => new Set(prev).add(layerId));
 
             try {
-                const layer = activeLayers.find(l => l.id === layerId);
-                const endpoint = layer?.metadata?.endpoint;
-                if (!endpoint) {
-                    console.warn(`No endpoint for layer: ${layerId}`);
-                    return;
-                }
-
-                console.log(`Loading data for ${layerId} from ${endpoint}`);
-
+                console.log(`Loading ${layerId} from ${endpoint}...`);
                 const response = await fetch(endpoint);
+
                 if (!response.ok) {
+                    console.error(`Failed to load ${layerId}: ${response.status} ${response.statusText}`);
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
 
                 const apiData = await response.json();
-                console.log(`Received API data for ${layerId}:`, apiData);
+                console.log(`Received data for ${layerId}:`, apiData);
 
-                // Transform API response to GeoJSON using Dashboard's transform function
                 const geoJSON = transformToGeoJSON(apiData, layerId);
-                console.log(`Transformed to ${geoJSON.features?.length || 0} features for ${layerId}`);
+                console.log(`Transformed ${layerId} to GeoJSON with ${geoJSON.features?.length || 0} features`);
 
-                // Update layer data
-                if (manager) {
-                    updateLayerData(layerId, geoJSON);
-
-                    // Update count
-                    const count = geoJSON.features?.length || 0;
-                    setLayers((prev) => prev.map(l =>
-                        l.id === layerId ? { ...l, count } : l
-                    ));
+                const source = map.getSource(layerId) as any;
+                if (source) {
+                    source.setData(geoJSON);
+                    console.log(`Updated ${layerId} source on map`);
+                } else {
+                    console.error(`Source ${layerId} not found on map`);
                 }
+
+                // Update count
+                setLayers(prev => prev.map(l =>
+                    l.id === layerId ? { ...l, count: geoJSON.features?.length || 0 } : l
+                ));
             } catch (error) {
                 console.error(`Error loading data for layer ${layerId}:`, error);
-                setLayers((prev) => prev.map(l =>
+                // Show error in UI
+                setLayers(prev => prev.map(l =>
                     l.id === layerId ? { ...l, count: 0 } : l
                 ));
             } finally {
-                setLoading((prev) => {
+                setLoading(prev => {
                     const next = new Set(prev);
                     next.delete(layerId);
                     return next;
                 });
             }
+        }
+    };
+
+    const transformToGeoJSON = (data: any, layerId: string): any => {
+        let items: any[] = [];
+
+        // Try different possible response structures
+        if (layerId === 'people') {
+            items = data.people || data.data || data || [];
+        } else if (layerId === 'assets') {
+            items = data.assets || data.data || data || [];
+        } else if (layerId === 'skills') {
+            items = data.skills || data.data || data || [];
+        }
+
+        // Ensure items is an array
+        if (!Array.isArray(items)) {
+            console.warn(`Expected array for ${layerId}, got:`, typeof items);
+            items = [];
+        }
+
+        console.log(`Transforming ${items.length} items for ${layerId}`);
+
+        const features = items
+            .filter((item: any) => {
+                // Validate that item has required fields
+                const hasCoords = item.latitude != null && item.longitude != null;
+                if (!hasCoords) {
+                    console.warn(`Item missing coordinates in ${layerId}:`, item);
+                }
+                return hasCoords;
+            })
+            .map((item: any) => {
+                const lng = parseFloat(item.longitude);
+                const lat = parseFloat(item.latitude);
+
+                // Validate coordinates
+                if (isNaN(lng) || isNaN(lat)) {
+                    console.warn(`Invalid coordinates for item in ${layerId}:`, item);
+                    return null;
+                }
+
+                return {
+                    type: 'Feature',
+                    id: item.id,
+                    geometry: {
+                        type: 'Point',
+                        coordinates: [lng, lat],
+                    },
+                    properties: {
+                        ...item,
+                        layer: layerId,
+                    },
+                };
+            })
+            .filter((feature: any) => feature !== null);
+
+        return {
+            type: 'FeatureCollection',
+            features,
         };
+    };
 
-        // Load data for all visible layers
-        visibleLayers.forEach((layerId) => {
-            loadLayerData(layerId);
+    useEffect(() => {
+        if (!mapContainer.current || mapRef.current) return;
+
+        const map = new Map({
+            container: mapContainer.current,
+            style: {
+                version: 8,
+                sources: {
+                    osm: {
+                        type: 'raster',
+                        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+                        tileSize: 256,
+                        attribution: '© OpenStreetMap contributors',
+                    },
+                },
+                layers: [
+                    {
+                        id: 'osm-tiles',
+                        type: 'raster',
+                        source: 'osm',
+                        minzoom: 0,
+                        maxzoom: 19,
+                    },
+                ],
+            },
+            center: [-77.9160, 18.4663],
+            zoom: 10,
         });
-    }, [visibleLayers, mapLoaded, activeLayers, mapInstance, manager, updateLayerData]);
 
-    // Handle layer toggle
-    const toggleLayer = useCallback((layerId: string) => {
+        map.addControl(new NavigationControl(), 'top-right');
+
+        map.on('load', () => {
+            setMapLoaded(true);
+            onMapLoad(map);
+        });
+
+        mapRef.current = map;
+
+        return () => {
+            map.remove();
+            mapRef.current = null;
+        };
+    }, []);
+
+    const toggleLayer = (layerId: string) => {
         const layer = layers.find(l => l.id === layerId);
-        if (!layer) return;
+        if (!layer || !mapRef.current) return;
 
         const newEnabled = !layer.enabled;
 
@@ -453,30 +426,30 @@ export default function SupervisorMapPage() {
             l.id === layerId ? { ...l, enabled: newEnabled } : l
         ));
 
-        setVisibleLayers((prev) => {
-            const next = new Set(prev);
-            if (newEnabled) {
-                next.add(layerId);
-            } else {
-                next.delete(layerId);
+        // Update map layer visibility
+        const map = mapRef.current;
+        const layerIds = [layerId, `${layerId}-cluster`, `${layerId}-cluster-count`];
+
+        layerIds.forEach(id => {
+            if (map.getLayer(id)) {
+                map.setLayoutProperty(id, 'visibility', newEnabled ? 'visible' : 'none');
             }
-            return next;
         });
 
-        // Update map layer visibility
-        if (manager) {
-            setLayerVisibility(layerId, newEnabled);
+        // Reload data if enabling
+        if (newEnabled && mapLoaded) {
+            loadLayerData(map);
         }
-    }, [layers, manager, setLayerVisibility]);
+    };
 
     const getIcon = (layerId: string) => {
         switch (layerId) {
             case 'people':
                 return <Users size={20} />;
-            case 'places':
-                return <MapPin size={20} />;
             case 'assets':
                 return <Box size={20} />;
+            case 'skills':
+                return <Briefcase size={20} />;
             default:
                 return null;
         }
@@ -485,7 +458,7 @@ export default function SupervisorMapPage() {
     return (
         <div className="relative w-screen h-screen overflow-hidden bg-gray-100">
 
-            {/* Left Panel */}
+            {/* Left Panel - wrapped in pointer-events-none */}
             <div
                 className={`absolute top-0 left-0 h-full z-20 transition-all duration-300 pointer-events-none ${isLeftPanelOpen ? "w-80" : "w-0"
                     }`}
@@ -568,7 +541,7 @@ export default function SupervisorMapPage() {
                 </button>
             )}
 
-            {/* Right Panel */}
+            {/* Right Panel - also pointer-events-none wrapper */}
             <div
                 className={`absolute top-0 right-0 h-full z-20 transition-all duration-300 pointer-events-none ${isRightPanelOpen ? "w-80" : "w-0"
                     }`}
@@ -625,16 +598,22 @@ export default function SupervisorMapPage() {
                 </button>
             )}
 
-            {/* Map Container - Using EnhancedMap */}
+            {/* Map Container */}
             <div className="w-full h-full pointer-events-auto">
-                <EnhancedMap
-                    onMapLoad={handleMapLoad}
-                    initialLayers={activeLayers}
-                />
+                <div ref={mapContainer} className="w-full h-full" />
             </div>
 
-
+            {/* Top Bar */}
+            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-10 pointer-events-none">
+                <div className="bg-white shadow-lg rounded-lg px-6 py-3 border border-gray-200 pointer-events-auto">
+                    <div className="flex items-center gap-3">
+                        <MapPin size={20} className="text-[#1a1a3c]" />
+                        <h1 className="text-lg font-bold text-gray-900">Supervisor Map View</h1>
+                    </div>
+                </div>
+            </div>
 
         </div>
     );
+
 }

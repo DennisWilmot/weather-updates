@@ -291,8 +291,8 @@ export default function MapFilters({
                         value={
                           filters.dateRange?.start
                             ? new Date(filters.dateRange.start)
-                                .toISOString()
-                                .slice(0, 16)
+                              .toISOString()
+                              .slice(0, 16)
                             : ''
                         }
                         onChange={(e) => {
@@ -322,8 +322,8 @@ export default function MapFilters({
                         value={
                           filters.dateRange?.end
                             ? new Date(filters.dateRange.end)
-                                .toISOString()
-                                .slice(0, 16)
+                              .toISOString()
+                              .slice(0, 16)
                             : ''
                         }
                         onChange={(e) => {
@@ -350,7 +350,7 @@ export default function MapFilters({
             </Paper>
 
             {/* Categories */}
-            <Paper p="sm" withBorder>
+            {/* <Paper p="sm" withBorder>
               <Group
                 justify="space-between"
                 style={{ cursor: 'pointer' }}
@@ -419,10 +419,10 @@ export default function MapFilters({
                   />
                 </Stack>
               </Collapse>
-            </Paper>
+            </Paper> */}
 
             {/* Locations */}
-            <Paper p="sm" withBorder>
+            {/* <Paper p="sm" withBorder>
               <Group
                 justify="space-between"
                 style={{ cursor: 'pointer' }}
@@ -464,7 +464,7 @@ export default function MapFilters({
                   />
                 </Stack>
               </Collapse>
-            </Paper>
+            </Paper> */}
 
             {/* Status */}
             <Paper p="sm" withBorder>

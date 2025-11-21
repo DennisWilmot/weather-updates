@@ -48,6 +48,7 @@ import { LayerConfig } from '@/lib/maps/layer-types';
 import { transformToGeoJSON } from './../components/transform';
 import { generatePopupHTML } from './../components/mapPopUp';
 import DashboardNavigation from '@/components/DashboardNavigation';
+import { ChevronUp, Filter, ChevronDown, Zap, ChevronLeft, X, ChevronRight, Users } from 'lucide-react';
 
 function DashboardContent() {
   const router = useRouter();
@@ -58,7 +59,12 @@ function DashboardContent() {
   const [layersDrawerOpened, { open: openLayersDrawer, close: closeLayersDrawer }] = useDisclosure(false);
   const [filtersDrawerOpened, { open: openFiltersDrawer, close: closeFiltersDrawer }] = useDisclosure(false);
   const [mobileMenuOpened, { toggle: toggleMobileMenu, close: closeMobileMenu }] = useDisclosure(false);
-  const [filtersExpanded, { toggle: toggleFiltersExpanded }] = useDisclosure(true);
+  // const [filtersExpanded, { toggle: toggleFiltersExpanded }] = useDisclosure(true);
+  const [filtersExpanded, setFiltersExpanded] = useState(true)
+  const [isRightPanelOpen, setIsRightPanelOpen] = useState(true)
+  const [isLeftPanelOpen, setIsLeftPanelOpen] = useState(true)
+
+
 
   // Map State
   const [mapLoaded, setMapLoaded] = useState(false);
@@ -67,6 +73,10 @@ function DashboardContent() {
   const [layerCounts, setLayerCounts] = useState<Map<string, number>>(new Map());
   const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
   const [activeLayers, setActiveLayers] = useState<LayerConfig[]>([]);
+  const [layerRawData, setLayerRawData] = useState<Record<string, any[]>>({});
+  const [layers, setLayers] = useState<any[]>([]);
+  const [subTypeFilters, setSubTypeFilters] = useState<Record<string, Set<string>>>({});
+
 
   // MapLayerManager hook
   const {
@@ -129,9 +139,6 @@ function DashboardContent() {
         duration: 500,
       });
     });
-
-
-
 
     // Add click handlers for each layer
     const setupClickHandlers = () => {
@@ -221,6 +228,90 @@ function DashboardContent() {
     setTimeout(setupClickHandlers, 500);
   }, []);
 
+
+  // LOCAL FILTERING when subtype toggles
+  useEffect(() => {
+    if (!mapLoaded || !manager || !mapRef.current) return;
+
+    Object.keys(layerRawData).forEach(layerId => {
+      const fullRows = layerRawData[layerId];
+      if (!fullRows) return;
+
+      const enabledSubTypes =
+        subTypeFilters[layerId] && subTypeFilters[layerId].size > 0
+          ? subTypeFilters[layerId]
+          : null;
+
+      // Filter rows in-place
+      const filteredRows = enabledSubTypes
+        ? fullRows.filter(row => enabledSubTypes.has(row.type))
+        : fullRows;
+
+      // Convert filtered rows → GeoJSON
+      const filteredGeoJSON = transformToGeoJSON(
+        { [layerId]: filteredRows },
+        layerId as 'people' | 'places' | 'assets'
+      );
+
+      // Update the map source
+      updateLayerData(layerId, filteredGeoJSON);
+
+      // Update counts
+      setLayerCounts(prev => {
+        const next = new Map(prev);
+        next.set(layerId, filteredRows.length);
+        return next;
+      });
+    });
+  }, [subTypeFilters, layerRawData, mapLoaded]);
+
+
+  const toggleSubType = (layerId: string, subTypeId: string) => {
+    setSubTypeFilters(prev => {
+      const next = { ...prev };
+      if (!next[layerId]) next[layerId] = new Set();
+
+      if (next[layerId].has(subTypeId)) {
+        next[layerId].delete(subTypeId);
+      } else {
+        next[layerId].add(subTypeId);
+      }
+
+      return next;
+    });
+
+    // Also update the visible state inside the `layers` array
+    setLayers(prev =>
+      prev.map(layer => {
+        if (layer.id !== layerId) return layer;
+
+        return {
+          ...layer,
+          subTypes: layer.subTypes.map((sub: any) =>
+            sub.id === subTypeId ? { ...sub, enabled: !sub.enabled } : sub
+          )
+        };
+      })
+    );
+  };
+
+  const toggleLayer = (layerId: string) => {
+    setLayers(prev =>
+      prev.map(layer =>
+        layer.id === layerId
+          ? { ...layer, enabled: !layer.enabled }
+          : layer
+      )
+    );
+
+    const isEnabled =
+      !layers.find(layer => layer.id === layerId)?.enabled;
+
+    // Call existing function to update map visibility
+    handleLayerToggle(layerId, isEnabled);
+  };
+
+
   // Initialize layers
   useEffect(() => {
     if (!mapLoaded || !manager || !mapInstance) return;
@@ -306,6 +397,46 @@ function DashboardContent() {
     setActiveLayers(layerConfigs);
   }, [mapLoaded, manager, mapInstance, addSource, registerLayer]);
 
+  useEffect(() => {
+    // Do nothing until data-loaded + activeLayers are ready
+    if (!activeLayers.length) return;
+
+    const newLayers = activeLayers.map(layer => {
+      const layerId = layer.id;
+
+      // Raw DB rows for this layer
+      const rows = layerRawData[layerId] || [];
+
+      // Derive subtypes from DB
+      const subtypeMap = new Map();
+
+      rows.forEach(item => {
+        if (!item.type) return;
+        if (!subtypeMap.has(item.type)) {
+          subtypeMap.set(item.type, {
+            id: item.type,
+            name: item.type.replace(/_/g, ' ').replace(/\b\w/g, (c: any) => c.toUpperCase()),
+            color: layer.metadata?.color,
+            enabled: true,
+          });
+        }
+      });
+
+      return {
+        id: layer.id,
+        name: layer.name,
+        color: layer.metadata?.color,
+        enabled: visibleLayers.has(layerId),
+        expanded: false,
+        count: layerCounts.get(layerId) || 0,
+        subTypes: Array.from(subtypeMap.values()),
+      };
+    });
+
+    setLayers(newLayers);
+  }, [activeLayers, layerRawData, layerCounts, visibleLayers]);
+
+
   // Load layer data when visibility changes or filters change
   useEffect(() => {
     if (!mapLoaded || !mapInstance) return;
@@ -344,11 +475,17 @@ function DashboardContent() {
         }
 
         const apiData = await response.json();
-        console.log(`Received API data for ${layerId}:`, apiData);
 
-        // Transform API response to GeoJSON
-        const geoJSON = transformToGeoJSON(apiData, layerId as 'people' | 'places' | 'assets');
-        console.log(`Transformed to ${geoJSON.features?.length || 0} features for ${layerId}`);
+        let rows = apiData[layerId] || apiData.data || apiData || [];
+
+        // Transform filtered rows into GeoJSON
+        const geoJSON = transformToGeoJSON({ [layerId]: rows }, layerId as 'people' | 'places' | 'assets');
+
+        setLayerRawData(prev => ({
+          ...prev,
+          [layerId]: apiData[layerId] || apiData.data || apiData || [],
+        }));
+
 
         // Update layer data
         if (mapRef.current && manager) {
@@ -406,6 +543,18 @@ function DashboardContent() {
     const params = serializeFilters(newFilters);
     router.push(`/dashboard?${params.toString()}`, { scroll: false });
   }, [router]);
+
+  // expand/collapse toggle per layer
+  const toggleLayerExpand = (layerId: string) => {
+    setLayers(prev =>
+      prev.map(layer =>
+        layer.id === layerId
+          ? { ...layer, expanded: !layer.expanded }
+          : layer
+      )
+    );
+  };
+
 
   // Initialize real-time connection
   useEffect(() => {
@@ -511,162 +660,123 @@ function DashboardContent() {
         </Box>
 
         {/* Floating Desktop Panels */}
-        <Box
-          visibleFrom="md"
-          style={{
-            position: 'absolute',
-            top: '20px',
-            left: '20px',
-            bottom: '20px',
-            width: '320px',
-            zIndex: 1000,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
+        {/* LEFT PANEL – Map Layers */}
+        <div
+          className={`absolute top-0 left-0 h-full z-20 transition-all duration-300 pointer-events-none ${isLeftPanelOpen ? "w-80" : "w-0"
+            }`}
         >
-          <Paper
-            p={0}
-            withBorder
-            shadow="lg"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              flex: 1,
-              minHeight: 0,
-              overflow: 'hidden',
-              backgroundColor: 'white',
-            }}
+          <div
+            className={`h-full flex flex-col bg-white shadow-xl border-r border-gray-200 pointer-events-auto ${isLeftPanelOpen ? "" : "hidden"
+              }`}
           >
-            <div style={{ padding: '16px', flexShrink: 0, borderBottom: '1px solid #e9ecef' }}>
-              <Text size="lg" fw={600}>
-                Map Layers
-              </Text>
-            </div>
-            <div
-              style={{
-                flex: 1,
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                minHeight: 0,
-                padding: '16px',
-              }}
-            >
-              <MapLayerPanel
-                visibleLayers={visibleLayers}
-                layerCounts={layerCounts}
-                loadingLayers={loadingLayers}
-                onLayerToggle={handleLayerToggle}
-              />
+            {/* HEADER */}
+            <div className="bg-[#1a1a3c] p-6 flex-shrink-0">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="text-blue-400" size={24} />
+                    <h2 className="text-2xl font-bold text-white">Map Layers</h2>
+                  </div>
+                  <p className="text-blue-100 text-sm">Toggle layers to view data</p>
+                </div>
+
+                {/* Close Button */}
+                <button
+                  onClick={() => setIsLeftPanelOpen(false)}
+                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all hover:rotate-90"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
-            {/* Legend */}
-            <div style={{ padding: '16px', flexShrink: 0, borderTop: '1px solid #e9ecef' }}>
-              <Text size="sm" fw={600} mb="xs">Legend</Text>
-              <Stack gap="xs">
-                {activeLayers.map(layer => (
-                  <Group key={layer.id} gap="xs">
-                    <Box
-                      style={{
-                        width: 16,
-                        height: 16,
-                        borderRadius: '50%',
-                        backgroundColor: layer.metadata?.color || '#666',
-                        border: '2px solid #fff',
-                        boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
-                      }}
-                    />
-                    <Text size="sm">{layer.name}</Text>
-                    {layerCounts.has(layer.id) && (
-                      <Badge size="xs" color="gray" variant="light">
-                        {layerCounts.get(layer.id)}
-                      </Badge>
+            {/* CONTENT SCROLL AREA */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* LAYER LIST */}
+              <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-4">
+                {layers.map((layer: any) => (
+                  <div key={layer.id} className="border-b border-gray-100 pb-4 last:border-none">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-4 h-4 rounded"
+                        style={{ backgroundColor: layer.color }}
+                      />
+
+                      <button
+                        onClick={() => toggleLayerExpand(layer.id)}
+                        className="flex items-center gap-2 text-gray-900 font-semibold"
+                      >
+                        {layer.name}
+                        {layer.expanded ? (
+                          <ChevronUp size={16} className="text-gray-500" />
+                        ) : (
+                          <ChevronDown size={16} className="text-gray-500" />
+                        )}
+                      </button>
+
+                      <span className="ml-auto text-sm bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                        {layer.count}
+                      </span>
+
+                      {/* Toggle switch */}
+                      <button
+                        onClick={() => toggleLayer(layer.id)}
+                        className={`relative w-11 h-6 rounded-full transition-colors ml-2 ${layer.enabled ? "bg-[#1a1a3c]" : "bg-gray-300"
+                          }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform shadow-sm ${layer.enabled ? "translate-x-5" : ""
+                            }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* SUBTYPES */}
+                    {layer.expanded && (
+                      <div className="mt-3 pl-7 space-y-2">
+                        {layer.subTypes.map((sub: any) => (
+                          <div key={sub.id} className="flex items-center gap-2">
+                            <button
+                              onClick={() => toggleSubType(layer.id, sub.id)}
+                              className={`relative w-9 h-5 rounded-full transition-colors ${sub.enabled ? "bg-[#1a1a3c]" : "bg-gray-300"
+                                }`}
+                            >
+                              <span
+                                className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${sub.enabled ? "translate-x-4" : ""
+                                  }`}
+                              />
+                            </button>
+
+                            <div
+                              className="w-3 h-3 rounded"
+                              style={{ backgroundColor: sub.color }}
+                            />
+
+                            <span className="text-sm text-gray-700">{sub.name}</span>
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </Group>
+                  </div>
                 ))}
-              </Stack>
+              </div>
+
+
             </div>
-          </Paper>
-        </Box>
+          </div>
+        </div>
 
-        <Box
-          visibleFrom="md"
-          style={{
-            position: 'absolute',
-            top: '20px',
-            right: '20px',
-            ...(filtersExpanded ? { bottom: '20px' } : {}),
-            width: filtersExpanded ? '320px' : '280px',
-            maxHeight: filtersExpanded ? 'calc(100vh - 14.28vh - 40px)' : 'auto',
-            zIndex: 1000,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <Paper
-            p={filtersExpanded ? 0 : "md"}
-            withBorder
-            shadow="lg"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              ...(filtersExpanded ? { flex: 1, minHeight: 0 } : {}),
-              backgroundColor: 'white',
-            }}
+        {/* TOGGLE BUTTON WHEN CLOSED */}
+        {!isLeftPanelOpen && (
+          <button
+            onClick={() => setIsLeftPanelOpen(true)}
+            className="absolute top-4 left-4 z-20 bg-white shadow-lg rounded-lg p-3 hover:bg-gray-50 transition-colors pointer-events-auto"
           >
-            {filtersExpanded ? (
-              <>
-                {/* Collapsible Header */}
-                <div
-                  style={{
-                    padding: '16px',
-                    flexShrink: 0,
-                    borderBottom: '1px solid #e9ecef',
-                    cursor: 'pointer',
-                  }}
-                  onClick={toggleFiltersExpanded}
-                >
-                  <Group justify="space-between" gap="xs">
-                    <Group gap="xs">
-                      <IconFilter size={20} />
-                      <Text size="lg" fw={600}>
-                        Filters
-                      </Text>
-                    </Group>
-                    <IconChevronUp size={16} />
-                  </Group>
-                </div>
+            <ChevronRight size={20} className="text-gray-700" />
+          </button>
+        )}
 
-                {/* Collapsible Content */}
-                <div
-                  style={{
-                    flex: 1,
-                    minHeight: 0,
-                    overflowY: 'auto',
-                    overflowX: 'hidden',
-                    padding: '16px',
-                  }}
-                >
-                  <MapFilters filters={filters} onFiltersChange={handleFiltersChange} hideHeader />
-                </div>
-              </>
-            ) : (
-              <Group
-                justify="space-between"
-                gap="xs"
-                style={{ cursor: 'pointer' }}
-                onClick={toggleFiltersExpanded}
-              >
-                <Group gap="xs">
-                  <IconFilter size={20} />
-                  <Text size="lg" fw={600}>
-                    Filters
-                  </Text>
-                </Group>
-                <IconChevronDown size={16} />
-              </Group>
-            )}
-          </Paper>
-        </Box>
+
 
         {/* Mobile Drawers */}
         <Drawer
@@ -685,32 +795,86 @@ function DashboardContent() {
           />
 
           {/* Legend in mobile drawer */}
-          <Box mt="xl" pt="xl" style={{ borderTop: '1px solid #e9ecef' }}>
-            <Text size="sm" fw={600} mb="xs">Legend</Text>
-            <Stack gap="xs">
-              {activeLayers.map(layer => (
-                <Group key={layer.id} gap="xs">
-                  <Box
-                    style={{
-                      width: 16,
-                      height: 16,
-                      borderRadius: '50%',
-                      backgroundColor: layer.metadata?.color || '#666',
-                      border: '2px solid #fff',
-                      boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
-                    }}
-                  />
-                  <Text size="sm">{layer.name}</Text>
-                  {layerCounts.has(layer.id) && (
-                    <Badge size="xs" color="gray" variant="light">
-                      {layerCounts.get(layer.id)}
-                    </Badge>
-                  )}
-                </Group>
-              ))}
-            </Stack>
-          </Box>
+
         </Drawer>
+        <div
+          className={`absolute top-0 right-0 h-full z-20 transition-all duration-300 pointer-events-none ${isRightPanelOpen ? "w-80" : "w-0"}`}
+        >
+          <div className={`h-full flex flex-col bg-white shadow-xl border-l border-gray-200 pointer-events-auto ${isRightPanelOpen ? "" : "hidden"}`}>
+            <div className="bg-[#1a1a3c] p-6 flex-shrink-0">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Filter size={24} className="text-blue-400" />
+                    <h2 className="text-2xl font-bold text-white">Filters & Tools</h2>
+                  </div>
+                  <p className="text-blue-100 text-sm">Filter map data and AI tools</p>
+                </div>
+                <button
+                  onClick={() => setIsRightPanelOpen(false)}
+                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all hover:rotate-90"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <button
+                  onClick={() => setFiltersExpanded(!filtersExpanded)}
+                  className="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Filter size={18} className="text-gray-700" />
+                    <span className="font-semibold text-gray-900">Map Filters</span>
+                  </div>
+                  {filtersExpanded ? (
+                    <ChevronUp size={18} className="text-gray-700" />
+                  ) : (
+                    <ChevronDown size={18} className="text-gray-700" />
+                  )}
+                </button>
+
+                {filtersExpanded && (
+                  <div className="p-4 border-t border-gray-200">
+                    <MapFilters
+                      filters={filters}
+                      onFiltersChange={handleFiltersChange}
+                      hideHeader
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-dashed border-blue-300 rounded-xl p-8 text-center">
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Zap size={32} className="text-blue-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">AI Matching System</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Intelligently match missions with drones.
+                </p>
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-blue-200">
+                  <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500" />
+                  </span>
+                  <span className="text-sm font-medium text-gray-700">Coming Soon</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {!isRightPanelOpen && (
+          <button
+            onClick={() => setIsRightPanelOpen(true)}
+            className="absolute top-4 right-4 z-20 bg-white shadow-lg rounded-lg p-3 hover:bg-gray-50 transition-colors pointer-events-auto"
+          >
+            <ChevronLeft size={20} className="text-gray-700" />
+          </button>
+        )}
 
         <Drawer
           opened={filtersDrawerOpened}
@@ -724,7 +888,7 @@ function DashboardContent() {
         </Drawer>
 
         {/* Floating Statistics Panel */}
-        <Box
+        {/* <Box
           style={{
             position: 'absolute',
             top: '20px',
@@ -735,12 +899,10 @@ function DashboardContent() {
           }}
           visibleFrom="md"
         >
-          <Paper p="md" withBorder shadow="lg" style={{ backgroundColor: 'white', maxHeight: '100%', overflowY: 'auto' }}>
-            <StatisticsPanel activeLayers={visibleLayerConfigs} filters={filters} />
-          </Paper>
-        </Box>
 
-        <Box
+        </Box> */}
+
+        {/* <Box
           style={{
             position: 'absolute',
             top: '20px',
@@ -753,7 +915,7 @@ function DashboardContent() {
           <Paper p="md" withBorder shadow="lg" style={{ backgroundColor: 'white' }}>
             <StatisticsPanel activeLayers={visibleLayerConfigs} filters={filters} />
           </Paper>
-        </Box>
+        </Box> */}
 
       </Box>
     </>
