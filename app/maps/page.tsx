@@ -263,15 +263,7 @@ export default function MapsPage() {
             
             {/* Desktop Navigation Tabs */}
             <Group gap="xs" visibleFrom="sm">
-              <Button
-                variant="outline"
-                color="teal"
-                size="sm"
-                onClick={() => router.push('/')}
-                leftSection="📋"
-              >
-                Community Feed
-              </Button>
+             
               <Button
                 variant="outline"
                 color="electricBlue"
@@ -281,15 +273,7 @@ export default function MapsPage() {
               >
                 Report Incident
               </Button>
-              <Button
-                variant="outline"
-                color="yellow"
-                size="sm"
-                onClick={() => router.push('/onlineretailers')}
-                leftSection="🛒"
-              >
-                Retailers
-              </Button>
+              
               <Button
                 variant="filled"
                 color="blue"
@@ -335,15 +319,7 @@ export default function MapsPage() {
         }}
       >
         <Stack gap="md" mt="md">
-          <Button
-            variant="subtle"
-            color="teal"
-            fullWidth
-            onClick={() => { router.push('/'); close(); }}
-            leftSection="📋"
-          >
-            Community Feed
-          </Button>
+        
           <Button
             variant="subtle"
             color="electricBlue"
@@ -353,15 +329,7 @@ export default function MapsPage() {
           >
             Report Incident
           </Button>
-          <Button
-            variant="subtle"
-            color="yellow"
-            fullWidth
-            onClick={() => { router.push('/onlineretailers'); close(); }}
-            leftSection="🛒"
-          >
-            Retailers
-          </Button>
+          
           <Button
             variant="filled"
             color="blue"

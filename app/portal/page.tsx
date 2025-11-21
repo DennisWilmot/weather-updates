@@ -4,7 +4,7 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { Container, Stack, Title, Text, Alert, Paper, Tabs, Group, Box, Center, Loader } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
-import { IconPackage, IconMapPin, IconUsers, IconUserCheck, IconCheck, IconAlertCircle } from '@tabler/icons-react';
+import { IconPackage, IconMapPin, IconUsers, IconUserCheck, IconCheck, IconAlertCircle, IconStatusChange } from '@tabler/icons-react';
 import PortalLayout from '@/components/portals/PortalLayout';
 
 // Dynamic imports to avoid webpack issues - disable SSR to prevent runtime errors
@@ -44,7 +44,16 @@ const AidWorkerScheduleForm = dynamic(() => import('@/components/portals/AidWork
   ),
 });
 
-type FormType = 'assets' | 'places' | 'people' | 'aid-workers';
+const AvailableAssetsForm = dynamic(() => import('@/components/portals/AvailableAssetsForm'), {
+  ssr: false,
+  loading: () => (
+    <Center py="xl">
+      <Loader />
+    </Center>
+  ),
+});
+
+type FormType = 'assets' | 'give' | 'places' | 'people' | 'aid-workers';
 
 export default function PortalPage() {
   const isMobile = useMediaQuery('(max-width: 768px)');
@@ -69,6 +78,8 @@ export default function PortalPage() {
     switch (activeTab) {
       case 'assets':
         return 'Asset Distribution Form';
+      case 'give':
+        return 'Asset Availability Form';
       case 'places':
         return 'Place Operational Status Form';
       case 'people':
@@ -80,6 +91,8 @@ export default function PortalPage() {
 
   const getFormDescription = () => {
     switch (activeTab) {
+      case 'give':
+        return 'Record asset availability to individuals or locations. This information will be displayed on the dashboard map.';
       case 'assets':
         return 'Record asset distributions to individuals or locations. This information will be displayed on the dashboard map.';
       case 'places':
@@ -129,10 +142,17 @@ export default function PortalPage() {
               <Tabs.List grow={!isMobile}>
                 <Tabs.Tab
                   value="assets"
-                  leftSection={<IconPackage size={isMobile ? 18 : 20} />}
+                  leftSection={<IconStatusChange size={isMobile ? 18 : 20} />}
                   style={{ minHeight: isMobile ? '44px' : undefined }}
                 >
                   {isMobile ? 'Assets' : 'Assets Distribution'}
+                </Tabs.Tab>
+                <Tabs.Tab
+                  value="give"
+                  leftSection={<IconPackage size={isMobile ? 18 : 20} />}
+                  style={{ minHeight: isMobile ? '44px' : undefined }}
+                >
+                  {isMobile ? 'Give' : 'Available Assets'}
                 </Tabs.Tab>
                 <Tabs.Tab
                   value="places"
@@ -168,6 +188,7 @@ export default function PortalPage() {
               onClose={() => setSubmitted(false)}
               withCloseButton
             >
+              {activeTab === 'give' && 'Asset availability has been recorded successfully. It will appear on the dashboard map shortly.'}
               {activeTab === 'assets' && 'Asset distribution has been recorded successfully. It will appear on the dashboard map shortly.'}
               {activeTab === 'places' && 'Place status has been recorded successfully. It will appear on the dashboard map shortly.'}
               {activeTab === 'people' && 'People needs have been recorded successfully. They will appear on the dashboard map shortly.'}
@@ -201,6 +222,9 @@ export default function PortalPage() {
             )}
             {activeTab === 'aid-workers' && (
               <AidWorkerScheduleForm onSuccess={handleSuccess} onError={handleError} />
+            )}
+            {activeTab === 'give' && (
+              <AvailableAssetsForm onSuccess={handleSuccess} onError={handleError} />
             )}
           </Box>
 

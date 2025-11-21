@@ -2,7 +2,7 @@
  * Map utility functions for MapLibre GL JS
  */
 
-import maplibregl from 'maplibre-gl';
+import maplibregl from "maplibre-gl";
 
 /**
  * Create a default map style with OpenStreetMap tiles
@@ -11,18 +11,18 @@ export function createDefaultMapStyle(): maplibregl.StyleSpecification {
   return {
     version: 8,
     sources: {
-      'osm-tiles': {
-        type: 'raster',
-        tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      "osm-tiles": {
+        type: "raster",
+        tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
         tileSize: 256,
-        attribution: '© OpenStreetMap contributors',
+        attribution: "© OpenStreetMap contributors",
       },
     },
     layers: [
       {
-        id: 'osm-tiles-layer',
-        type: 'raster',
-        source: 'osm-tiles',
+        id: "osm-tiles-layer",
+        type: "raster",
+        source: "osm-tiles",
         minzoom: 0,
         maxzoom: 19,
       },
@@ -36,6 +36,7 @@ export function createDefaultMapStyle(): maplibregl.StyleSpecification {
 export const defaultMapOptions: Partial<maplibregl.MapOptions> = {
   center: [-77.2975, 18.1096], // Jamaica center
   zoom: 7,
+  maxZoom: 400,
   interactive: true,
   scrollZoom: true,
   doubleClickZoom: true,
@@ -114,6 +115,3 @@ export function debounce<T extends (...args: any[]) => any>(
     timeout = setTimeout(later, wait);
   };
 }
-
-
-

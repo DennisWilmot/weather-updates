@@ -160,7 +160,6 @@ export default function HomePage() {
                   Hurricane Response
               </Title>
               <Group gap="xs" visibleFrom="sm">
-                <Button variant="outline" color="teal" size="sm" leftSection="📋" disabled>Feed</Button>
                 <Button variant="outline" color="coral" size="sm" leftSection="📞" disabled>Contacts</Button>
               </Group>
             </Flex>
@@ -213,7 +212,6 @@ export default function HomePage() {
                   Hurricane Response
               </Title>
               <Group gap="xs" visibleFrom="sm">
-                <Button variant="outline" color="teal" size="sm" leftSection="📋" disabled>Feed</Button>
                 <Button variant="outline" color="coral" size="sm" leftSection="📞" disabled>Contacts</Button>
               </Group>
             </Flex>
@@ -266,7 +264,6 @@ export default function HomePage() {
                   Hurricane Response
               </Title>
               <Group gap="xs" visibleFrom="sm">
-                <Button variant="outline" color="teal" size="sm" leftSection="📋" disabled>Feed</Button>
                 <Button variant="outline" color="coral" size="sm" leftSection="📞" disabled>Contacts</Button>
               </Group>
             </Flex>
@@ -342,33 +339,7 @@ export default function HomePage() {
               
               {/* Desktop Navigation */}
               <Group gap="xs" visibleFrom="sm">
-                <Button
-                  variant={activeTab === 'feed' ? 'filled' : 'outline'}
-                  color="teal"
-                  size="sm"
-                  onClick={() => setActiveTab('feed')}
-                  leftSection="📋"
-                >
-                  Community Feed
-                </Button>
-                <Button
-                  variant={activeTab === 'submit' ? 'filled' : 'outline'}
-                  color="electricBlue"
-                  size="sm"
-                  onClick={() => setActiveTab('submit')}
-                  leftSection="📢"
-                >
-                  Report Incident
-                </Button>
-                <Button
-                  variant="outline"
-                  color="yellow"
-                  size="sm"
-                  onClick={() => router.push('/onlineretailers')}
-                  leftSection="🛒"
-                >
-                  Retailers
-                </Button>
+               
                 <Button
                   variant="outline"
                   color="blue"
@@ -416,42 +387,7 @@ export default function HomePage() {
         }}
       >
         <Stack gap="md" mt="md">
-          <Button
-            variant={activeTab === 'feed' ? 'filled' : 'subtle'}
-            color="teal"
-            fullWidth
-            onClick={() => {
-              setActiveTab('feed');
-              close();
-            }}
-            leftSection="📋"
-          >
-            Community Feed
-          </Button>
-          <Button
-            variant={activeTab === 'submit' ? 'filled' : 'subtle'}
-            color="electricBlue"
-            fullWidth
-            onClick={() => {
-              setActiveTab('submit');
-              close();
-            }}
-            leftSection="📢"
-          >
-            Submit Update
-          </Button>
-          <Button
-            variant="subtle"
-            color="yellow"
-            fullWidth
-            onClick={() => {
-              router.push('/onlineretailers');
-              close();
-            }}
-            leftSection="🛒"
-          >
-            Retailers
-          </Button>
+          
           <Button
             variant="subtle"
             color="blue"
@@ -621,35 +557,7 @@ export default function HomePage() {
         }}
       >
         <Group justify="space-between" gap="xs">
-          <Button
-            variant="subtle"
-            color="gray"
-            size="sm"
-            onClick={() => setActiveTab('feed')}
-            style={{
-              flex: 1,
-              flexDirection: 'column',
-              height: 'auto',
-              padding: '8px 4px',
-              minHeight: '56px',
-              borderRadius: '12px',
-              backgroundColor: activeTab === 'feed' ? 'rgba(17, 221, 176, 0.15)' : 'transparent',
-              border: activeTab === 'feed' ? '1px solid rgba(17, 221, 176, 0.3)' : '1px solid transparent',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              transform: activeTab === 'feed' ? 'translateY(-2px)' : 'translateY(0)',
-              boxShadow: activeTab === 'feed' ? '0 4px 12px rgba(17, 221, 176, 0.2)' : 'none'
-            }}
-          >
-            <Text size="xl" style={{
-              color: activeTab === 'feed' ? '#11DDB0' : '#8B8B8B',
-              transition: 'color 0.3s ease'
-            }}>📋</Text>
-            <Text size="xs" style={{
-              color: activeTab === 'feed' ? '#11DDB0' : '#8B8B8B',
-              transition: 'color 0.3s ease',
-              marginTop: '2px'
-            }}>Feed</Text>
-          </Button>
+         
 
           <Button
             variant="subtle"
@@ -711,33 +619,6 @@ export default function HomePage() {
             }}>Contacts</Text>
           </Button>
 
-          <Button
-            variant="subtle"
-            color="gray"
-            size="sm"
-            onClick={() => router.push('/onlineretailers')}
-            style={{
-              flex: 1,
-              flexDirection: 'column',
-              height: 'auto',
-              padding: '8px 4px',
-              minHeight: '56px',
-              borderRadius: '12px',
-              backgroundColor: 'transparent',
-              border: '1px solid transparent',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-            }}
-          >
-            <Text size="xl" style={{
-              color: '#FFE66D',
-              transition: 'color 0.3s ease'
-            }}>🛒</Text>
-            <Text size="xs" style={{
-              color: '#FFE66D',
-              transition: 'color 0.3s ease',
-              marginTop: '2px'
-            }}>Retailers</Text>
-          </Button>
         </Group>
       </Paper>
     </>

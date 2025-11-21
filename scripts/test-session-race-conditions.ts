@@ -347,7 +347,7 @@ async function runAllTests() {
     
     // Test 2: Concurrent get-session (if we have tokens)
     if (signInResult?.tokens && signInResult.tokens.length > 0) {
-      await testConcurrentGetSession(signInResult.tokens);
+      await testConcurrentGetSession(signInResult.tokens as string[]);
     }
 
     // Test 3: Token uniqueness

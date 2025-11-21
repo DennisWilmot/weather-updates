@@ -230,15 +230,7 @@ export default function ReliefPortal() {
             
             {/* Desktop Navigation Tabs */}
             <Group gap="xs" visibleFrom="sm">
-              <Button
-                variant="outline"
-                color="teal"
-                size="sm"
-                onClick={() => router.push('/')}
-                leftSection="📋"
-              >
-                Feed
-              </Button>
+             
               <Button
                 variant="outline"
                 color="electricBlue"
@@ -302,15 +294,8 @@ export default function ReliefPortal() {
         }}
       >
         <Stack gap="md" mt="md">
-          <Button
-            variant="subtle"
-            color="teal"
-            fullWidth
-            onClick={() => { router.push('/'); close(); }}
-            leftSection="📋"
-          >
-            Community Feed
-          </Button>
+         
+         
           <Button
             variant="subtle"
             color="electricBlue"

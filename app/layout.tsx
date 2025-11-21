@@ -3,6 +3,8 @@ import { Notifications } from '@mantine/notifications';
 import QueryProvider from '../components/QueryProvider';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
+import "./global.css"
+import { Toaster } from 'sonner';
 
 const theme = createTheme({
   colors: {
@@ -44,6 +46,8 @@ export default function RootLayout({
           <MantineProvider theme={theme}>
             <Notifications />
             {children}
+            <Toaster richColors={true} position='bottom-center' />
+
           </MantineProvider>
         </QueryProvider>
       </body>

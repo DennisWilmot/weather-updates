@@ -31,6 +31,9 @@ import {
   IconChartBar,
   IconChevronDown,
   IconChevronUp,
+  IconUser,
+  IconMapPin,
+  IconBox,
 } from '@tabler/icons-react';
 import Image from 'next/image';
 import maplibregl from 'maplibre-gl';
@@ -39,17 +42,17 @@ import MapLayerPanel from '@/components/MapLayerPanel';
 import MapFilters from '@/components/MapFilters';
 import StatisticsPanel from '@/components/dashboard/StatisticsPanel';
 import { useMapLayerManager } from '@/components/MapLayerManager';
-import { layerHierarchy, getAllLayerIds } from '@/lib/maps/layer-hierarchy';
 import { MapFilters as MapFiltersType, deserializeFilters, serializeFilters } from '@/lib/maps/filters';
 import { createRealtimeConnection, ConnectionStatus } from '@/lib/maps/realtime';
 import { LayerConfig } from '@/lib/maps/layer-types';
-import { isHeatmapLayer, getHeatmapApiEndpoint, createHeatmapLayerFromId, getHeatmapSourceId } from '@/lib/maps/heatmap-layers';
+import { transformToGeoJSON } from './transform';
+import { generatePopupHTML } from './mapPopUp';
 
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const mapRef = useRef<maplibregl.Map | null>(null);
-  
+
   // UI State
   const [layersDrawerOpened, { open: openLayersDrawer, close: closeLayersDrawer }] = useDisclosure(false);
   const [filtersDrawerOpened, { open: openFiltersDrawer, close: closeFiltersDrawer }] = useDisclosure(false);
@@ -59,7 +62,7 @@ function DashboardContent() {
   // Map State
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapInstance, setMapInstance] = useState<maplibregl.Map | null>(null);
-  const [visibleLayers, setVisibleLayers] = useState<Set<string>>(new Set());
+  const [visibleLayers, setVisibleLayers] = useState<Set<string>>(new Set(['people', 'places', 'assets']));
   const [layerCounts, setLayerCounts] = useState<Map<string, number>>(new Map());
   const [loadingLayers, setLoadingLayers] = useState<Set<string>>(new Set());
   const [activeLayers, setActiveLayers] = useState<LayerConfig[]>([]);
@@ -94,166 +97,260 @@ function DashboardContent() {
     }
   }, [searchParams]);
 
+  const setCategoryVisibility = (category: string, visible: boolean) => {
+    if (!mapRef.current) return;
+
+    const map = mapRef.current;
+
+    const ids = [
+      category,                    // base layer
+      `${category}-cluster`,       // clusters
+      `${category}-cluster-count`  // cluster numbers
+    ];
+
+    ids.forEach(id => {
+      if (map.getLayer(id)) {
+        map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+      }
+    });
+  };
+
   // Handle map load
   const handleMapLoad = useCallback((map: maplibregl.Map) => {
     mapRef.current = map;
     setMapInstance(map);
     setMapLoaded(true);
+
+    map.on('dblclick', (e) => {
+      map.easeTo({
+        center: e.lngLat,
+        zoom: map.getZoom() + 400,
+        duration: 500,
+      });
+    });
+
+
+
+
+    // Add click handlers for each layer
+    const setupClickHandlers = () => {
+      ['people', 'places', 'assets'].forEach(layerId => {
+        map.on('click', layerId, (e) => {
+          if (e.features && e.features.length > 0) {
+            const feature = e.features[0];
+            const properties = feature.properties || {};
+            const layer = properties.layer as 'people' | 'places' | 'assets';
+
+            if (!layer) return;
+
+            // Create popup
+            const popupHTML = generatePopupHTML(properties, layer);
+
+            new maplibregl.Popup()
+              .setLngLat((feature.geometry as any).coordinates)
+              .setHTML(popupHTML)
+              .addTo(map);
+          }
+        });
+
+        // Change cursor on hover
+        map.on('mouseenter', layerId, () => {
+          map.getCanvas().style.cursor = 'pointer';
+        });
+
+        map.on('mouseleave', layerId, () => {
+          map.getCanvas().style.cursor = '';
+        });
+      });
+
+      // Handle cluster clicks
+      ['people', 'places', 'assets'].forEach(layerId => {
+        map.on('click', layerId, (e) => {
+          const features = map.queryRenderedFeatures(e.point, {
+            layers: [layerId]
+          });
+
+          if (features.length > 0) {
+            const clusterId = features[0].properties?.cluster_id;
+
+            if (clusterId) {
+              const source = map.getSource(layerId) as maplibregl.GeoJSONSource;
+              // getClusterExpansionZoom now takes only the clusterId and returns a Promise in maplibregl >=3.0
+              const getExpansionZoom = (src: maplibregl.GeoJSONSource, cid: number) => {
+                // Fallback for both callback and promise APIs
+                if (typeof src.getClusterExpansionZoom === 'function') {
+                  try {
+                    // Check if API returns a Promise
+                    const res = src.getClusterExpansionZoom(cid);
+                    if (res && typeof (res as Promise<number>).then === 'function') {
+                      // Promise API
+                      (res as Promise<number>).then((zoom) => {
+                        map.easeTo({
+                          center: (features[0].geometry as any).coordinates,
+                          zoom: zoom || map.getZoom() + 2,
+                        });
+                      }).catch((err) => {
+                        // handle error if promise rejected
+                        // optionally log error
+                      });
+                      return;
+                    }
+                  } catch (e) {
+                    // fallback
+                  }
+                  // Fallback to callback API
+                  (src.getClusterExpansionZoom as any)(cid, (err: any, zoom: any) => {
+                    if (err) return;
+                    map.easeTo({
+                      center: (features[0].geometry as any).coordinates,
+                      zoom: zoom || map.getZoom() + 2,
+                    });
+                  });
+                }
+              };
+
+              getExpansionZoom(source, clusterId);
+            }
+          }
+        });
+      });
+    };
+
+    // Setup click handlers after a brief delay to ensure layers are added
+    setTimeout(setupClickHandlers, 500);
   }, []);
 
-  // Initialize layers from hierarchy
+  // Initialize layers
   useEffect(() => {
-    if (!mapLoaded || !manager) return;
+    if (!mapLoaded || !manager || !mapInstance) return;
 
-    // Create layer configurations from hierarchy
+    // Create layer configurations
     const layerConfigs: LayerConfig[] = [];
-    const allLayerIds = getAllLayerIds(layerHierarchy);
 
-    allLayerIds.forEach((layerId) => {
-      // Check if this is a heatmap layer
-      if (isHeatmapLayer(layerId)) {
-        const sourceId = getHeatmapSourceId(layerId);
-        
-        // Add source with empty GeoJSON for heatmap
-        if (!mapInstance?.getSource(sourceId)) {
-          addSource(sourceId, {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] },
-          });
-        }
+    // Define base layers with colors and icons
+    const baseLayerDefs = [
+      { id: 'people', name: 'People', color: '#FF6B6B', icon: 'user', endpoint: '/api/people' },
+      { id: 'places', name: 'Places', color: '#4ECDC4', icon: 'map-pin', endpoint: '/api/places' },
+      { id: 'assets', name: 'Assets', color: '#45B7D1', icon: 'box', endpoint: '/api/assets' },
+    ];
 
-        // Create heatmap layer config
-        const config = createHeatmapLayerFromId(layerId, sourceId);
-        config.visible = false;
-        
-        registerLayer(config);
-        layerConfigs.push(config);
-      } else {
-        // Regular layer handling
-        // Determine source ID based on layer ID
-        let sourceId = layerId;
+    baseLayerDefs.forEach(({ id, name, color, icon, endpoint }) => {
+      const sourceId = id;
 
-        // Map layer IDs to source IDs
-        if (layerId.startsWith('assets-')) {
-          sourceId = 'assets';
-        } else if (layerId.startsWith('places-')) {
-          sourceId = 'places';
-        } else if (layerId.startsWith('people-')) {
-          sourceId = 'people';
-        } else if (layerId.startsWith('aid_workers-')) {
-          sourceId = 'aid-workers';
-        }
+      // Add source with empty GeoJSON (only once per source)
+      if (!mapInstance.getSource(sourceId)) {
+        addSource(sourceId, {
+          type: 'geojson',
+          data: { type: 'FeatureCollection', features: [] },
+          cluster: true,
+          clusterRadius: 50,
+          clusterMaxZoom: 14,
+        });
+      }
 
-        // Add source with empty GeoJSON (only once per source)
-        if (!mapInstance?.getSource(sourceId)) {
-          addSource(sourceId, {
-            type: 'geojson',
-            data: { type: 'FeatureCollection', features: [] },
-            cluster: sourceId === 'assets' || sourceId === 'places',
-            clusterRadius: 50,
-            clusterMaxZoom: 14,
-          });
-        }
-
-        // Register layer
-        const config: LayerConfig = {
-          id: layerId,
-          name: layerId.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+      // Register layer with clustering support
+      const config: LayerConfig = {
+        id,
+        name,
+        type: 'circle',
+        sourceId,
+        style: {
           type: 'circle',
-          sourceId,
-          style: {
-            type: 'circle',
-            paint: {
-              'circle-radius': 8,
-              'circle-color': '#666',
-              'circle-stroke-width': 2,
-              'circle-stroke-color': '#fff',
-            },
+          paint: {
+            'circle-radius': [
+              'case',
+              ['has', 'point_count'],
+              ['interpolate', ['linear'], ['get', 'point_count'], 10, 20, 100, 30, 500, 40],
+              8
+            ],
+            'circle-color': color,
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#fff',
+            'circle-opacity': 0.8,
           },
-          metadata: {
-            icon: 'circle',
-            color: '#666',
-          },
-          visible: false,
-        };
+        },
+        metadata: {
+          icon,
+          color,
+          endpoint,
+        },
+        visible: true,
+      };
 
-        registerLayer(config);
-        layerConfigs.push(config);
+      registerLayer(config);
+      layerConfigs.push(config);
+
+      // Add cluster count layer
+      if (mapInstance) {
+        const clusterCountLayerId = `${id}-cluster-count`;
+        if (!mapInstance.getLayer(clusterCountLayerId)) {
+          mapInstance.addLayer({
+            id: clusterCountLayerId,
+            type: 'symbol',
+            source: sourceId,
+            filter: ['has', 'point_count'],
+            layout: {
+              'text-field': '{point_count_abbreviated}',
+              'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+              'text-size': 12,
+            },
+            paint: {
+              'text-color': '#ffffff',
+            },
+          });
+        }
       }
     });
 
     setActiveLayers(layerConfigs);
   }, [mapLoaded, manager, mapInstance, addSource, registerLayer]);
 
-  // Load layer data when visibility changes
+  // Load layer data when visibility changes or filters change
   useEffect(() => {
-    if (!mapLoaded || visibleLayers.size === 0) return;
+    if (!mapLoaded || !mapInstance) return;
 
     const loadLayerData = async (layerId: string) => {
       setLoadingLayers((prev) => new Set(prev).add(layerId));
 
       try {
-        // Map layer ID to API endpoint
-        const apiMap: Record<string, string> = {
-          'assets': '/api/assets?format=geojson',
-          'places': '/api/places?format=geojson',
-          'people': '/api/people?format=geojson',
-          'people-needs': '/api/people/needs?format=geojson',
-          'aid-workers': '/api/aid-workers/capabilities?format=geojson',
-          'asset-distributions': '/api/asset-distributions?format=geojson',
-          'place-status': '/api/places/status?format=geojson',
-        };
-
-        // Check if this is a heatmap layer
-        let endpoint = '';
-        if (isHeatmapLayer(layerId)) {
-          // Get heatmap-specific endpoint
-          const heatmapEndpoint = getHeatmapApiEndpoint(layerId);
-          if (!heatmapEndpoint) {
-            console.warn(`No API endpoint for heatmap layer: ${layerId}`);
-            return;
-          }
-          endpoint = `${heatmapEndpoint}?format=geojson&heatmap=true`;
-        } else {
-          // Regular layer endpoint
-          if (layerId.startsWith('assets-')) {
-            const assetType = layerId.replace('assets-', '');
-            endpoint = `/api/assets?format=geojson&type=${assetType}`;
-          } else if (layerId.startsWith('places-')) {
-            const placeType = layerId.replace('places-', '');
-            endpoint = `/api/places?format=geojson&type=${placeType}`;
-          } else {
-            endpoint = apiMap[layerId] || apiMap[layerId.split('-')[0]];
-          }
-        }
-
+        const layer = activeLayers.find(l => l.id === layerId);
+        const endpoint = layer?.metadata?.endpoint;
         if (!endpoint) {
-          console.warn(`No API endpoint for layer: ${layerId}`);
+          console.warn(`No endpoint for layer: ${layerId}`);
           return;
         }
 
-        // Add filter params
+        // Build query params from filters
         const params = new URLSearchParams();
+
         if (filters.dateRange) {
           params.set('startDate', filters.dateRange.start.toISOString());
           params.set('endDate', filters.dateRange.end.toISOString());
         }
-        if (filters.locations?.parishIds) {
+        if (filters.locations?.parishIds && filters.locations.parishIds.length > 0) {
           params.set('parishId', filters.locations.parishIds[0]);
         }
-        if (filters.locations?.communityIds) {
+        if (filters.locations?.communityIds && filters.locations.communityIds.length > 0) {
           params.set('communityId', filters.locations.communityIds[0]);
         }
 
-        const url = endpoint + (params.toString() ? `&${params.toString()}` : '');
+        const url = `${(layer?.metadata as { endpoint?: string })?.endpoint}${params.toString() ? `?${params.toString()}` : ''}`;
+        console.log(`Loading data for ${layerId} from ${url}`);
+
         const response = await fetch(url);
-        const geoJSON = await response.json();
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const apiData = await response.json();
+        console.log(`Received API data for ${layerId}:`, apiData);
+
+        // Transform API response to GeoJSON
+        const geoJSON = transformToGeoJSON(apiData, layerId as 'people' | 'places' | 'assets');
+        console.log(`Transformed to ${geoJSON.features?.length || 0} features for ${layerId}`);
 
         // Update layer data
         if (mapRef.current && manager) {
-          const sourceId = isHeatmapLayer(layerId) 
-            ? getHeatmapSourceId(layerId)
-            : activeLayers.find((l) => l.id === layerId)?.sourceId || layerId;
           updateLayerData(layerId, geoJSON);
 
           // Update count
@@ -275,13 +372,11 @@ function DashboardContent() {
       }
     };
 
-    // Load data for newly visible layers
+    // Load data for all visible layers
     visibleLayers.forEach((layerId) => {
-      if (!layerCounts.has(layerId)) {
-        loadLayerData(layerId);
-      }
+      loadLayerData(layerId);
     });
-  }, [visibleLayers, filters, mapLoaded, activeLayers]);
+  }, [visibleLayers, filters, mapLoaded, activeLayers, mapInstance, manager, updateLayerData]);
 
   // Handle layer toggle
   const handleLayerToggle = useCallback((layerId: string, visible: boolean) => {
@@ -297,20 +392,18 @@ function DashboardContent() {
 
     // Update map layer visibility
     if (mapRef.current && manager) {
-      setLayerVisibility(layerId, visible);
+      setCategoryVisibility(layerId, visible);
+
     }
   }, [manager, setLayerVisibility]);
 
   // Handle filter change
   const handleFiltersChange = useCallback((newFilters: MapFiltersType) => {
     setFilters(newFilters);
-    
+
     // Update URL with filters
     const params = serializeFilters(newFilters);
     router.push(`/dashboard?${params.toString()}`, { scroll: false });
-
-    // Reload visible layers with new filters
-    setLayerCounts(new Map()); // Clear counts to trigger reload
   }, [router]);
 
   // Initialize real-time connection
@@ -319,44 +412,21 @@ function DashboardContent() {
 
     // Get subscribed layer types
     const subscribedLayers = Array.from(visibleLayers)
-      .map((layerId) => {
-        if (layerId.startsWith('assets')) return 'assets' as const;
-        if (layerId.startsWith('places')) return 'places' as const;
-        if (layerId.startsWith('people')) return 'people' as const;
-        if (layerId.startsWith('aid')) return 'aid_workers' as const;
-        return null;
-      })
-      .filter((l): l is 'assets' | 'places' | 'people' | 'aid_workers' => l !== null);
+      .filter((layerId): layerId is 'assets' | 'places' | 'people' =>
+        ['assets', 'places', 'people'].includes(layerId)
+      );
 
     if (subscribedLayers.length === 0) return;
 
     // Create real-time connection
     const connection = createRealtimeConnection({
-      layers: subscribedLayers,
+      layers: subscribedLayers as ('assets' | 'places' | 'people' | 'aid_workers')[],
       onUpdate: (event) => {
-        // Handle update event
-        if (mapRef.current && manager) {
-          // Map layerType to layerId and update
-          console.log('Real-time update:', event);
-          // Reload layer data when updates arrive
-          const layerIdMap: Record<string, string> = {
-            assets: 'assets',
-            places: 'places',
-            people: 'people',
-            aid_workers: 'aid-workers',
-            distributions: 'asset-distributions',
-            needs: 'people-needs',
-            status: 'place-status',
-          };
-          const layerId = layerIdMap[event.layerType];
-          if (layerId && visibleLayers.has(layerId)) {
-            // Trigger reload by clearing count
-            setLayerCounts((prev) => {
-              const next = new Map(prev);
-              next.delete(layerId);
-              return next;
-            });
-          }
+        console.log('Real-time update:', event);
+        // Reload the updated layer
+        if (visibleLayers.has(event.layerType)) {
+          // Trigger reload by clearing loading state
+          setLoadingLayers((prev) => new Set(prev).add(event.layerType));
         }
       },
       onStatusChange: (status) => {
@@ -369,7 +439,7 @@ function DashboardContent() {
     return () => {
       connection.disconnect();
     };
-  }, [mapLoaded, visibleLayers, manager]);
+  }, [mapLoaded, visibleLayers]);
 
   // Get visible layer configs for legend and stats
   const visibleLayerConfigs = activeLayers.filter((layer) =>
@@ -425,8 +495,8 @@ function DashboardContent() {
                 connectionStatus === 'connected'
                   ? 'green'
                   : connectionStatus === 'connecting'
-                  ? 'yellow'
-                  : 'red'
+                    ? 'yellow'
+                    : 'red'
               }
               size="lg"
               visibleFrom="sm"
@@ -434,8 +504,8 @@ function DashboardContent() {
               {connectionStatus === 'connected'
                 ? '● Live'
                 : connectionStatus === 'connecting'
-                ? '● Connecting'
-                : '● Offline'}
+                  ? '● Connecting'
+                  : '● Offline'}
             </Badge>
 
             {/* Mobile Actions */}
@@ -504,9 +574,9 @@ function DashboardContent() {
         }}
       >
         {/* Map */}
-        <Box 
-          style={{ 
-            width: '100%', 
+        <Box
+          style={{
+            width: '100%',
             height: '100%',
             position: 'relative',
           }}
@@ -564,6 +634,33 @@ function DashboardContent() {
                 loadingLayers={loadingLayers}
                 onLayerToggle={handleLayerToggle}
               />
+            </div>
+
+            {/* Legend */}
+            <div style={{ padding: '16px', flexShrink: 0, borderTop: '1px solid #e9ecef' }}>
+              <Text size="sm" fw={600} mb="xs">Legend</Text>
+              <Stack gap="xs">
+                {activeLayers.map(layer => (
+                  <Group key={layer.id} gap="xs">
+                    <Box
+                      style={{
+                        width: 16,
+                        height: 16,
+                        borderRadius: '50%',
+                        backgroundColor: layer.metadata?.color || '#666',
+                        border: '2px solid #fff',
+                        boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
+                      }}
+                    />
+                    <Text size="sm">{layer.name}</Text>
+                    {layerCounts.has(layer.id) && (
+                      <Badge size="xs" color="gray" variant="light">
+                        {layerCounts.get(layer.id)}
+                      </Badge>
+                    )}
+                  </Group>
+                ))}
+              </Stack>
             </div>
           </Paper>
         </Box>
@@ -663,6 +760,33 @@ function DashboardContent() {
             loadingLayers={loadingLayers}
             onLayerToggle={handleLayerToggle}
           />
+
+          {/* Legend in mobile drawer */}
+          <Box mt="xl" pt="xl" style={{ borderTop: '1px solid #e9ecef' }}>
+            <Text size="sm" fw={600} mb="xs">Legend</Text>
+            <Stack gap="xs">
+              {activeLayers.map(layer => (
+                <Group key={layer.id} gap="xs">
+                  <Box
+                    style={{
+                      width: 16,
+                      height: 16,
+                      borderRadius: '50%',
+                      backgroundColor: layer.metadata?.color || '#666',
+                      border: '2px solid #fff',
+                      boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
+                    }}
+                  />
+                  <Text size="sm">{layer.name}</Text>
+                  {layerCounts.has(layer.id) && (
+                    <Badge size="xs" color="gray" variant="light">
+                      {layerCounts.get(layer.id)}
+                    </Badge>
+                  )}
+                </Group>
+              ))}
+            </Stack>
+          </Box>
         </Drawer>
 
         <Drawer
@@ -720,4 +844,3 @@ export default function DashboardPage() {
     </Suspense>
   );
 }
-

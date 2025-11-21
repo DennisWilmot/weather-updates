@@ -4,6 +4,7 @@
  */
 
 import 'dotenv/config';
+import { cookies } from 'next/headers';
 
 const BASE_URL = process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_BETTER_AUTH_URL || 'http://localhost:3000';
 
@@ -104,11 +105,11 @@ async function testSignIn(email: string, password: string) {
       return { success: true, cookies };
     } else {
       console.log('❌ sign-in endpoint returned error');
-      return { success: false };
+      return { success: false, cookies: "" };
     }
   } catch (error: any) {
     console.error('❌ Error testing sign-in:', error.message);
-    return { success: false };
+    return { success: false, cookies: "" };
   }
 }
 
@@ -157,7 +158,7 @@ async function runTests() {
   const signUpResult = await testSignUp();
   
   // Test 3: Sign in (if sign up worked)
-  let signInResult = { success: false, cookies: null };
+  let signInResult = { success: false, cookies: "" } as { success: boolean, cookies: string | null};
   if (signUpResult.success && signUpResult.email) {
     signInResult = await testSignIn(signUpResult.email, 'testpassword123');
   }
