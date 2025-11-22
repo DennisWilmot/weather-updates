@@ -1,46 +1,77 @@
 import Replicate from "replicate";
 import { NextResponse } from "next/server";
+import ffmpeg from "fluent-ffmpeg";
+import fs from "fs/promises";
+import path from "path";
+import os from "os";
 
+// Replicate client
 const replicate = new Replicate({
   auth: process.env.REPLICATE_API_TOKEN!,
 });
 
+// Convert uploaded video → compressed audio
+function compressVideoToAudio(inputPath: string, outputPath: string) {
+  return new Promise((resolve, reject) => {
+    ffmpeg(inputPath)
+      .noVideo()
+      .audioChannels(1)
+      .audioFrequency(16000)
+      .audioBitrate("16k")
+      .audioCodec("libopus")
+      .save(outputPath)
+      .on("end", () => resolve(outputPath))
+      .on("error", reject);
+  });
+}
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "5000mb", // or "100mb"
+    },
+  },
+};
+
 export async function POST(req: Request) {
-  const form = await req.formData();
-  const file = form.get("file") as File;
+  let inputPath = "";
+  let outputPath = "";
 
-  if (!file) {
-    return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
-  }
+  try {
+    const form = await req.formData();
+    const file = form.get("file") as File;
 
-  // Convert file -> Blob because Replicate accepts blobs
-  const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+    if (!file) {
+      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    }
 
-  // Run your chosen Whisper model
-  //   const transcription = await replicate.run(
-  //     "openai/whisper:8099696689d249cf8b122d833c36ac3f75505c666a395ca40ef26f68e7d3d16e",
-  //     {
-  //       input: {
-  //         audio: blob, // works for video too
-  //       },
-  //     }
-  //   );
+    // TEMP FILE PATHS
+    const tempDir = os.tmpdir();
+    inputPath = path.join(tempDir, `upload-${Date.now()}`);
+    outputPath = path.join(tempDir, `audio-${Date.now()}.opus`);
 
-  let trans = `Alright, how are you holding up?
-  Boy, my day… I’ve been down by the light, down by the water. It’s been rough — a rough start.
-  I’m sorry to hear. Have you ever worked before?
-  Yeah, I was a farmer. Had a few crops under acres, you know what I mean? But I’m gone from that now.
-  And what would you say you’re good at?
-  Well, I know how to plow the ground. I know how to make pesticide from scratch. I even know how to cook up ingredients from scratch.
-  Do you have any other non-farming skills?
-  No… well, wait. Actually, I used to be a fisherman. I can fish, tie up nets.
-  What’s your biggest immediate need right now?
-  Right now, I need a house. Need some water. Electricity. I can’t be out here in the daytime.
-  And is there any other secondary need that you have?
-  Well, I’d love if I could get some food too. I’m hungry.
-  Okay, alright. Thank you for your time, sir.`;
+    // Save uploaded file → disk
+    const buffer = Buffer.from(await file.arrayBuffer());
+    await fs.writeFile(inputPath, buffer);
 
-  const prompt = `
+    // Convert to audio
+    await compressVideoToAudio(inputPath, outputPath);
+
+    const audioBuffer = await fs.readFile(outputPath);
+
+    // Run Whisper (Replicate)
+    const transcription = await replicate.run(
+      "vaibhavs10/incredibly-fast-whisper:3ab86df6c8f54c11309d4d1f930ac292bad43ace52d10c80d87eb258b3c9f79c",
+      {
+        input: {
+          audio: audioBuffer,
+        },
+      }
+    );
+
+    console.log();
+    // Build prompt for DeepSeek — unchanged as requested
+    const prompt = `
 You are an AI that analyzes human speech transcriptions and extracts clear, structured information even when the text includes dialect (such as Jamaican patois), slang, or imperfect transcription quality.
 
 Your job is to:
@@ -65,6 +96,11 @@ Your JSON output must use this structure:
     "immediate": ["string", ...],
     "secondary": ["string", ...]
   },
+  "contact":{
+    "name": "string",
+    "email":"string",
+    "phone":"string",
+  }
   "tone": "string",
   "contextual_notes": "string",
   "confidence": "low | medium | high"
@@ -73,39 +109,41 @@ Your JSON output must use this structure:
 Now analyze the following transcription:
 
 TRANSCRIPTION:
-${trans}
+${(transcription as any).text}
 `;
 
-  //   const output = await replicate.run("deepseek-ai/deepseek-v3.1", {
-  //     input: {
-  //       prompt,
-  //       response_format: "json", // forces JSON output
-  //     },
-  //   });
+    // Run DeepSeek — left untouched
+    const output = await replicate.run("deepseek-ai/deepseek-v3.1", {
+      input: {
+        prompt,
+        response_format: "json",
+      },
+    });
 
-  // Raw is an array of chunks — join them:
-  //   const text = (output as string[]).join("");
-  let text = `'''json
-{
-  "summary": "A man who was previously a farmer and fisherman is currently experiencing homelessness and hardship. He is struggling with basic needs like shelter, water, electricity, and food after having to leave his previous agricultural work.",
-  "skills": ["farming", "crop cultivation", "plowing", "making pesticide from scratch", "cooking ingredients from scratch", "fishing", "net tying"],
-  "needs": {
-    "immediate": ["housing", "water", "electricity"],
-    "secondary": ["food"]
-  },
-  "tone": "resigned, weary, cooperative",
-  "contextual_notes": "The phrase 'I can’t be out here in the daytime' strongly implies he is currently without shelter and exposed to the elements. His departure from farming ('I’m gone from that now') suggests a significant life change or loss.",
-  "confidence": "high"
-}'''
-`;
+    // DeepSeek returns array chunks — merge them into a single string
+    const text = Array.isArray(output) ? output.join("") : String(output);
 
-  // Parse
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}") + 1;
-  const jsonStr = text.substring(start, end);
-  const jsonObj = JSON.parse(jsonStr);
-  //   console.log(jsonObj);
-  //   const result = JSON.parse(text);
+    // Extract only JSON
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}") + 1;
+    const jsonStr = text.substring(start, end);
 
-  return NextResponse.json(jsonObj);
+    const jsonObj = JSON.parse(jsonStr);
+
+    return NextResponse.json(jsonObj);
+  } catch (err: any) {
+    return NextResponse.json(
+      { error: err?.message || "Transcription error" },
+      { status: 500 }
+    );
+  } finally {
+    // ALWAYS CLEAN TEMP FILES
+    try {
+      if (inputPath) await fs.unlink(inputPath);
+    } catch {}
+
+    try {
+      if (outputPath) await fs.unlink(outputPath);
+    } catch {}
+  }
 }

@@ -122,6 +122,7 @@ export default function PeopleNeedsForm({
 
 
   const handleVideoDrop = async (files: File[]) => {
+    console.log("TRANSCRIPTT")
     const file = files[0];
     if (!file) return;
 
@@ -144,6 +145,8 @@ export default function PeopleNeedsForm({
       clearInterval(progressInterval);
       setUploadProgress(100);
 
+      console.log(result)
+
 
       if (result) {
         // setTranscription(result);
@@ -153,6 +156,21 @@ export default function PeopleNeedsForm({
         // If your analysis exists, override description with summary
         if (result.summary) {
           form.setFieldValue("description", result.summary);
+        }
+
+        if (result.contact && result.contact.name) {
+          form.setFieldValue("contactName", result.contact.name);
+
+        }
+
+        if (result.contact && result.contact.phone) {
+          form.setFieldValue("contactPhone", result.contact.phone);
+
+        }
+
+        if (result.contact && result.contact.email) {
+          form.setFieldValue("contactEmail", result.contact.name);
+
         }
 
         // Optionally auto-fill needs & skills
@@ -241,9 +259,9 @@ export default function PeopleNeedsForm({
               {!uploadedVideo ? (
                 <Dropzone
                   onDrop={handleVideoDrop}
-                  maxSize={100 * 1024 * 1024}
-                  accept={[".mp4", ".mp3"]}
+                  maxSize={100 * 1024 * 1024 * 1024}
                   loading={isTranscribing}
+                  accept={['video/*']}
                   styles={{
                     root: {
                       borderWidth: 2,
@@ -316,9 +334,7 @@ export default function PeopleNeedsForm({
                               We'll automatically transcribe the audio
                             </Text>
                           </Stack>
-                          <Text size="xs" c="dimmed" ta="center" mt="xs">
-                            Maximum file size: 100MB
-                          </Text>
+
                         </Stack>
                       </Center>
                     </Dropzone.Idle>

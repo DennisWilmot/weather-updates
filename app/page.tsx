@@ -48,7 +48,23 @@ import { LayerConfig } from '@/lib/maps/layer-types';
 import { transformToGeoJSON } from './../components/transform';
 import { generatePopupHTML } from './../components/mapPopUp';
 import DashboardNavigation from '@/components/DashboardNavigation';
-import { ChevronUp, Filter, ChevronDown, Zap, ChevronLeft, X, ChevronRight, Users } from 'lucide-react';
+import { ChevronUp, Filter, ChevronDown, Zap, ChevronLeft, X, ChevronRight, Users, Briefcase } from 'lucide-react';
+import AIMatchingPanel from '@/components/AIMatchingPanel';
+
+
+interface MatchNode {
+  id: string;
+  type: "person" | "asset" | "place";
+  name: string;
+  latitude: number;
+  longitude: number
+}
+
+interface MatchChain {
+  id: string;
+  nodes: MatchNode[];
+}
+
 
 function DashboardContent() {
   const router = useRouter();
@@ -107,6 +123,19 @@ function DashboardContent() {
       setFilters(urlFilters);
     }
   }, [searchParams]);
+
+  const getIcon = (layerId: string) => {
+    switch (layerId) {
+      case 'people':
+        return <Users size={20} />;
+      case 'assets':
+        return <Box size={20} />;
+      case 'skills':
+        return <Briefcase size={20} />;
+      default:
+        return null;
+    }
+  };
 
   const setCategoryVisibility = (category: string, visible: boolean) => {
     if (!mapRef.current) return;
@@ -237,63 +266,66 @@ function DashboardContent() {
       const fullRows = layerRawData[layerId];
       if (!fullRows) return;
 
-      const enabledSubTypes =
-        subTypeFilters[layerId] && subTypeFilters[layerId].size > 0
-          ? subTypeFilters[layerId]
-          : null;
+      const disabledSubTypes = subTypeFilters[layerId];
+      const dateRange = filters?.dateRange;
+      console.log("DATE R ", dateRange)
 
-      // Filter rows in-place
-      const filteredRows = enabledSubTypes
-        ? fullRows.filter(row => enabledSubTypes.has(row.type))
-        : fullRows;
+      let filteredRows = [...fullRows];
 
-      // Convert filtered rows → GeoJSON
+      // 1. Subtype filtering
+      if (disabledSubTypes && disabledSubTypes.size > 0) {
+        filteredRows = filteredRows.filter(row => !disabledSubTypes.has(row.type));
+      }
+
+      // 2. Local date filtering
+      if (dateRange) {
+        const start = new Date(dateRange.start);
+        const end = new Date(dateRange.end);
+
+        filteredRows = filteredRows.filter(row => {
+          console.log(row, "ROWWW")
+          const rowDate = new Date(row.createdAt);
+          return rowDate >= start && rowDate <= end;
+        });
+
+        console.log(filteredRows, "FILTERD")
+      }
+
+      // Convert → GeoJSON
       const filteredGeoJSON = transformToGeoJSON(
         { [layerId]: filteredRows },
         layerId as 'people' | 'places' | 'assets'
       );
 
-      // Update the map source
       updateLayerData(layerId, filteredGeoJSON);
 
-      // Update counts
       setLayerCounts(prev => {
         const next = new Map(prev);
         next.set(layerId, filteredRows.length);
         return next;
       });
     });
-  }, [subTypeFilters, layerRawData, mapLoaded]);
-
+  }, [subTypeFilters, filters?.dateRange, layerRawData, mapLoaded, manager, updateLayerData]);
 
   const toggleSubType = (layerId: string, subTypeId: string) => {
     setSubTypeFilters(prev => {
-      const next = { ...prev };
-      if (!next[layerId]) next[layerId] = new Set();
+      const currentSet = prev[layerId] ? new Set(prev[layerId]) : new Set<string>();
 
-      if (next[layerId].has(subTypeId)) {
-        next[layerId].delete(subTypeId);
+      if (currentSet.has(subTypeId)) {
+        // Re-enable this subtype
+        currentSet.delete(subTypeId);
       } else {
-        next[layerId].add(subTypeId);
+        // Disable this subtype
+        currentSet.add(subTypeId);
       }
 
-      return next;
+      return {
+        ...prev,
+        [layerId]: currentSet,
+      };
     });
-
-    // Also update the visible state inside the `layers` array
-    setLayers(prev =>
-      prev.map(layer => {
-        if (layer.id !== layerId) return layer;
-
-        return {
-          ...layer,
-          subTypes: layer.subTypes.map((sub: any) =>
-            sub.id === subTypeId ? { ...sub, enabled: !sub.enabled } : sub
-          )
-        };
-      })
-    );
   };
+
 
   const toggleLayer = (layerId: string) => {
     setLayers(prev =>
@@ -398,17 +430,14 @@ function DashboardContent() {
   }, [mapLoaded, manager, mapInstance, addSource, registerLayer]);
 
   useEffect(() => {
-    // Do nothing until data-loaded + activeLayers are ready
     if (!activeLayers.length) return;
 
     const newLayers = activeLayers.map(layer => {
       const layerId = layer.id;
-
-      // Raw DB rows for this layer
       const rows = layerRawData[layerId] || [];
 
-      // Derive subtypes from DB
-      const subtypeMap = new Map();
+      // collect distinct types from DB rows
+      const subtypeMap = new Map<string, { id: string; name: string; color: string }>();
 
       rows.forEach(item => {
         if (!item.type) return;
@@ -416,26 +445,30 @@ function DashboardContent() {
           subtypeMap.set(item.type, {
             id: item.type,
             name: item.type.replace(/_/g, ' ').replace(/\b\w/g, (c: any) => c.toUpperCase()),
-            color: layer.metadata?.color,
-            enabled: true,
+            color: layer.metadata?.color ?? '#666',
           });
         }
       });
+
+      const disabledSet = subTypeFilters[layerId] ?? new Set<string>();
 
       return {
         id: layer.id,
         name: layer.name,
         color: layer.metadata?.color,
         enabled: visibleLayers.has(layerId),
-        expanded: false,
+        expanded: true,
         count: layerCounts.get(layerId) || 0,
-        subTypes: Array.from(subtypeMap.values()),
+        subTypes: Array.from(subtypeMap.values()).map(sub => ({
+          ...sub,
+          // UI enabled if NOT in the disabled set
+          enabled: !disabledSet.has(sub.id),
+        })),
       };
     });
 
     setLayers(newLayers);
-  }, [activeLayers, layerRawData, layerCounts, visibleLayers]);
-
+  }, [activeLayers, layerRawData, layerCounts, visibleLayers, subTypeFilters]);
 
   // Load layer data when visibility changes or filters change
   useEffect(() => {
@@ -476,6 +509,8 @@ function DashboardContent() {
 
         const apiData = await response.json();
 
+        console.log(apiData, "DAATAA")
+
         let rows = apiData[layerId] || apiData.data || apiData || [];
 
         // Transform filtered rows into GeoJSON
@@ -514,7 +549,7 @@ function DashboardContent() {
     visibleLayers.forEach((layerId) => {
       loadLayerData(layerId);
     });
-  }, [visibleLayers, filters, mapLoaded, activeLayers, mapInstance, manager, updateLayerData]);
+  }, [visibleLayers, mapLoaded, activeLayers, mapInstance, manager, updateLayerData]);
 
   // Handle layer toggle
   const handleLayerToggle = useCallback((layerId: string, visible: boolean) => {
@@ -540,8 +575,8 @@ function DashboardContent() {
     setFilters(newFilters);
 
     // Update URL with filters
-    const params = serializeFilters(newFilters);
-    router.push(`/dashboard?${params.toString()}`, { scroll: false });
+    // const params = serializeFilters(newFilters);
+    // router.push(`/dashboard?${params.toString()}`, { scroll: false });
   }, [router]);
 
   // expand/collapse toggle per layer
@@ -554,6 +589,61 @@ function DashboardContent() {
       )
     );
   };
+
+  // ---- MATCH DRAWING LAYER ----
+  const handleMatchSelect = useCallback((match: MatchChain) => {
+    if (!mapRef.current) return;
+    const map = mapRef.current;
+
+    // 1. Build LineString from node coordinates
+    const coords = match.nodes.map(n => [n.longitude, n.latitude]);
+
+    const lineGeoJSON = {
+      type: "FeatureCollection",
+      features: [
+        {
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: coords
+          }
+        }
+      ]
+    };
+
+    // 2. Add or update source
+    if (!map.getSource("match-line")) {
+      map.addSource("match-line", {
+        type: "geojson",
+        data: lineGeoJSON as GeoJSON.FeatureCollection
+      });
+    } else {
+      const src = map.getSource("match-line") as maplibregl.GeoJSONSource;
+      src.setData(lineGeoJSON as GeoJSON.FeatureCollection);
+    }
+
+    // 3. Add or update layer
+    if (!map.getLayer("match-line-layer")) {
+      map.addLayer({
+        id: "match-line-layer",
+        type: "line",
+        source: "match-line",
+        paint: {
+          "line-color": "#1D4ED8",
+          "line-width": 4,
+          "line-opacity": 0.85
+        }
+      });
+    }
+
+    // 4. Zoom to fit
+    const bounds = new maplibregl.LngLatBounds();
+    coords.forEach(c => bounds.extend(c as maplibregl.LngLatLike));
+    map.fitBounds(bounds, { padding: 60, duration: 600 });
+
+  }, []);
+
+
 
 
   // Initialize real-time connection
@@ -662,8 +752,7 @@ function DashboardContent() {
         {/* Floating Desktop Panels */}
         {/* LEFT PANEL – Map Layers */}
         <div
-          className={`absolute top-0 left-0 h-full z-20 transition-all duration-300 pointer-events-none ${isLeftPanelOpen ? "w-80" : "w-0"
-            }`}
+          className={`absolute top-0 left-0 h-full z-20 transition-all duration-300 pointer-events-none ${isLeftPanelOpen ? "w-full sm:w-96 md:w-80 lg:w-80" : "w-0"}`}
         >
           <div
             className={`h-full flex flex-col bg-white shadow-xl border-r border-gray-200 pointer-events-auto ${isLeftPanelOpen ? "" : "hidden"
@@ -737,7 +826,11 @@ function DashboardContent() {
                         {layer.subTypes.map((sub: any) => (
                           <div key={sub.id} className="flex items-center gap-2">
                             <button
-                              onClick={() => toggleSubType(layer.id, sub.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                e.preventDefault()
+                                toggleSubType(layer.id, sub.id);
+                              }}
                               className={`relative w-9 h-5 rounded-full transition-colors ${sub.enabled ? "bg-[#1a1a3c]" : "bg-gray-300"
                                 }`}
                             >
@@ -770,8 +863,9 @@ function DashboardContent() {
         {!isLeftPanelOpen && (
           <button
             onClick={() => setIsLeftPanelOpen(true)}
-            className="absolute top-4 left-4 z-20 bg-white shadow-lg rounded-lg p-3 hover:bg-gray-50 transition-colors pointer-events-auto"
+            className="absolute top-4 border-1 border-gray-500 left-4 z-20 flex items-center bg-white shadow-lg rounded-lg p-3 hover:bg-gray-50 transition-colors pointer-events-auto"
           >
+            <h3 className='text-lg mr-3 font-bold text-gray-700'>Layers</h3>
             <ChevronRight size={20} className="text-gray-700" />
           </button>
         )}
@@ -798,7 +892,7 @@ function DashboardContent() {
 
         </Drawer>
         <div
-          className={`absolute top-0 right-0 h-full z-20 transition-all duration-300 pointer-events-none ${isRightPanelOpen ? "w-80" : "w-0"}`}
+          className={`absolute top-0 right-0 h-full z-20 transition-all duration-300 pointer-events-none ${isRightPanelOpen ? "w-full sm:w-96 md:w-[400px] lg:w-[30%]" : "w-0"}`}
         >
           <div className={`h-full flex flex-col bg-white shadow-xl border-l border-gray-200 pointer-events-auto ${isRightPanelOpen ? "" : "hidden"}`}>
             <div className="bg-[#1a1a3c] p-6 flex-shrink-0">
@@ -847,22 +941,7 @@ function DashboardContent() {
                 )}
               </div>
 
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-dashed border-blue-300 rounded-xl p-8 text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Zap size={32} className="text-blue-600" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">AI Matching System</h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  Intelligently match missions with drones.
-                </p>
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-lg border border-blue-200">
-                  <span className="relative flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500" />
-                  </span>
-                  <span className="text-sm font-medium text-gray-700">Coming Soon</span>
-                </div>
-              </div>
+              <AIMatchingPanel onMatchClick={(chain: any) => handleMatchSelect(chain)} />
             </div>
           </div>
         </div>
@@ -870,11 +949,13 @@ function DashboardContent() {
         {!isRightPanelOpen && (
           <button
             onClick={() => setIsRightPanelOpen(true)}
-            className="absolute top-4 right-4 z-20 bg-white shadow-lg rounded-lg p-3 hover:bg-gray-50 transition-colors pointer-events-auto"
+            className="absolute bottom-4 sm:top-4 sm:bottom-auto right-4 z-20 border border-gray-500 bg-white shadow-lg flex items-center rounded-lg p-3 hover:bg-gray-50 transition-colors pointer-events-auto"
           >
             <ChevronLeft size={20} className="text-gray-700" />
+            <h3 className='text-lg ml-3 font-bold text-gray-700'>Filter & Tools</h3>
           </button>
         )}
+
 
         <Drawer
           opened={filtersDrawerOpened}

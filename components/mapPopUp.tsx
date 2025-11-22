@@ -1,256 +1,179 @@
-/**
- * Map Popup Component - Shows details when clicking on map features
- */
+export function generatePopupHTML(
+    properties: Record<string, any>,
+    layer: 'people' | 'places' | 'assets'
+): string {
+    const color =
+        layer === 'people'
+            ? '#FF6B6B'
+            : layer === 'places'
+                ? '#4ECDC4'
+                : '#45B7D1';
 
-import { Box, Text, Stack, Group, Badge, Divider } from '@mantine/core';
-import { IconUser, IconMapPin, IconBox, IconPhone, IconMail, IconBuilding } from '@tabler/icons-react';
+    const iconSVG = {
+        user: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" stroke-width="1.5" stroke="currentColor" fill="none" viewBox="0 0 24 24"><path stroke="none" d="M0 0h24v24H0z"/><circle cx="12" cy="7" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>`,
 
-export interface PopupProps {
-    properties: Record<string, any>;
-    layer: 'people' | 'places' | 'assets';
-}
+        phone: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" stroke-width="1.5" stroke="currentColor" fill="none" viewBox="0 0 24 24"><path d="M4 4h5l2 5l-2 2a12 12 0 0 0 6 6l2-2l5 2v5a1 1 0 0 1 -1 1a17 17 0 0 1 -17-17a1 1 0 0 1 1 -1"/></svg>`,
 
-export function MapPopup({ properties, layer }: PopupProps) {
-    const getIcon = () => {
-        switch (layer) {
-            case 'people':
-                return <IconUser size={20} color="#FF6B6B" />;
-            case 'places':
-                return <IconMapPin size={20} color="#4ECDC4" />;
-            case 'assets':
-                return <IconBox size={20} color="#45B7D1" />;
-        }
+        mail: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" stroke-width="1.5" stroke="currentColor" fill="none" viewBox="0 0 24 24"><path d="M3 7l9 6l9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>`,
+
+        pin: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" stroke-width="1.5" stroke="currentColor" fill="none" viewBox="0 0 24 24"><path d="M12 11m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/><path d="M8 11c0 4.418 2.686 8 4 8s4-3.582 4-8a4 4 0 1 0 -8 0"/></svg>`,
+
+        building: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" stroke-width="1.5" stroke="currentColor" fill="none" viewBox="0 0 24 24"><path d="M3 21v-13l9-4l9 4v13"/><path d="M13 13h4v8h-10v-6h6v6"/></svg>`,
+
+        box: `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" stroke-width="1.5" stroke="currentColor" fill="none" viewBox="0 0 24 24"><path d="M12 3l8 4.5l-8 4.5l-8-4.5z"/><path d="M4 7.5v9l8 4.5l8-4.5v-9"/></svg>`
     };
 
-    const getTypeLabel = (type: string) => {
-        return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    };
-
-    return (
-        <Box style={{ minWidth: 250, maxWidth: 350 }}>
-            <Group gap="xs" mb="sm">
-                {getIcon()}
-                <Text fw={600} size="lg">
-                    {properties.name}
-                </Text>
-            </Group>
-
-            <Stack gap="xs">
-                <Badge color={
-                    layer === 'people' ? 'red' :
-                        layer === 'places' ? 'teal' :
-                            'blue'
-                } size="sm">
-                    {getTypeLabel(properties.type)}
-                </Badge>
-
-                {/* People-specific fields */}
-                {layer === 'people' && (
-                    <>
-                        {properties.contactName && (
-                            <Group gap="xs">
-                                <IconUser size={16} />
-                                <Text size="sm">{properties.contactName}</Text>
-                            </Group>
-                        )}
-                        {properties.contactPhone && (
-                            <Group gap="xs">
-                                <IconPhone size={16} />
-                                <Text size="sm">{properties.contactPhone}</Text>
-                            </Group>
-                        )}
-                        {properties.contactEmail && (
-                            <Group gap="xs">
-                                <IconMail size={16} />
-                                <Text size="sm" style={{ wordBreak: 'break-word' }}>
-                                    {properties.contactEmail}
-                                </Text>
-                            </Group>
-                        )}
-                        {properties.organization && (
-                            <Group gap="xs">
-                                <IconBuilding size={16} />
-                                <Text size="sm">{properties.organization}</Text>
-                            </Group>
-                        )}
-                    </>
-                )}
-
-                {/* Places-specific fields */}
-                {layer === 'places' && (
-                    <>
-                        {properties.address && (
-                            <Group gap="xs">
-                                <IconMapPin size={16} />
-                                <Text size="sm">{properties.address}</Text>
-                            </Group>
-                        )}
-                        {properties.maxCapacity && (
-                            <Text size="sm">
-                                <strong>Capacity:</strong> {properties.maxCapacity}
-                            </Text>
-                        )}
-                        {properties.description && (
-                            <Text size="sm" c="dimmed">
-                                {properties.description}
-                            </Text>
-                        )}
-                        {properties.verified && (
-                            <Badge color="green" size="xs" variant="light">
-                                Verified
-                            </Badge>
-                        )}
-                    </>
-                )}
-
-                {/* Assets-specific fields */}
-                {layer === 'assets' && (
-                    <>
-                        {properties.serialNumber && (
-                            <Text size="sm">
-                                <strong>Serial:</strong> {properties.serialNumber}
-                            </Text>
-                        )}
-                        {properties.status && (
-                            <Badge
-                                color={
-                                    properties.status === 'available' ? 'green' :
-                                        properties.status === 'in_use' ? 'yellow' :
-                                            properties.status === 'maintenance' ? 'orange' :
-                                                'red'
-                                }
-                                size="sm"
-                            >
-                                {getTypeLabel(properties.status)}
-                            </Badge>
-                        )}
-                        {properties.currentLocation && (
-                            <Group gap="xs">
-                                <IconMapPin size={16} />
-                                <Text size="sm">{properties.currentLocation}</Text>
-                            </Group>
-                        )}
-                        {properties.organization && (
-                            <Group gap="xs">
-                                <IconBuilding size={16} />
-                                <Text size="sm">{properties.organization}</Text>
-                            </Group>
-                        )}
-                    </>
-                )}
-
-                {/* Location info (common to all) */}
-                {(properties.parishName || properties.communityName) && (
-                    <>
-                        <Divider my="xs" />
-                        {properties.communityName && (
-                            <Text size="xs" c="dimmed">
-                                {properties.communityName}
-                                {properties.parishName && `, ${properties.parishName}`}
-                            </Text>
-                        )}
-                        {!properties.communityName && properties.parishName && (
-                            <Text size="xs" c="dimmed">
-                                {properties.parishName}
-                            </Text>
-                        )}
-                    </>
-                )}
-            </Stack>
-        </Box>
-    );
-}
-
-/**
- * Generate HTML string for MapLibre popup
- */
-export function generatePopupHTML(properties: Record<string, any>, layer: 'people' | 'places' | 'assets'): string {
-    const getTypeLabel = (type: string) => {
-        return type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    };
-
-    const color = layer === 'people' ? '#FF6B6B' : layer === 'places' ? '#4ECDC4' : '#45B7D1';
+    const pretty = (text: string) =>
+        text ? text.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '';
 
     let html = `
-    <div style="padding: 12px; min-width: 250px; max-width: 350px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-        <div style="width: 20px; height: 20px; background: ${color}; border-radius: 50%;"></div>
-        <h3 style="margin: 0; font-size: 18px; font-weight: 600;">${properties.name || 'Unknown'}</h3>
-      </div>
-      
-      <div style="margin-bottom: 8px;">
-        <span style="background: ${color}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
-          ${getTypeLabel(properties.type || 'unknown')}
-        </span>
-      </div>
-  `;
+      <div style="
+        width: 280px;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.16);
+        font-family: system-ui, sans-serif;
+        background: white;
+      ">
+  
+        <!-- Header -->
+        <div style="
+          background: #1a1a3c;
+          padding: 12px 16px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        ">
+          <div style="
+            width: 10px;
+            height: 10px;
+            background: ${color};
+            border-radius: 50%;
+          "></div>
+  
+          <div style="color: white; font-weight: 600; font-size: 16px;">
+            ${properties.name || 'Unknown'}
+          </div>
+        </div>
+  
+        <div style="padding: 14px 16px;">
+  
+          <div style="
+            display: inline-block;
+            background: ${color}20;
+            color: ${color};
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 6px;
+            font-weight: 600;
+            margin-bottom: 10px;
+          ">
+            ${pretty(properties.type)}
+          </div>
+    `;
 
-    // People-specific
+    // PEOPLE
     if (layer === 'people') {
-        if (properties.contactName) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">👤 ${properties.contactName}</div>`;
-        }
-        if (properties.contactPhone) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">📞 ${properties.contactPhone}</div>`;
-        }
-        if (properties.contactEmail) {
-            html += `<div style="margin: 6px 0; font-size: 14px; word-break: break-word;">✉️ ${properties.contactEmail}</div>`;
-        }
-        if (properties.organization) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">🏢 ${properties.organization}</div>`;
-        }
+        if (properties.contactName)
+            html += `
+          <div style="margin: 6px 0; display:flex; align-items:center; gap:6px;">
+            ${iconSVG.user} <span>${properties.contactName}</span>
+          </div>`;
+
+        if (properties.contactPhone)
+            html += `
+          <div style="margin: 6px 0; display:flex; align-items:center; gap:6px;">
+            ${iconSVG.phone} <span>${properties.contactPhone}</span>
+          </div>`;
+
+        if (properties.contactEmail)
+            html += `
+          <div style="margin: 6px 0; display:flex; align-items:center; gap:6px; word-break: break-word;">
+            ${iconSVG.mail} <span>${properties.contactEmail}</span>
+          </div>`;
+
+        if (properties.organization)
+            html += `
+          <div style="margin: 6px 0; display:flex; align-items:center; gap:6px;">
+            ${iconSVG.building} <span>${properties.organization}</span>
+          </div>`;
     }
 
-    // Places-specific
+    // PLACES
     if (layer === 'places') {
-        if (properties.address) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">📍 ${properties.address}</div>`;
-        }
-        if (properties.maxCapacity) {
-            html += `<div style="margin: 6px 0; font-size: 14px;"><strong>Capacity:</strong> ${properties.maxCapacity}</div>`;
-        }
-        if (properties.description) {
-            html += `<div style="margin: 6px 0; font-size: 13px; color: #666;">${properties.description}</div>`;
-        }
-        if (properties.verified) {
-            html += `<div style="margin: 6px 0;"><span style="background: #51cf66; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">✓ Verified</span></div>`;
-        }
+        if (properties.address)
+            html += `
+          <div style="margin: 6px 0; display:flex; gap:6px; align-items:center;">
+            ${iconSVG.pin} <span>${properties.address}</span>
+          </div>`;
+
+        if (properties.maxCapacity)
+            html += `<div style="margin:6px 0;"><strong>Capacity:</strong> ${properties.maxCapacity}</div>`;
+
+        if (properties.description)
+            html += `<div style="margin:6px 0; font-size:13px; color:#666;">${properties.description}</div>`;
+
+        if (properties.verified)
+            html += `
+          <div style="margin:6px 0;">
+            <span style="
+              background:#51cf66;
+              color:white;
+              padding:2px 8px;
+              font-size:11px;
+              border-radius:4px;
+            ">Verified</span>
+          </div>`;
     }
 
-    // Assets-specific
+    // ASSETS
     if (layer === 'assets') {
-        if (properties.serialNumber) {
-            html += `<div style="margin: 6px 0; font-size: 14px;"><strong>Serial:</strong> ${properties.serialNumber}</div>`;
-        }
-        if (properties.status) {
-            const statusColors: Record<string, string> = {
-                available: '#51cf66',
-                in_use: '#ffd43b',
-                maintenance: '#ff922b',
-                retired: '#868e96',
-            };
-            const statusColor = statusColors[properties.status] || '#868e96';
-            html += `<div style="margin: 6px 0;"><span style="background: ${statusColor}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">${getTypeLabel(properties.status)}</span></div>`;
-        }
-        if (properties.currentLocation) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">📍 ${properties.currentLocation}</div>`;
-        }
-        if (properties.organization) {
-            html += `<div style="margin: 6px 0; font-size: 14px;">🏢 ${properties.organization}</div>`;
-        }
+        if (properties.serialNumber)
+            html += `<div style="margin:6px 0;"><strong>Serial:</strong> ${properties.serialNumber}</div>`;
+
+        if (properties.status)
+            html += `
+          <div style="margin: 6px 0;">
+            <span style="
+              background:${color};
+              color:white;
+              padding:4px 8px;
+              border-radius:6px;
+              font-size:12px;
+            ">
+              ${pretty(properties.status)}
+            </span>
+          </div>`;
+
+        if (properties.currentLocation)
+            html += `
+          <div style="margin:6px 0; display:flex; gap:6px; align-items:center;">
+            ${iconSVG.pin} <span>${properties.currentLocation}</span>
+          </div>`;
+
+        if (properties.organization)
+            html += `
+          <div style="margin:6px 0; display:flex; gap:6px; align-items:center;">
+            ${iconSVG.building} <span>${properties.organization}</span>
+          </div>`;
     }
 
-    // Location (common)
+    // LOCATION (COMMON)
     if (properties.communityName || properties.parishName) {
-        html += `<div style="border-top: 1px solid #e9ecef; margin-top: 12px; padding-top: 8px;">`;
-        if (properties.communityName) {
-            html += `<div style="font-size: 12px; color: #868e96;">${properties.communityName}${properties.parishName ? `, ${properties.parishName}` : ''}</div>`;
-        } else if (properties.parishName) {
-            html += `<div style="font-size: 12px; color: #868e96;">${properties.parishName}</div>`;
-        }
-        html += `</div>`;
+        html += `
+        <div style="margin-top:12px; padding-top:10px; border-top:1px solid #eee;">
+          <div style="font-size:12px; color:#888;">
+            ${(properties.communityName || '')}
+            ${properties.communityName && properties.parishName ? ', ' : ''}
+            ${(properties.parishName || '')}
+          </div>
+        </div>`;
     }
 
-    html += `</div>`;
+    html += `
+        </div>
+      </div>
+    `;
+
     return html;
 }

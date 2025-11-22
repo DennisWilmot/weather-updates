@@ -31,6 +31,8 @@ import { MapFilters as MapFiltersType, createFilterPreset, countActiveFilters } 
 import { ASSET_TYPES } from '@/lib/schemas/assets-schema';
 import { PLACE_TYPES } from '@/lib/schemas/places-schema';
 import { NEEDS_OPTIONS, URGENCY_LEVELS } from '@/lib/schemas/people-needs-schema';
+import { DateTimePicker } from '@mantine/dates';
+import '@mantine/dates/styles.css';
 
 interface MapFiltersProps {
   filters: MapFiltersType;
@@ -246,104 +248,63 @@ export default function MapFilters({
               </Group>
               <Collapse in={dateRangeExpanded}>
                 <Stack gap="sm" mt="sm">
-                  <Group gap="xs">
-                    <Button
-                      size="xs"
-                      variant={
-                        filters.dateRange?.preset === '24h'
-                          ? 'filled'
-                          : 'outline'
-                      }
-                      onClick={() => handleDatePreset('24h')}
-                    >
-                      Last 24h
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant={
-                        filters.dateRange?.preset === '7d'
-                          ? 'filled'
-                          : 'outline'
-                      }
-                      onClick={() => handleDatePreset('7d')}
-                    >
-                      Last 7d
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant={
-                        filters.dateRange?.preset === '30d'
-                          ? 'filled'
-                          : 'outline'
-                      }
-                      onClick={() => handleDatePreset('30d')}
-                    >
-                      Last 30d
-                    </Button>
-                  </Group>
+
                   <Stack gap="xs">
-                    <div>
-                      <Text size="xs" mb={4}>
-                        Start Date
-                      </Text>
-                      <input
-                        type="datetime-local"
-                        value={
-                          filters.dateRange?.start
-                            ? new Date(filters.dateRange.start)
-                              .toISOString()
-                              .slice(0, 16)
-                            : ''
+                    <Stack gap="xs" mt="sm">
+
+                      <Group gap="xs">
+                        <Button
+                          size="xs"
+                          variant={filters.dateRange?.preset === '24h' ? 'filled' : 'outline'}
+                          onClick={() => handleDatePreset('24h')}
+                        >
+                          Last 24h
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant={filters.dateRange?.preset === '7d' ? 'filled' : 'outline'}
+                          onClick={() => handleDatePreset('7d')}
+                        >
+                          Last 7d
+                        </Button>
+                        <Button
+                          size="xs"
+                          variant={filters.dateRange?.preset === '30d' ? 'filled' : 'outline'}
+                          onClick={() => handleDatePreset('30d')}
+                        >
+                          Last 30d
+                        </Button>
+                      </Group>
+
+                      {/* ---- START DATE ---- */}
+                      <DateTimePicker
+                        label="Start Date"
+                        value={filters.dateRange?.start || null}
+                        onChange={(value) =>
+                          handleCustomDateRange(value, filters.dateRange?.end || null)
                         }
-                        onChange={(e) => {
-                          const date = e.target.value
-                            ? new Date(e.target.value)
-                            : null;
-                          handleCustomDateRange(
-                            date,
-                            filters.dateRange?.end || null
-                          );
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '4px 8px',
-                          fontSize: '12px',
-                          border: '1px solid #ced4da',
-                          borderRadius: '4px',
-                        }}
+                        valueFormat="MM/DD/YYYY HH:mm"
+                        maxDate={filters.dateRange?.end || undefined}
+                        clearable
+                        size="sm"
                       />
-                    </div>
-                    <div>
-                      <Text size="xs" mb={4}>
-                        End Date
-                      </Text>
-                      <input
-                        type="datetime-local"
-                        value={
-                          filters.dateRange?.end
-                            ? new Date(filters.dateRange.end)
-                              .toISOString()
-                              .slice(0, 16)
-                            : ''
+
+                      {/* ---- END DATE ---- */}
+                      <DateTimePicker
+                        label="End Date"
+                        value={filters.dateRange?.end || null}
+                        onChange={(value) =>
+                          handleCustomDateRange(filters.dateRange?.start || null, value)
                         }
-                        onChange={(e) => {
-                          const date = e.target.value
-                            ? new Date(e.target.value)
-                            : null;
-                          handleCustomDateRange(
-                            filters.dateRange?.start || null,
-                            date
-                          );
-                        }}
-                        style={{
-                          width: '100%',
-                          padding: '4px 8px',
-                          fontSize: '12px',
-                          border: '1px solid #ced4da',
-                          borderRadius: '4px',
-                        }}
+                        valueFormat="MM/DD/YYYY HH:mm"
+                        minDate={filters.dateRange?.start || undefined}
+                        clearable
+                        size="sm"
                       />
-                    </div>
+
+                    </Stack>
+
+
                   </Stack>
                 </Stack>
               </Collapse>
@@ -521,48 +482,7 @@ export default function MapFilters({
                     }
                     size="xs"
                   />
-                  <Text size="xs" fw={500} mt="xs">
-                    Place Status
-                  </Text>
-                  <MultiSelect
-                    label="Electricity"
-                    placeholder="Select status"
-                    data={OPERATIONAL_STATUS_OPTIONS.map((s) => ({
-                      value: s,
-                      label: s.charAt(0).toUpperCase() + s.slice(1),
-                    }))}
-                    value={filters.status?.placeStatus?.electricity || []}
-                    onChange={(values) =>
-                      handlePlaceStatusChange('electricity', values)
-                    }
-                    size="xs"
-                  />
-                  <MultiSelect
-                    label="Water"
-                    placeholder="Select status"
-                    data={OPERATIONAL_STATUS_OPTIONS.map((s) => ({
-                      value: s,
-                      label: s.charAt(0).toUpperCase() + s.slice(1),
-                    }))}
-                    value={filters.status?.placeStatus?.water || []}
-                    onChange={(values) =>
-                      handlePlaceStatusChange('water', values)
-                    }
-                    size="xs"
-                  />
-                  <MultiSelect
-                    label="WiFi"
-                    placeholder="Select status"
-                    data={OPERATIONAL_STATUS_OPTIONS.map((s) => ({
-                      value: s,
-                      label: s.charAt(0).toUpperCase() + s.slice(1),
-                    }))}
-                    value={filters.status?.placeStatus?.wifi || []}
-                    onChange={(values) =>
-                      handlePlaceStatusChange('wifi', values)
-                    }
-                    size="xs"
-                  />
+
                 </Stack>
               </Collapse>
             </Paper>
