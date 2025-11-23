@@ -1,3 +1,8 @@
+// Load environment variables FIRST before any other imports
+import { config } from 'dotenv';
+config({ path: '.env.local' });
+config({ path: '.env' }); // Fallback to .env if .env.local doesn't exist
+
 import { db } from './index';
 import { 
   parishes, 
@@ -5,21 +10,24 @@ import {
   places,
   people,
   assets,
+  warehouses,
+  warehouseInventory,
   aidMissions,
   aidWorkerCapabilities,
   missionAssignments,
   assetDistributions, 
   placeStatus, 
-  peopleNeeds, 
   aidWorkerSchedules 
 } from './schema';
 import { jamaicaParishes } from './seed-data/parishes';
 import { jamaimaCommunities } from './seed-data/communities';
 import { sampleAssetDistributions } from './seed-data/asset-distributions';
 import { samplePlaceStatus } from './seed-data/place-status';
-import { samplePeopleNeeds } from './seed-data/people-needs';
 import { sampleAidWorkerSchedules } from './seed-data/aid-worker-schedules';
-import { eq, and } from 'drizzle-orm';
+import { geographicAssets } from './seed-data/geographic-assets';
+import { geographicPeople } from './seed-data/geographic-people';
+import { geographicPlaces } from './seed-data/geographic-places';
+import { eq, and, sql } from 'drizzle-orm';
 
 export async function seedDatabase() {
   console.log('🌱 Starting database seed...');
@@ -174,42 +182,7 @@ export async function seedDatabase() {
     
     console.log(`✓ Seeded ${placeStatusCount} place status records`);
 
-    // Step 6: Seed people needs
-    console.log('👥 Seeding people needs...');
-    let peopleNeedsCount = 0;
-    
-    for (const need of samplePeopleNeeds) {
-      const communityKey = `${need.parishCode}:${need.communityName}`;
-      const communityId = communityMap.get(communityKey);
-      const parishId = parishMap.get(need.parishCode);
-      
-      if (!parishId || !communityId) {
-        console.warn(`  ⚠️  Location not found for people need: ${need.parishCode}:${need.communityName}`);
-        continue;
-      }
-      
-      await db.insert(peopleNeeds).values({
-        parishId,
-        communityId,
-        latitude: need.latitude ? need.latitude.toString() : undefined,
-        longitude: need.longitude ? need.longitude.toString() : undefined,
-        needs: need.needs,
-        contactName: need.contactName,
-        contactPhone: need.contactPhone,
-        contactEmail: need.contactEmail,
-        numberOfPeople: need.numberOfPeople,
-        urgency: need.urgency,
-        description: need.description,
-        status: need.status || 'pending',
-        reportedBy: 'system-seed', // Placeholder user ID
-      }).onConflictDoNothing();
-      
-      peopleNeedsCount++;
-    }
-    
-    console.log(`✓ Seeded ${peopleNeedsCount} people needs records`);
-
-    // Step 7: Seed aid worker schedules
+    // Step 6: Seed aid worker schedules
     console.log('👷 Seeding aid worker schedules...');
     let schedulesCount = 0;
     
@@ -237,6 +210,162 @@ export async function seedDatabase() {
     
     console.log(`✓ Seeded ${schedulesCount} aid worker schedules`);
 
+    // Step 7: Seed geographic assets (for allocation planning)
+    console.log('📦 Seeding geographic assets...');
+    let assetsCount = 0;
+    const warehouseMap = new Map<string, string>(); // "parishCode:lat:lng" -> warehouseId
+
+    for (const asset of geographicAssets) {
+      const communityKey = `${asset.parishCode}:${asset.communityName}`;
+      const communityId = communityMap.get(communityKey);
+      const parishId = parishMap.get(asset.parishCode);
+
+      if (!parishId) {
+        console.warn(`  ⚠️  Parish ${asset.parishCode} not found for asset ${asset.name}`);
+        continue;
+      }
+
+      // Create or get warehouse for this location
+      // Group assets by location (same lat/lng = same warehouse)
+      const warehouseKey = `${asset.parishCode}:${asset.latitude.toFixed(4)}:${asset.longitude.toFixed(4)}`;
+      let warehouseId = warehouseMap.get(warehouseKey);
+
+      if (!warehouseId) {
+        // Check if warehouse already exists at this location
+        const [existing] = await db
+          .select()
+          .from(warehouses)
+          .where(
+            and(
+              eq(warehouses.parishId, parishId),
+              eq(warehouses.latitude, asset.latitude.toString()),
+              eq(warehouses.longitude, asset.longitude.toString())
+            )
+          )
+          .limit(1);
+
+        if (existing) {
+          warehouseId = existing.id;
+          warehouseMap.set(warehouseKey, warehouseId);
+        } else {
+          // Create new warehouse
+          const [warehouse] = await db
+            .insert(warehouses)
+            .values({
+              name: asset.name.replace(' Warehouse', '').replace(' Storage', '').replace(' Depot', '').replace(' Facility', '').replace(' Center', '').replace(' Food Bank', '').replace(' Distribution', ''),
+              parishId,
+              communityId: communityId || undefined,
+              latitude: asset.latitude.toString(),
+              longitude: asset.longitude.toString(),
+              status: 'active',
+            })
+            .returning();
+
+          if (warehouse) {
+            warehouseId = warehouse.id;
+            warehouseMap.set(warehouseKey, warehouseId);
+          } else {
+            console.warn(`  ⚠️  Could not create warehouse for ${asset.name}`);
+            continue;
+          }
+        }
+      }
+
+      // Create or update warehouse inventory record
+      if (warehouseId) {
+        await db
+          .insert(warehouseInventory)
+          .values({
+            warehouseId,
+            itemCode: asset.type,
+            quantity: asset.quantity,
+            reservedQuantity: 0,
+          })
+          .onConflictDoUpdate({
+            target: [warehouseInventory.warehouseId, warehouseInventory.itemCode],
+            set: {
+              quantity: asset.quantity, // Update to new quantity if conflict
+            },
+          });
+
+        assetsCount++;
+      }
+    }
+
+    console.log(`✓ Seeded ${assetsCount} geographic assets (warehouse inventory)`);
+
+    // Step 8: Seed geographic people
+    console.log('👥 Seeding geographic people...');
+    let peopleCount = 0;
+
+    for (const person of geographicPeople) {
+      const communityKey = `${person.parishCode}:${person.communityName}`;
+      const communityId = communityMap.get(communityKey);
+      const parishId = parishMap.get(person.parishCode);
+
+      if (!parishId) {
+        console.warn(`  ⚠️  Parish ${person.parishCode} not found for person ${person.name}`);
+        continue;
+      }
+
+      await db
+        .insert(people)
+        .values({
+          name: person.name,
+          type: person.type,
+          parishId,
+          communityId: communityId || undefined,
+          latitude: person.latitude.toString(),
+          longitude: person.longitude.toString(),
+          contactName: person.contactName,
+          contactPhone: person.contactPhone,
+          contactEmail: person.contactEmail,
+          needs: person.needs || [],
+          skills: person.skills || [],
+          organization: person.organization,
+        })
+        .onConflictDoNothing();
+
+      peopleCount++;
+    }
+
+    console.log(`✓ Seeded ${peopleCount} geographic people`);
+
+    // Step 9: Seed geographic places
+    console.log('🏢 Seeding geographic places...');
+    let placesCount = 0;
+
+    for (const place of geographicPlaces) {
+      const communityKey = `${place.parishCode}:${place.communityName}`;
+      const communityId = communityMap.get(communityKey);
+      const parishId = parishMap.get(place.parishCode);
+
+      if (!parishId) {
+        console.warn(`  ⚠️  Parish ${place.parishCode} not found for place ${place.name}`);
+        continue;
+      }
+
+      await db
+        .insert(places)
+        .values({
+          name: place.name,
+          type: place.type,
+          parishId,
+          communityId: communityId || undefined,
+          latitude: place.latitude.toString(),
+          longitude: place.longitude.toString(),
+          address: place.address,
+          maxCapacity: place.maxCapacity,
+          description: place.description,
+          verified: true, // Mark as verified for seed data
+        })
+        .onConflictDoNothing();
+
+      placesCount++;
+    }
+
+    console.log(`✓ Seeded ${placesCount} geographic places`);
+
     console.log('✅ Database seed completed successfully!');
     return { 
       success: true, 
@@ -244,8 +373,10 @@ export async function seedDatabase() {
       communities: communitiesCount,
       distributions: distributionsCount,
       placeStatus: placeStatusCount,
-      peopleNeeds: peopleNeedsCount,
       schedules: schedulesCount,
+      geographicAssets: assetsCount,
+      geographicPeople: peopleCount,
+      geographicPlaces: placesCount,
     };
   } catch (error) {
     console.error('❌ Error seeding database:', error);

@@ -1,152 +1,493 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
-    ChevronLeft,
-    ChevronRight,
-    Link as LinkIcon,
-    Users,
-    Box,
-    MapPin,
-    Zap,
-} from "lucide-react";
+  Paper,
+  Stack,
+  Group,
+  Text,
+  Badge,
+  Loader,
+  Button,
+  ActionIcon,
+  Title,
+  Alert,
+  Progress,
+} from "@mantine/core";
+import {
+  IconChevronLeft,
+  IconChevronRight,
+  IconArrowRight,
+  IconBox,
+  IconMapPin,
+  IconAlertCircle,
+  IconRefresh,
+  IconCheck,
+} from "@tabler/icons-react";
+import type { GlobalPlanningResult, Shipment } from "@/lib/types/planning";
+import type { MapFilters as MapFiltersType } from "@/lib/maps/filters";
 
-interface MatchNode {
-    id: string;
-    type: "person" | "asset" | "place";
-    name: string;
-    latitude: number;
-    longitude: number
+interface AIMatchingPanelProps {
+  onMatchClick?: (shipment: Shipment) => void;
+  filters?: MapFiltersType;
+  visibleLayers?: Set<string>;
+  subTypeFilters?: Record<string, Set<string>>;
 }
 
-interface MatchChain {
-    id: string;
-    nodes: MatchNode[];
-}
+export default function AIMatchingPanel({ 
+  onMatchClick, 
+  filters, 
+  visibleLayers, 
+  subTypeFilters 
+}: AIMatchingPanelProps) {
+  const [page, setPage] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [planResult, setPlanResult] = useState<GlobalPlanningResult | null>(null);
+  const [warehouseMap, setWarehouseMap] = useState<Map<string, { lat: number; lng: number; name?: string }>>(new Map());
+  const [communityMap, setCommunityMap] = useState<Map<string, { lat: number; lng: number; name?: string }>>(new Map());
+  const [warehouseNames, setWarehouseNames] = useState<Map<string, string>>(new Map());
+  const [communityNames, setCommunityNames] = useState<Map<string, string>>(new Map());
 
-// Dummy data
-const dummyMatches: MatchChain[] = [
-    {
-        id: "match-1",
-        nodes: [
-            { id: "p1", type: "person", name: "Jason", latitude: 18.2281, longitude: -78.1292 },
-            { id: "a1", type: "asset", name: "iPhone Unit 3", latitude: 18.2266, longitude: -78.1312 },
-            { id: "p2", type: "person", name: "Kerish", latitude: 18.2267, longitude: -78.1306 }
-        ]
-    },
-    {
-        id: "match-2",
-        nodes: [
-            { id: "p3", type: "person", name: "Nurse Adams", latitude: 18.2302, longitude: -78.1251 },
-            { id: "a2", type: "asset", name: "Medical Kit", latitude: 18.2294, longitude: -78.1267 },
-            { id: "p4", type: "person", name: "Civilian #2301", latitude: 18.2278, longitude: -78.1290 }
-        ]
-    },
-    {
-        id: "match-3",
-        nodes: [
-            { id: "p5", type: "person", name: "Rescuer Leo", latitude: 18.2249, longitude: -78.1341 },
-            { id: "a3", type: "asset", name: "Drone Unit A", latitude: 18.2253, longitude: -78.1330 },
-            { id: "pl1", type: "place", name: "Survey Team HQ", latitude: 18.2260, longitude: -78.1322 }
-        ]
-    }
-];
+  const pageSize = 5;
 
+  // Fetch allocation plan when filters or visible layers change
+  useEffect(() => {
+    fetchAllocationPlan();
+  }, [filters, visibleLayers, subTypeFilters]);
 
-export default function AIMatchingPanel({ onMatchClick }: any) {
-    const [page, setPage] = useState(0);
+  const fetchAllocationPlan = async () => {
+    setLoading(true);
+    setError(null);
 
-    const pageSize = 3;
-    const totalPages = Math.ceil(dummyMatches.length / pageSize);
-
-    const getNodeIcon = (type: MatchNode["type"]) => {
-        switch (type) {
-            case "person":
-                return <Users size={18} className="text-blue-600" />;
-            case "asset":
-                return <Box size={18} className="text-teal-600" />;
-            case "place":
-                return <MapPin size={18} className="text-purple-600" />;
+    try {
+      // Step 1: Build query params from filters
+      const params = new URLSearchParams();
+      
+      // Location filters
+      if (filters?.locations?.parishIds && filters.locations.parishIds.length > 0) {
+        params.set('parishIds', filters.locations.parishIds.join(','));
+      }
+      if (filters?.locations?.communityIds && filters.locations.communityIds.length > 0) {
+        params.set('communityIds', filters.locations.communityIds.join(','));
+      }
+      
+      // Date filters
+      if (filters?.dateRange) {
+        params.set('startDate', filters.dateRange.start.toISOString());
+        params.set('endDate', filters.dateRange.end.toISOString());
+      }
+      
+      // Visible layers
+      if (visibleLayers && visibleLayers.size > 0) {
+        params.set('layers', Array.from(visibleLayers).join(','));
+      }
+      
+      // Subtype filters (convert Sets to JSON)
+      if (subTypeFilters) {
+        // Convert Sets to arrays for JSON serialization
+        const subTypeFiltersSerializable: Record<string, string[]> = {};
+        Object.keys(subTypeFilters).forEach(key => {
+          if (subTypeFilters[key] && subTypeFilters[key].size > 0) {
+            subTypeFiltersSerializable[key] = Array.from(subTypeFilters[key]);
+          }
+        });
+        if (Object.keys(subTypeFiltersSerializable).length > 0) {
+          params.set('subTypeFilters', JSON.stringify(subTypeFiltersSerializable));
         }
-    };
+      }
+      
+      // Fetch filtered data from database
+      const dataResponse = await fetch(`/api/planning/data?${params.toString()}`);
+      
+      if (!dataResponse.ok) {
+        const errorData = await dataResponse.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.error || `Failed to fetch planning data: ${dataResponse.status}`);
+      }
 
-    const pageMatches = dummyMatches.slice(
-        page * pageSize,
-        page * pageSize + pageSize
-    );
+      const { problem, metadata } = await dataResponse.json();
+      console.log('[AIMatchingPanel] Fetched planning data:', metadata);
+
+      // Step 2: Send problem to planning service
+      const response = await fetch("/api/planning", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(problem),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
+        const suggestion = errorData.suggestion || '';
+        
+        // Format validation error details if present
+        let detailsMessage = '';
+        if (errorData.details && Array.isArray(errorData.details)) {
+          const validationErrors = errorData.details
+            .map((d: any) => `${d.path?.join('.') || 'unknown'}: ${d.message || 'Invalid'}`)
+            .slice(0, 5) // Show first 5 errors
+            .join('; ');
+          if (validationErrors) {
+            detailsMessage = ` Validation errors: ${validationErrors}`;
+          }
+        } else if (errorData.details && typeof errorData.details === 'string') {
+          detailsMessage = ` ${errorData.details}`;
+        }
+        
+        const fullMessage = `${errorMessage}${detailsMessage}${suggestion ? `. ${suggestion}` : ''}`;
+        throw new Error(fullMessage);
+      }
+
+      const result = await response.json() as GlobalPlanningResult;
+      setPlanResult(result);
+
+      // Step 3: Store warehouse and community data (coordinates + names) for drawing lines and display
+      const wMap = new Map<string, { lat: number; lng: number; name?: string }>();
+      const cMap = new Map<string, { lat: number; lng: number; name?: string }>();
+      const wNames = new Map<string, string>();
+      const cNames = new Map<string, string>();
+      
+      // Store coordinates first
+      for (const warehouse of problem.warehouses) {
+        wMap.set(warehouse.id, { lat: warehouse.lat, lng: warehouse.lng });
+      }
+      
+      for (const community of problem.communities) {
+        cMap.set(community.id, { lat: community.lat, lng: community.lng });
+      }
+      
+      // Batch fetch warehouse names (only for warehouses used in shipments)
+      const warehouseIds = new Set(result.shipments.map(s => s.fromWarehouseId));
+      const warehouseNamePromises = Array.from(warehouseIds).map(async (id) => {
+        try {
+          const wRes = await fetch(`/api/warehouses/${id}`);
+          if (wRes.ok) {
+            const wData = await wRes.json();
+            const name = wData.name || `Warehouse ${id.slice(0, 8)}`;
+            wNames.set(id, name);
+            const coords = wMap.get(id);
+            if (coords) {
+              wMap.set(id, { ...coords, name });
+            }
+          }
+        } catch (e) {
+          console.warn('Could not fetch warehouse name:', id);
+        }
+      });
+      
+      // Batch fetch community names (only for communities used in shipments)
+      const communityIds = new Set(result.shipments.map(s => s.toCommunityId));
+      const communityNamePromises = Array.from(communityIds).map(async (id) => {
+        try {
+          const cRes = await fetch(`/api/communities/${id}`);
+          if (cRes.ok) {
+            const cData = await cRes.json();
+            const name = cData.name || `Community ${id.slice(0, 8)}`;
+            cNames.set(id, name);
+            const coords = cMap.get(id);
+            if (coords) {
+              cMap.set(id, { ...coords, name });
+            }
+          }
+        } catch (e) {
+          console.warn('Could not fetch community name:', id);
+        }
+      });
+      
+      // Wait for all name fetches to complete
+      await Promise.all([...warehouseNamePromises, ...communityNamePromises]);
+      
+      setWarehouseMap(wMap);
+      setCommunityMap(cMap);
+      setWarehouseNames(wNames);
+      setCommunityNames(cNames);
+    } catch (err: any) {
+      console.error("Error fetching allocation plan:", err);
+      setError(err.message || "Failed to fetch allocation plan");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const shipments = planResult?.shipments || [];
+  const totalPages = Math.ceil(shipments.length / pageSize);
+  const pageShipments = shipments.slice(page * pageSize, page * pageSize + pageSize);
+
+  const handleShipmentClick = (shipment: Shipment) => {
+    if (onMatchClick) {
+      // Enhance shipment with coordinates if available
+      const warehouseCoords = warehouseMap.get(shipment.fromWarehouseId);
+      const communityCoords = communityMap.get(shipment.toCommunityId);
+      
+      if (warehouseCoords && communityCoords) {
+        // Create enhanced shipment with coordinates
+        const enhancedShipment = {
+          ...shipment,
+          fromWarehouseCoords: warehouseCoords,
+          toCommunityCoords: communityCoords,
+        };
+        onMatchClick(enhancedShipment as any);
+      } else {
+        // Fallback to original shipment
+        onMatchClick(shipment);
+      }
+    }
+  };
 
     return (
-        <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-6">
+    <Paper shadow="sm" p="lg" radius="md" withBorder style={{ backgroundColor: "#fff" }}>
             {/* HEADER */}
-            <div className="flex items-center gap-3 mb-5">
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                    <Zap size={22} className="text-blue-600" />
-                </div>
-
+      <Stack gap="md">
+        <Group justify="space-between" align="center">
+          <Group gap="sm">
+            <Paper
+              p="xs"
+              radius="xl"
+              style={{
+                backgroundColor: "#1a1a3c",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <IconBox size={20} />
+            </Paper>
                 <div>
-                    <h3 className="text-lg font-semibold text-gray-900">
-                        AI Matching System
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                        Smart mission-to-resource connections
-                    </p>
-                </div>
+              <Title order={4} c="#1a1a3c">
+                Allocation Planning System
+              </Title>
+              <Text size="sm" c="dimmed">
+                Global resource allocation plan
+              </Text>
             </div>
+          </Group>
+          <ActionIcon
+            variant="subtle"
+            onClick={fetchAllocationPlan}
+            loading={loading}
+            title="Refresh plan"
+          >
+            <IconRefresh size={18} />
+          </ActionIcon>
+        </Group>
 
-            {/* MATCHES LIST */}
-            <div className="space-y-4">
-                {pageMatches.map((match) => (
-                    <div
-                        onClick={() => onMatchClick(match)}
-                        key={match.id}
-                        className="bg-gray-50 rounded-lg p-4 border border-gray-200"
-                    >
-                        <div className="flex items-center justify-between">
-                            {match.nodes.map((node, index) => (
-                                <div key={node.id} className="flex items-center gap-2">
-                                    {/* Node */}
-                                    <div className="flex flex-col items-center text-center">
-                                        <div className="w-10 h-10 bg-white rounded-full shadow flex items-center justify-center">
-                                            {getNodeIcon(node.type)}
+        {/* SUMMARY STATS */}
+        {planResult && (
+          <Paper p="md" radius="md" style={{ backgroundColor: "#f8f9fa" }}>
+            <Group justify="space-between" align="flex-start">
+              <Stack gap="xs">
+                <Text size="sm" fw={500} c="dimmed">
+                  Summary
+                </Text>
+                <Group gap="xl">
+                  <div>
+                    <Text size="lg" fw={700} c="#1a1a3c">
+                      {planResult.summary.totalShipments}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      Shipments
+                    </Text>
+                  </div>
+                  <div>
+                    <Text size="lg" fw={700} c="#1a1a3c">
+                      {planResult.summary.totalItemsAllocated.toLocaleString()}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      Items Allocated
+                    </Text>
+                  </div>
+                  <div>
+                    <Text size="lg" fw={700} c="#1a1a3c">
+                      {(planResult.summary.fulfillmentRate * 100).toFixed(1)}%
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      Fulfillment Rate
+                    </Text>
                                         </div>
-                                        <p className="text-xs font-medium text-gray-700 mt-1 w-20 truncate">
-                                            {node.name}
-                                        </p>
+                  <div>
+                    <Text size="lg" fw={700} c="#1a1a3c">
+                      ${planResult.summary.totalCost.toFixed(2)}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                      Total Cost
+                    </Text>
                                     </div>
+                </Group>
+                {planResult.summary.fulfillmentRate < 1 && (
+                  <Alert
+                    icon={<IconAlertCircle size={16} />}
+                    title="Partial Fulfillment"
+                    color="yellow"
+                    mt="sm"
+                  >
+                    {planResult.summary.unmetNeeds.length} needs could not be fully satisfied
+                  </Alert>
+                )}
+              </Stack>
+            </Group>
+          </Paper>
+        )}
 
-                                    {/* connector */}
-                                    {index < match.nodes.length - 1 && (
-                                        <LinkIcon size={18} className="text-gray-400 mx-2" />
-                                    )}
+        {/* LOADING STATE */}
+        {loading && (
+          <Group justify="center" py="xl">
+            <Loader size="md" />
+            <Text c="dimmed">Generating allocation plan...</Text>
+          </Group>
+        )}
+
+        {/* ERROR STATE */}
+        {error && (
+          <Alert
+            icon={<IconAlertCircle size={16} />}
+            title="Error"
+            color="red"
+            onClose={() => setError(null)}
+            withCloseButton
+          >
+            {error}
+          </Alert>
+        )}
+
+        {/* SHIPMENTS LIST */}
+        {!loading && !error && planResult && (
+          <>
+            {pageShipments.length === 0 ? (
+              <Paper p="xl" radius="md" style={{ backgroundColor: "#f8f9fa" }}>
+                <Text ta="center" c="dimmed">
+                  No shipments in this allocation plan
+                </Text>
+              </Paper>
+            ) : (
+              <Stack gap="sm">
+                {pageShipments.map((shipment, index) => (
+                  <Paper
+                    key={`${shipment.fromWarehouseId}-${shipment.toCommunityId}-${shipment.itemCode}-${index}`}
+                    p="md"
+                    radius="md"
+                    withBorder
+                    style={{
+                      cursor: onMatchClick ? "pointer" : "default",
+                      transition: "all 0.2s",
+                    }}
+                    onClick={() => handleShipmentClick(shipment)}
+                    onMouseEnter={(e) => {
+                      if (onMatchClick) {
+                        e.currentTarget.style.backgroundColor = "#f8f9fa";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = "#fff";
+                    }}
+                  >
+                    <Group justify="space-between" align="center">
+                      <Group gap="md">
+                        {/* Warehouse */}
+                        <Group gap="xs">
+                          <IconBox size={18} color="#1478FF" />
+                          <div>
+                            <Text size="xs" c="dimmed">
+                              Warehouse
+                            </Text>
+                            <Text size="sm" fw={500}>
+                              {warehouseNames.get(shipment.fromWarehouseId) || shipment.fromWarehouseId.slice(0, 8)}
+                            </Text>
+                          </div>
+                        </Group>
+
+                        {/* Arrow */}
+                        <IconArrowRight size={16} color="#1478FF" />
+
+                        {/* Community */}
+                        <Group gap="xs">
+                          <IconMapPin size={18} color="#1478FF" />
+                          <div>
+                            <Text size="xs" c="dimmed">
+                              Community
+                            </Text>
+                            <Text size="sm" fw={500}>
+                              {communityNames.get(shipment.toCommunityId) || shipment.toCommunityId.slice(0, 8)}
+                            </Text>
                                 </div>
-                            ))}
+                        </Group>
+                      </Group>
+
+                      <Group gap="md">
+                        {/* Item and Quantity */}
+                        <div style={{ textAlign: "right" }}>
+                          <Badge color="blue" variant="light" mb={4}>
+                            {shipment.itemCode}
+                          </Badge>
+                          <Text size="sm" fw={600}>
+                            {shipment.quantity} units
+                          </Text>
                         </div>
+
+                        {/* Cost */}
+                        <div style={{ textAlign: "right" }}>
+                          <Text size="xs" c="dimmed">
+                            Cost
+                          </Text>
+                          <Text size="sm" fw={600} c="#1a1a3c">
+                            ${shipment.cost.toFixed(2)}
+                          </Text>
                     </div>
+                      </Group>
+                    </Group>
+                  </Paper>
                 ))}
-            </div>
+              </Stack>
+            )}
 
             {/* PAGINATION */}
-            <div className="flex items-center justify-center gap-3 mt-6">
-                <button
+            {totalPages > 1 && (
+              <Group justify="center" mt="md">
+                <ActionIcon
+                  variant="subtle"
                     onClick={() => setPage((p) => Math.max(0, p - 1))}
                     disabled={page === 0}
-                    className="p-2 rounded-lg bg-gray-100 text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                    <ChevronLeft size={18} />
-                </button>
+                  <IconChevronLeft size={18} />
+                </ActionIcon>
 
-                <span className="text-sm font-medium text-gray-700">
+                <Text size="sm" fw={500} c="dimmed">
                     Page {page + 1} / {totalPages}
-                </span>
+                </Text>
 
-                <button
+                <ActionIcon
+                  variant="subtle"
                     onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                     disabled={page === totalPages - 1}
-                    className="p-2 rounded-lg bg-gray-100 text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
                 >
-                    <ChevronRight size={18} />
-                </button>
-            </div>
-        </div>
+                  <IconChevronRight size={18} />
+                </ActionIcon>
+              </Group>
+            )}
+          </>
+        )}
+
+        {/* EMPTY STATE - No plan loaded yet */}
+        {!loading && !error && !planResult && (
+          <Paper p="xl" radius="md" style={{ backgroundColor: "#f8f9fa" }}>
+            <Stack gap="sm" align="center">
+              <IconBox size={48} color="#1478FF" />
+              <Text ta="center" c="dimmed">
+                Click refresh to generate an allocation plan
+              </Text>
+              <Button
+                variant="light"
+                leftSection={<IconRefresh size={16} />}
+                onClick={fetchAllocationPlan}
+              >
+                Generate Plan
+              </Button>
+            </Stack>
+          </Paper>
+        )}
+      </Stack>
+    </Paper>
     );
 }

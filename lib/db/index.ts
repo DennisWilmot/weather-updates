@@ -1,3 +1,14 @@
+// Load environment variables if not already loaded (for scripts)
+if (typeof process !== 'undefined' && !process.env.DATABASE_URL) {
+  try {
+    const { config } = require('dotenv');
+    config({ path: '.env.local' });
+    config({ path: '.env' }); // Fallback to .env if .env.local doesn't exist
+  } catch (e) {
+    // dotenv might not be available in all contexts
+  }
+}
+
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import * as schema from './schema';

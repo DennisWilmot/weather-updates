@@ -22,7 +22,7 @@ const theme = createTheme({
 });
 
 export const metadata = {
-  title: 'Tropical Storm Melissa - Jamaica Update | Powered by Intellibus',
+  title: 'ATLAS',
   description: 'Live tracking of Tropical Storm Melissa in relation to Jamaica',
 };
 

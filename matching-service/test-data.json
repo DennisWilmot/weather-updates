@@ -1,0 +1,86 @@
+{
+  "warehouses": [
+    {
+      "id": "w1",
+      "parishId": "p1",
+      "lat": 18.0,
+      "lng": -76.8,
+      "inventory": [
+        { "warehouseId": "w1", "itemCode": "food", "quantity": 1000 },
+        { "warehouseId": "w1", "itemCode": "water", "quantity": 500 },
+        { "warehouseId": "w1", "itemCode": "shelter", "quantity": 200 }
+      ]
+    },
+    {
+      "id": "w2",
+      "parishId": "p2",
+      "lat": 18.1,
+      "lng": -77.0,
+      "inventory": [
+        { "warehouseId": "w2", "itemCode": "food", "quantity": 800 },
+        { "warehouseId": "w2", "itemCode": "water", "quantity": 600 },
+        { "warehouseId": "w2", "itemCode": "medical", "quantity": 150 }
+      ]
+    }
+  ],
+  "communities": [
+    {
+      "id": "c1",
+      "parishId": "p1",
+      "lat": 18.05,
+      "lng": -76.85
+    },
+    {
+      "id": "c2",
+      "parishId": "p2",
+      "lat": 18.12,
+      "lng": -77.05
+    },
+    {
+      "id": "c3",
+      "parishId": "p1",
+      "lat": 17.95,
+      "lng": -76.75
+    }
+  ],
+  "communityNeeds": [
+    {
+      "communityId": "c1",
+      "itemCode": "food",
+      "quantity": 200,
+      "priority": 1
+    },
+    {
+      "communityId": "c1",
+      "itemCode": "water",
+      "quantity": 150,
+      "priority": 1
+    },
+    {
+      "communityId": "c2",
+      "itemCode": "food",
+      "quantity": 300,
+      "priority": 2
+    },
+    {
+      "communityId": "c2",
+      "itemCode": "medical",
+      "quantity": 50,
+      "priority": 1
+    },
+    {
+      "communityId": "c3",
+      "itemCode": "shelter",
+      "quantity": 100,
+      "priority": 1
+    }
+  ],
+  "constraints": {
+    "reserveFraction": 0.2,
+    "maxDistanceKm": 100,
+    "distanceWeight": 1.0,
+    "riskWeight": 0.5,
+    "fairnessWeight": 0.3
+  }
+}
+

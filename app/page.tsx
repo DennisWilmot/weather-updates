@@ -52,19 +52,7 @@ import { ChevronUp, Filter, ChevronDown, Zap, ChevronLeft, X, ChevronRight, User
 import AIMatchingPanel from '@/components/AIMatchingPanel';
 
 
-interface MatchNode {
-  id: string;
-  type: "person" | "asset" | "place";
-  name: string;
-  latitude: number;
-  longitude: number
-}
-
-interface MatchChain {
-  id: string;
-  nodes: MatchNode[];
-}
-
+import type { Shipment } from '@/lib/types/planning';
 
 function DashboardContent() {
   const router = useRouter();
@@ -590,58 +578,199 @@ function DashboardContent() {
     );
   };
 
-  // ---- MATCH DRAWING LAYER ----
-  const handleMatchSelect = useCallback((match: MatchChain) => {
+  // ---- SHIPMENT DRAWING LAYER ----
+  const handleMatchSelect = useCallback(async (shipment: Shipment & { fromWarehouseCoords?: { lat: number; lng: number }; toCommunityCoords?: { lat: number; lng: number } }) => {
     if (!mapRef.current) return;
     const map = mapRef.current;
 
-    // 1. Build LineString from node coordinates
-    const coords = match.nodes.map(n => [n.longitude, n.latitude]);
+    try {
+      let warehouseCoords: [number, number] | null = null;
+      let communityCoords: [number, number] | null = null;
 
-    const lineGeoJSON = {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: coords
+      // First check if coordinates are already in the shipment (from AIMatchingPanel)
+      if (shipment.fromWarehouseCoords && shipment.toCommunityCoords) {
+        warehouseCoords = [shipment.fromWarehouseCoords.lng, shipment.fromWarehouseCoords.lat];
+        communityCoords = [shipment.toCommunityCoords.lng, shipment.toCommunityCoords.lat];
+      } else {
+        // Try to find in layer data (for performance)
+        const warehouseLayer = layers.find(l => l.id === 'warehouses');
+        const warehouse = warehouseLayer?.data?.features?.find(
+          (f: any) => f.properties?.id === shipment.fromWarehouseId
+        );
+
+        const communityLayer = layers.find(l => l.id === 'communities');
+        const community = communityLayer?.data?.features?.find(
+          (f: any) => f.properties?.id === shipment.toCommunityId
+        );
+
+        // If found in layers, use those coordinates
+        if (warehouse && community) {
+          warehouseCoords = warehouse.geometry.coordinates;
+          communityCoords = community.geometry.coordinates;
+        } else {
+          // Otherwise, fetch from API
+          const [warehouseRes, communityRes] = await Promise.all([
+            fetch(`/api/warehouses/${shipment.fromWarehouseId}`).catch(() => null),
+            fetch(`/api/communities/${shipment.toCommunityId}`).catch(() => null),
+          ]);
+
+          if (warehouseRes?.ok) {
+            const warehouseData = await warehouseRes.json();
+            warehouseCoords = [
+              parseFloat(warehouseData.longitude || warehouseData.coordinates?.lng || '0'),
+              parseFloat(warehouseData.latitude || warehouseData.coordinates?.lat || '0'),
+            ];
+          }
+
+          if (communityRes?.ok) {
+            const communityData = await communityRes.json();
+            communityCoords = [
+              parseFloat(communityData.longitude || communityData.coordinates?.lng || '0'),
+              parseFloat(communityData.latitude || communityData.coordinates?.lat || '0'),
+            ];
           }
         }
-      ]
-    };
+      }
 
-    // 2. Add or update source
-    if (!map.getSource("match-line")) {
-      map.addSource("match-line", {
-        type: "geojson",
-        data: lineGeoJSON as GeoJSON.FeatureCollection
-      });
-    } else {
-      const src = map.getSource("match-line") as maplibregl.GeoJSONSource;
-      src.setData(lineGeoJSON as GeoJSON.FeatureCollection);
+      if (!warehouseCoords || !communityCoords) {
+        console.warn('Could not find warehouse or community coordinates for shipment', shipment);
+        return;
+      }
+
+      // Build LineString from warehouse to community
+      const coords = [
+        warehouseCoords,
+        communityCoords
+      ];
+
+      // Create GeoJSON for line
+      const lineGeoJSON = {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: coords
+            },
+            properties: {
+              shipment: shipment,
+            }
+          }
+        ]
+      };
+
+      // Create GeoJSON for markers (warehouse and community)
+      const markersGeoJSON = {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: warehouseCoords
+            },
+            properties: {
+              type: "warehouse",
+              id: shipment.fromWarehouseId,
+              itemCode: shipment.itemCode,
+              quantity: shipment.quantity,
+            }
+          },
+          {
+            type: "Feature",
+            geometry: {
+              type: "Point",
+              coordinates: communityCoords
+            },
+            properties: {
+              type: "community",
+              id: shipment.toCommunityId,
+              itemCode: shipment.itemCode,
+              quantity: shipment.quantity,
+            }
+          }
+        ]
+      };
+
+      // 2. Add or update line source
+      if (!map.getSource("shipment-line")) {
+        map.addSource("shipment-line", {
+          type: "geojson",
+          data: lineGeoJSON as GeoJSON.FeatureCollection
+        });
+      } else {
+        const src = map.getSource("shipment-line") as maplibregl.GeoJSONSource;
+        src.setData(lineGeoJSON as GeoJSON.FeatureCollection);
+      }
+
+      // 3. Add or update line layer
+      if (!map.getLayer("shipment-line-layer")) {
+        map.addLayer({
+          id: "shipment-line-layer",
+          type: "line",
+          source: "shipment-line",
+          paint: {
+            "line-color": "#1D4ED8",
+            "line-width": 4,
+            "line-opacity": 0.85
+          }
+        });
+      }
+
+      // 4. Add or update markers source
+      if (!map.getSource("shipment-markers")) {
+        map.addSource("shipment-markers", {
+          type: "geojson",
+          data: markersGeoJSON as GeoJSON.FeatureCollection
+        });
+      } else {
+        const markersSrc = map.getSource("shipment-markers") as maplibregl.GeoJSONSource;
+        markersSrc.setData(markersGeoJSON as GeoJSON.FeatureCollection);
+      }
+
+      // 5. Add or update warehouse marker layer (circle)
+      if (!map.getLayer("shipment-warehouse-layer")) {
+        map.addLayer({
+          id: "shipment-warehouse-layer",
+          type: "circle",
+          source: "shipment-markers",
+          filter: ["==", ["get", "type"], "warehouse"],
+          paint: {
+            "circle-radius": 10,
+            "circle-color": "#10B981", // Green for warehouse
+            "circle-stroke-width": 2,
+            "circle-stroke-color": "#fff",
+            "circle-opacity": 0.9
+          }
+        });
+      }
+
+      // 6. Add or update community marker layer (circle)
+      if (!map.getLayer("shipment-community-layer")) {
+        map.addLayer({
+          id: "shipment-community-layer",
+          type: "circle",
+          source: "shipment-markers",
+          filter: ["==", ["get", "type"], "community"],
+          paint: {
+            "circle-radius": 10,
+            "circle-color": "#EF4444", // Red for community/destination
+            "circle-stroke-width": 2,
+            "circle-stroke-color": "#fff",
+            "circle-opacity": 0.9
+          }
+        });
+      }
+
+      // 7. Zoom to fit
+      const bounds = new maplibregl.LngLatBounds();
+      coords.forEach(c => bounds.extend(c as maplibregl.LngLatLike));
+      map.fitBounds(bounds, { padding: 60, duration: 600 });
+    } catch (error) {
+      console.error('Error drawing shipment line:', error);
     }
-
-    // 3. Add or update layer
-    if (!map.getLayer("match-line-layer")) {
-      map.addLayer({
-        id: "match-line-layer",
-        type: "line",
-        source: "match-line",
-        paint: {
-          "line-color": "#1D4ED8",
-          "line-width": 4,
-          "line-opacity": 0.85
-        }
-      });
-    }
-
-    // 4. Zoom to fit
-    const bounds = new maplibregl.LngLatBounds();
-    coords.forEach(c => bounds.extend(c as maplibregl.LngLatLike));
-    map.fitBounds(bounds, { padding: 60, duration: 600 });
-
-  }, []);
+  }, [layers]);
 
 
 
@@ -914,7 +1043,8 @@ function DashboardContent() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              {/* Map Filters - Temporarily commented out */}
+              {/* <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
                 <button
                   onClick={() => setFiltersExpanded(!filtersExpanded)}
                   className="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
@@ -939,9 +1069,14 @@ function DashboardContent() {
                     />
                   </div>
                 )}
-              </div>
+              </div> */}
 
-              <AIMatchingPanel onMatchClick={(chain: any) => handleMatchSelect(chain)} />
+              <AIMatchingPanel 
+                onMatchClick={(chain: any) => handleMatchSelect(chain)}
+                filters={filters}
+                visibleLayers={visibleLayers}
+                subTypeFilters={subTypeFilters}
+              />
             </div>
           </div>
         </div>
