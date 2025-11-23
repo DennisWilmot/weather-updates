@@ -261,7 +261,8 @@ export async function GET(request: Request) {
         }
         
         // Validation requires positive quantity
-        const quantity = Math.max(1, row.person.numberOfPeople || 1);
+        // Each need item represents one unit (person doesn't have numberOfPeople field)
+        const quantity = 1;
         
         // Validation requires positive priority
         const priority = 1; // Default priority, could be based on urgency
