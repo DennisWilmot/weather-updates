@@ -1,6 +1,10 @@
 # Nixpacks configuration for matching-service
 # Forces Node.js detection and prevents Python detection
 
+# Explicitly set provider to node
+[providers]
+node = true
+
 [phases.setup]
 nixPkgs = ["nodejs_20", "npm"]
 
@@ -13,7 +17,6 @@ cmds = ["npm run build"]
 [start]
 cmd = "npm start"
 
-# Explicitly tell Nixpacks this is a Node.js project
 [variables]
 NODE_ENV = "production"
 
