@@ -291,3 +291,4 @@ Once Phase 1 is complete, proceed to:
 - Consider making some fields optional if they're not always needed
 - The `GlobalPlanningProblem` type should be flexible enough to accommodate future enhancements (risk layers, parish stats)
 
+

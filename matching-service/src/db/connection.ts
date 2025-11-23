@@ -38,3 +38,4 @@ export const db = drizzle(client);
 // Export client for direct access if needed
 export { client };
 
+

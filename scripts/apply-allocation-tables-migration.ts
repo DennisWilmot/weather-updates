@@ -2,7 +2,7 @@
  * Apply allocation tables migration
  * 
  * Applies the migration for warehouses, warehouse_inventory, allocation_plans,
- * and allocation_shipments tables.
+ * and allocation_shipments tables..
  */
 
 import postgres from 'postgres';
