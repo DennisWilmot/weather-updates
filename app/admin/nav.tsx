@@ -1,114 +1,149 @@
-"use client";
+'use client';
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { Box, Container, Flex, Group, Anchor, Burger, Drawer, Stack, Text } from '@mantine/core';
+import { useDisclosure } from '@mantine/hooks';
+import { IconChevronLeft } from '@tabler/icons-react';
 
 export default function AdminNavigation() {
   const pathname = usePathname();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMenuOpened, { toggle: toggleMobileMenu, close: closeMobileMenu }] = useDisclosure(false);
 
   const tabs = [
-    { name: "Dashboard", href: "/admin" },
     { name: "Users", href: "/admin/users" },
     { name: "Roles", href: "/admin/roles" },
     { name: "Audit Logs", href: "/admin/audits" },
   ];
 
   return (
-    <nav className="bg-white shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          {/* Desktop navigation */}
-          <div className="hidden md:flex md:space-x-8 md:items-center">
-            {tabs.map(tab => {
-              const active = pathname === tab.href;
-
-              return (
-                <Link
-                  key={tab.href}
-                  href={tab.href}
-                  className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${active
-                    ? "border-blue-500 text-gray-900"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                    }`}
-                >
-                  {tab.name}
-                </Link>
-              );
-            })}
-          </div>
-
-          {/* Mobile menu button */}
-          <div className="flex items-center md:hidden">
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
-              aria-expanded="false"
+    <>
+      <Box bg="white" style={{ boxShadow: '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)' }}>
+        <Container size="xl">
+          <Flex justify="space-between" align="center" h={64} gap="md">
+            <Anchor
+              component={Link}
+              href="/"
+              hiddenFrom="md"
+              style={{ display: 'none' }}
             >
-              <span className="sr-only">Open main menu</span>
-              {/* Hamburger icon */}
-              {!mobileMenuOpen ? (
-                <svg
-                  className="block h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth="1.5"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  className="block h-6 w-6"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth="1.5"
-                  stroke="currentColor"
-                  aria-hidden="true"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
+              <Group gap="xs">
+                <IconChevronLeft size={16} />
+                <Text size="sm" fw={500} c="gray.6">Back to Dashboard</Text>
+              </Group>
+            </Anchor>
+            <Anchor
+              component={Link}
+              href="/"
+              visibleFrom="md"
+            >
+              <Group gap="xs">
+                <IconChevronLeft size={16} />
+                <Text size="sm" fw={500} c="gray.6">Back to Dashboard</Text>
+              </Group>
+            </Anchor>
+            
+            {/* Desktop navigation */}
+            <Group gap="lg" ml="auto" visibleFrom="md">
+              {tabs.map(tab => {
+                const active = pathname === tab.href || (pathname === "/admin" && tab.href === "/admin/users");
+
+                return (
+                  <Anchor
+                    key={tab.href}
+                    component={Link}
+                    href={tab.href}
+                    style={{
+                      paddingBottom: '4px',
+                      borderBottom: active ? '2px solid #1478FF' : '2px solid transparent',
+                      color: active ? '#1a1a3c' : '#6b7280',
+                      textDecoration: 'none',
+                      fontWeight: 500,
+                      fontSize: '14px',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!active) e.currentTarget.style.color = '#374151';
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!active) e.currentTarget.style.color = '#6b7280';
+                    }}
+                  >
+                    {tab.name}
+                  </Anchor>
+                );
+              })}
+            </Group>
+
+            {/* Mobile menu button */}
+            <Burger
+              opened={mobileMenuOpened}
+              onClick={toggleMobileMenu}
+              hiddenFrom="md"
+              size="sm"
+            />
+          </Flex>
+        </Container>
+      </Box>
 
       {/* Mobile menu */}
-      {mobileMenuOpen && (
-        <div className="md:hidden">
-          <div className="pt-2 pb-3 space-y-1">
-            {tabs.map(tab => {
-              const active = pathname === tab.href;
+      <Drawer
+        opened={mobileMenuOpened}
+        onClose={closeMobileMenu}
+        title="Navigation"
+        position="left"
+        size="sm"
+        hiddenFrom="md"
+      >
+        <Stack gap="xs">
+          <Anchor
+            component={Link}
+            href="/"
+            onClick={closeMobileMenu}
+          >
+            <Group gap="xs">
+              <IconChevronLeft size={16} />
+              <Text size="sm" fw={500} c="gray.6">Back to Dashboard</Text>
+            </Group>
+          </Anchor>
+          {tabs.map(tab => {
+            const active = pathname === tab.href || (pathname === "/admin" && tab.href === "/admin/users");
 
-              return (
-                <Link
-                  key={tab.href}
-                  href={tab.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={`block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${active
-                    ? "bg-blue-50 border-blue-500 text-blue-700"
-                    : "border-transparent text-gray-600 hover:bg-gray-50 hover:border-gray-300 hover:text-gray-800"
-                    }`}
-                >
-                  {tab.name}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </nav>
+            return (
+              <Anchor
+                key={tab.href}
+                component={Link}
+                href={tab.href}
+                onClick={closeMobileMenu}
+                style={{
+                  padding: '8px 12px',
+                  paddingLeft: '12px',
+                  borderLeft: active ? '4px solid #1478FF' : '4px solid transparent',
+                  backgroundColor: active ? '#eff6ff' : 'transparent',
+                  color: active ? '#1e40af' : '#4b5563',
+                  textDecoration: 'none',
+                  fontWeight: 500,
+                  fontSize: '16px',
+                  borderRadius: '4px',
+                }}
+                onMouseEnter={(e) => {
+                  if (!active) {
+                    e.currentTarget.style.backgroundColor = '#f9fafb';
+                    e.currentTarget.style.color = '#1f2937';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                    e.currentTarget.style.color = '#4b5563';
+                  }
+                }}
+              >
+                {tab.name}
+              </Anchor>
+            );
+          })}
+        </Stack>
+      </Drawer>
+    </>
   );
 }
