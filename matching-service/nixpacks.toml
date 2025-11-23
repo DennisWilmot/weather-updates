@@ -5,11 +5,15 @@
 nixPkgs = ["nodejs_20", "npm"]
 
 [phases.install]
-cmds = ["npm install"]
+cmds = ["npm ci"]
 
 [phases.build]
 cmds = ["npm run build"]
 
 [start]
 cmd = "npm start"
+
+# Explicitly tell Nixpacks this is a Node.js project
+[variables]
+NODE_ENV = "production"
 

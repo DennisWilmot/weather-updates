@@ -1,0 +1,5 @@
+# Ignore Python files that might confuse Railway's detection
+../requirements.txt
+../*.py
+../scripts/*.py
+
