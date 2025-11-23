@@ -1,5 +1,27 @@
 'use client'
-import { Edit2, Plus, Search, Shield, Users, X } from 'lucide-react';
+import {
+  Box,
+  Stack,
+  Group,
+  Paper,
+  Button,
+  Text,
+  Title,
+  Badge,
+  TextInput,
+  Modal,
+  SimpleGrid,
+  Checkbox,
+} from '@mantine/core';
+import {
+  IconEdit,
+  IconPlus,
+  IconSearch,
+  IconShield,
+  IconUsers,
+  IconX,
+} from '@tabler/icons-react';
+import { useDisclosure } from '@mantine/hooks';
 import React, { useState } from 'react'
 
 interface Role {
@@ -32,7 +54,6 @@ const mockRoles: Role[] = [
     permissions: ['view_missions'],
     userCount: 45
   },
-
 ];
 
 const allPermissions = [
@@ -50,7 +71,7 @@ const allPermissions = [
 export default function Roles() {
   const [roles, setRoles] = useState<Role[]>(mockRoles);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
-  const [showRoleModal, setShowRoleModal] = useState(false);
+  const [showRoleModalOpened, { open: openRoleModal, close: closeRoleModal }] = useDisclosure(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
 
@@ -90,14 +111,16 @@ export default function Roles() {
   }, {} as Record<string, typeof allPermissions>);
 
   return (
-    <div className="space-y-6 p-4 sm:p-0">
+    <Stack gap="md">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-4xl font-bold text-black bg-clip-text tracking-tight">Roles & Permissions</h1>
-          <p className="text-gray-600 mt-1">Manage user roles and their permissions</p>
-        </div>
-        <button
+      <Group justify="space-between" align="flex-start" wrap="wrap">
+        <Box>
+          <Title order={1} fw={700} c="gray.9" style={{ letterSpacing: '-0.02em' }}>
+            Roles & Permissions
+          </Title>
+          <Text c="gray.6" mt="xs">Manage user roles and their permissions</Text>
+        </Box>
+        <Button
           onClick={() => {
             setSelectedRole({
               id: Date.now().toString(),
@@ -106,261 +129,251 @@ export default function Roles() {
               permissions: [],
               userCount: 0
             });
-            setShowRoleModal(true);
+            openRoleModal();
           }}
-          className="flex items-center justify-center gap-2 bg-[#1a1a3c] text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto"
+          leftSection={<IconPlus size={20} />}
+          style={{ backgroundColor: '#1a1a3c' }}
+          radius="md"
         >
-          <Plus size={20} />
           Create Role
-        </button>
-      </div>
+        </Button>
+      </Group>
 
       {/* Search */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-          <input
-            type="text"
-            placeholder="Search roles..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-      </div>
+      <Paper withBorder shadow="sm" radius="md" p="md">
+        <TextInput
+          placeholder="Search roles..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.currentTarget.value)}
+          leftSection={<IconSearch size={20} />}
+          radius="md"
+        />
+      </Paper>
 
       {/* Roles Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <SimpleGrid cols={{ base: 1, md: 2, lg: 3 }} spacing="md">
         {filteredRoles.map(role => (
-          <div
+          <Paper
             key={role.id}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-200 overflow-hidden group"
+            withBorder
+            shadow="sm"
+            radius="md"
+            p="md"
+            style={{ position: 'relative' }}
           >
-            <div className="p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#1a1a3c] rounded-lg flex items-center justify-center shadow-sm">
-                    <Shield className="text-white" size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-900">{role.name}</h3>
-                    <p className="text-xs text-gray-500">{role.description}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setSelectedRole(role);
-                    setShowRoleModal(true);
+            <Group justify="space-between" align="flex-start" mb="md">
+              <Group gap="sm">
+                <Box
+                  style={{
+                    width: 40,
+                    height: 40,
+                    backgroundColor: '#1a1a3c',
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
-                  className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors opacity-0 group-hover:opacity-100"
                 >
-                  <Edit2 size={16} />
-                </button>
-              </div>
+                  <IconShield size={20} color="white" />
+                </Box>
+                <Box>
+                  <Text fw={700} size="lg" c="gray.9">{role.name}</Text>
+                  <Text size="xs" c="gray.5">{role.description}</Text>
+                </Box>
+              </Group>
+              <Button
+                variant="subtle"
+                size="xs"
+                onClick={() => {
+                  setSelectedRole(role);
+                  openRoleModal();
+                }}
+                style={{ opacity: 0 }}
+                className="group-hover:opacity-100"
+              >
+                <IconEdit size={16} />
+              </Button>
+            </Group>
 
-              <div className="flex items-center gap-4 mb-4 pb-4 border-b border-gray-100">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Users size={16} className="text-gray-400" />
-                  <span>{role.userCount} users</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Shield size={16} className="text-gray-400" />
-                  <span>{role.permissions.length} permissions</span>
-                </div>
-              </div>
+            <Group gap="lg" mb="md" pb="md" style={{ borderBottom: '1px solid #e9ecef' }}>
+              <Group gap="xs">
+                <IconUsers size={16} color="#9ca3af" />
+                <Text size="sm" c="gray.6">{role.userCount} users</Text>
+              </Group>
+              <Group gap="xs">
+                <IconShield size={16} color="#9ca3af" />
+                <Text size="sm" c="gray.6">{role.permissions.length} permissions</Text>
+              </Group>
+            </Group>
 
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                  Key Permissions
-                </p>
-                <div className="flex flex-wrap gap-1">
-                  {role.permissions.slice(0, 3).map(perm => (
-                    <span
-                      key={perm}
-                      className="inline-flex items-center px-2 py-1 rounded-md bg-blue-50 text-blue-700 text-xs font-medium"
-                    >
-                      {perm.replace(/_/g, ' ')}
-                    </span>
-                  ))}
-                  {role.permissions.length > 3 && (
-                    <span className="inline-flex items-center px-2 py-1 rounded-md bg-gray-100 text-gray-600 text-xs font-medium">
-                      +{role.permissions.length - 3} more
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+            <Box>
+              <Text size="xs" fw={600} c="gray.5" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }} mb="xs">
+                Key Permissions
+              </Text>
+              <Group gap="xs" wrap="wrap">
+                {role.permissions.slice(0, 3).map(perm => (
+                  <Badge key={perm} variant="light" color="blue" size="sm">
+                    {perm.replace(/_/g, ' ')}
+                  </Badge>
+                ))}
+                {role.permissions.length > 3 && (
+                  <Badge variant="light" color="gray" size="sm">
+                    +{role.permissions.length - 3} more
+                  </Badge>
+                )}
+              </Group>
+            </Box>
+          </Paper>
         ))}
-      </div>
+      </SimpleGrid>
 
       {/* Modal */}
-      {showRoleModal && selectedRole && (
-        <div className="fixed inset-0  backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            <div className="bg-[#1a1a3c] p-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold text-white mb-2">
-                    {selectedRole.name ? 'Edit Role' : 'Create New Role'}
-                  </h2>
-                  <p className="text-blue-100 text-sm">Configure role permissions</p>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowRoleModal(false);
-                    setSelectedRole(null);
-                    setSelectedCategory('all');
-                  }}
-                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
+      <Modal
+        opened={showRoleModalOpened}
+        onClose={() => {
+          closeRoleModal();
+          setSelectedRole(null);
+          setSelectedCategory('all');
+        }}
+        title={
+          <Box>
+            <Title order={2} fw={700} c="white" mb="xs">
+              {selectedRole?.name ? 'Edit Role' : 'Create New Role'}
+            </Title>
+            <Text size="sm" c="blue.1">Configure role permissions</Text>
+          </Box>
+        }
+        size="xl"
+        centered
+        styles={{
+          header: { backgroundColor: '#1a1a3c' },
+          title: { color: 'white' },
+        }}
+      >
+        {selectedRole && (
+          <Stack gap="md">
+            <Stack gap="md">
+              <TextInput
+                label="Role Name"
+                value={selectedRole.name}
+                onChange={(e) => setSelectedRole({ ...selectedRole, name: e.currentTarget.value })}
+                placeholder="Enter role name"
+                radius="md"
+              />
+              <TextInput
+                label="Description"
+                value={selectedRole.description || ''}
+                onChange={(e) => setSelectedRole({ ...selectedRole, description: e.currentTarget.value })}
+                placeholder="Brief description"
+                radius="md"
+              />
+            </Stack>
 
-            <div className="p-6 overflow-y-auto max-h-[calc(90vh-180px)]">
-              <div className="space-y-4 mb-6">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Role Name</label>
-                  <input
-                    type="text"
-                    value={selectedRole.name}
-                    onChange={(e) => setSelectedRole({ ...selectedRole, name: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter role name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
-                  <input
-                    type="text"
-                    value={selectedRole.description || ''}
-                    onChange={(e) => setSelectedRole({ ...selectedRole, description: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Brief description"
-                  />
-                </div>
-              </div>
+            <Box>
+              <Text size="sm" fw={600} c="gray.7" mb="sm">Filter by Category</Text>
+              <Group gap="xs" wrap="wrap">
+                {categories.map(cat => (
+                  <Button
+                    key={cat}
+                    variant={selectedCategory === cat ? 'filled' : 'light'}
+                    color={selectedCategory === cat ? 'blue' : 'gray'}
+                    size="sm"
+                    radius="md"
+                    onClick={() => setSelectedCategory(cat)}
+                    style={
+                      selectedCategory === cat
+                        ? { backgroundColor: '#1a1a3c' }
+                        : {}
+                    }
+                  >
+                    {cat === 'all' ? 'All' : cat}
+                  </Button>
+                ))}
+              </Group>
+            </Box>
 
-              <div className="mb-6">
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Filter by Category</label>
-                <div className="flex flex-wrap gap-2">
-                  {categories.map(cat => (
-                    <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedCategory === cat
-                        ? 'bg-[#1a1a3c] text-white shadow-sm'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                    >
-                      {cat === 'all' ? 'All' : cat}
-                    </button>
-                  ))}
-                </div>
-              </div>
+            <Box>
+              <Text size="sm" fw={600} c="gray.7" mb="sm">
+                Permissions ({selectedRole.permissions.length} selected)
+              </Text>
 
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">
-                  Permissions ({selectedRole.permissions.length} selected)
-                </label>
-
-                {selectedCategory === 'all' ? (
-                  <div className="space-y-6">
-                    {Object.entries(groupedPermissions).map(([category, perms]) => (
-                      <div key={category} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                        <h4 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                          {category}
-                        </h4>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {perms.map(permission => {
-                            const isChecked = selectedRole.permissions.includes(permission.id);
-                            return (
-                              <label key={permission.id} className="group relative flex items-center gap-3 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => handleTogglePermission(permission.id)}
-                                  className="sr-only"
-                                />
-                                <div className={`relative w-5 h-5 rounded-md border-2 transition-all ${isChecked ? 'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-600' : 'bg-white border-gray-300 group-hover:border-blue-400'
-                                  }`}>
-                                  {isChecked && (
-                                    <svg className="absolute inset-0 w-full h-full text-white p-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  )}
-                                </div>
-                                <span className={`text-sm font-medium ${isChecked ? 'text-gray-900' : 'text-gray-600'}`}>
-                                  {permission.name}
-                                </span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {filteredPermissions.map(permission => {
-                        const isChecked = selectedRole.permissions.includes(permission.id);
-                        return (
-                          <label key={permission.id} className="group relative flex items-center gap-3 cursor-pointer">
-                            <input
-                              type="checkbox"
+              {selectedCategory === 'all' ? (
+                <Stack gap="md">
+                  {Object.entries(groupedPermissions).map(([category, perms]) => (
+                    <Paper key={category} withBorder radius="md" p="md" bg="gray.0">
+                      <Group gap="xs" mb="sm">
+                        <Box
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: '#3b82f6',
+                          }}
+                        />
+                        <Text size="sm" fw={700} c="gray.9">{category}</Text>
+                      </Group>
+                      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                        {perms.map(permission => {
+                          const isChecked = selectedRole.permissions.includes(permission.id);
+                          return (
+                            <Checkbox
+                              key={permission.id}
+                              label={permission.name}
                               checked={isChecked}
                               onChange={() => handleTogglePermission(permission.id)}
-                              className="sr-only"
                             />
-                            <div className={`relative w-5 h-5 rounded-md border-2 transition-all ${isChecked ? 'bg-gradient-to-br from-blue-500 to-blue-600 border-blue-600' : 'bg-white border-gray-300 group-hover:border-blue-400'
-                              }`}>
-                              {isChecked && (
-                                <svg className="absolute inset-0 w-full h-full text-white p-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                </svg>
-                              )}
-                            </div>
-                            <span className={`text-sm font-medium ${isChecked ? 'text-gray-900' : 'text-gray-600'}`}>
-                              {permission.name}
-                            </span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
+                          );
+                        })}
+                      </SimpleGrid>
+                    </Paper>
+                  ))}
+                </Stack>
+              ) : (
+                <Paper withBorder radius="md" p="md" bg="gray.0">
+                  <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                    {filteredPermissions.map(permission => {
+                      const isChecked = selectedRole.permissions.includes(permission.id);
+                      return (
+                        <Checkbox
+                          key={permission.id}
+                          label={permission.name}
+                          checked={isChecked}
+                          onChange={() => handleTogglePermission(permission.id)}
+                        />
+                      );
+                    })}
+                  </SimpleGrid>
+                </Paper>
+              )}
+            </Box>
 
-            <div className="bg-gray-50 p-6 border-t flex flex-col sm:flex-row gap-3 justify-end">
-              <button
+            <Group justify="flex-end" gap="sm" mt="md">
+              <Button
+                variant="outline"
                 onClick={() => {
-                  setShowRoleModal(false);
+                  closeRoleModal();
                   setSelectedRole(null);
                   setSelectedCategory('all');
                 }}
-                className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100"
+                radius="md"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={() => {
-                  setShowRoleModal(false);
+                  closeRoleModal();
                   setSelectedRole(null);
                   setSelectedCategory('all');
                 }}
-                className="px-6 py-2 bg-[#1a1a3c] text-white rounded-lg hover:bg-blue-700"
+                style={{ backgroundColor: '#1a1a3c' }}
+                radius="md"
               >
                 Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+              </Button>
+            </Group>
+          </Stack>
+        )}
+      </Modal>
+    </Stack>
   )
 }

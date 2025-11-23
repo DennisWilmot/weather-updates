@@ -1,517 +1,1131 @@
 'use client';
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Power, RefreshCw, Save, Search, Trash2, X, User, Mail, Shield, Calendar, Clock } from 'lucide-react';
+
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  Box,
+  Container,
+  Stack,
+  Group,
+  Paper,
+  Button,
+  Text,
+  Title,
+  Badge,
+  TextInput,
+  Select,
+  Table,
+  Modal,
+  SimpleGrid,
+  Pagination as MantinePagination,
+  Loader,
+  ActionIcon,
+  Checkbox,
+  Textarea,
+} from '@mantine/core';
+import {
+  IconBadge,
+  IconCalendar,
+  IconCheck,
+  IconChevronLeft,
+  IconChevronRight,
+  IconClock,
+  IconFilter,
+  IconMail,
+  IconRefresh,
+  IconDeviceFloppy,
+  IconSearch,
+  IconShield,
+  IconTrash,
+  IconUsers,
+  IconX,
+} from '@tabler/icons-react';
+import { useDisclosure } from '@mantine/hooks';
 import { toast } from 'sonner';
 
-interface User {
+const CUSTOM_ROLE_ID = 'custom-inline';
+
+type Status = 'active' | 'suspended';
+type RoleMode = 'preset' | 'custom';
+
+interface PermissionActionConfig {
+  id: string;
+  label: string;
+}
+
+interface PermissionCategoryConfig {
+  id: string;
+  label: string;
+  description: string;
+  actions: PermissionActionConfig[];
+}
+
+type PermissionMatrix = Record<string, Record<string, boolean>>;
+type FormsAccess = Record<string, boolean>;
+
+interface RoleDefinition {
+  id: string;
+  name: string;
+  description: string;
+  accent: string;
+  badgeClass: string;
+  permissions: PermissionMatrix;
+  formsAccess: FormsAccess;
+  lastUpdated: string;
+  isSystem?: boolean;
+}
+
+interface UserRecord {
   id: string;
   name: string;
   email: string;
-  role: string;
-  status: 'active' | 'suspended';
-  lastLogin: string;
+  status: Status;
+  roleId: string;
+  customRole?: RoleDefinition;
+  location: string;
+  teams: string[];
+  lastActive: string;
   createdAt: string;
 }
 
-const mockUsers: User[] = [
-  { id: '1', name: 'John Doe', email: 'john@example.com', role: 'Admin', status: 'active', lastLogin: '2025-11-19 10:30', createdAt: '2025-01-15' },
-  { id: '2', name: 'Jane Smith', email: 'jane@example.com', role: 'Editor', status: 'active', lastLogin: '2025-11-18 14:20', createdAt: '2025-02-20' },
-  { id: '3', name: 'Bob Wilson', email: 'bob@example.com', role: 'Viewer', status: 'suspended', lastLogin: '2025-11-10 09:15', createdAt: '2025-03-10' },
-  { id: '4', name: 'Alice Brown', email: 'alice@example.com', role: 'Editor', status: 'active', lastLogin: '2025-11-19 08:45', createdAt: '2025-04-05' },
+const formsCatalog = [
+  { id: 'damage', label: 'Damage & Needs Assessment' },
+  { id: 'supply', label: 'Supply Drop Verification' },
+  { id: 'shelter', label: 'Shelter Readiness Survey' },
+  { id: 'medical', label: 'Medical Intake' },
+  { id: 'water', label: 'Water Quality Check' },
 ];
 
-const mockRoles: any[] = [
-  { id: '1', name: 'Admin', permissions: ['view_users', 'edit_users', 'delete_users', 'view_missions', 'edit_missions', 'approve_missions'] },
-  { id: '2', name: 'Editor', permissions: ['view_users', 'view_missions', 'edit_missions'] },
-  { id: '3', name: 'Viewer', permissions: ['view_missions'] },
+const permissionCatalog: PermissionCategoryConfig[] = [
+  {
+    id: 'users',
+    label: 'User Directory',
+    description: 'Invite, edit, and suspend platform users.',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'invite', label: 'Invite' },
+      { id: 'edit', label: 'Edit' },
+      { id: 'suspend', label: 'Suspend' },
+    ],
+  },
+  {
+    id: 'deployments',
+    label: 'Deployments',
+    description: 'Field missions, assignments, and approvals.',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'create', label: 'Create' },
+      { id: 'edit', label: 'Edit' },
+      { id: 'approve', label: 'Approve' },
+    ],
+  },
+  {
+    id: 'forms',
+    label: 'Form Builder',
+    description: 'Atlas form templates and publishing.',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'create', label: 'Create' },
+      { id: 'assign', label: 'Assign' },
+      { id: 'publish', label: 'Publish' },
+    ],
+  },
+  {
+    id: 'insights',
+    label: 'Insights & Exports',
+    description: 'Reporting, downloads, and sharing.',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'export', label: 'Export' },
+    ],
+  },
 ];
+
+const baseMatrix = buildBaseMatrix();
+const baseForms = buildBaseForms();
+
+function buildBaseMatrix(): PermissionMatrix {
+  const matrix: PermissionMatrix = {};
+  permissionCatalog.forEach(category => {
+    matrix[category.id] = {};
+    category.actions.forEach(action => {
+      matrix[category.id][action.id] = false;
+    });
+  });
+  return matrix;
+}
+
+function buildBaseForms(): FormsAccess {
+  const map: FormsAccess = {};
+  formsCatalog.forEach(form => {
+    map[form.id] = false;
+  });
+  return map;
+}
+
+function cloneMatrix(matrix: PermissionMatrix): PermissionMatrix {
+  return JSON.parse(JSON.stringify(matrix));
+}
+
+function cloneForms(map: FormsAccess): FormsAccess {
+  return { ...map };
+}
+
+function createMatrix(enabled: Record<string, string[]>): PermissionMatrix {
+  const matrix = cloneMatrix(baseMatrix);
+  Object.entries(enabled).forEach(([categoryId, actionIds]) => {
+    actionIds.forEach(actionId => {
+      if (matrix[categoryId] && actionId in matrix[categoryId]) {
+        matrix[categoryId][actionId] = true;
+      }
+    });
+  });
+  return matrix;
+}
+
+function createFormsAccess(enabledIds: string[]): FormsAccess {
+  const map = cloneForms(baseForms);
+  enabledIds.forEach(id => {
+    if (map[id] !== undefined) {
+      map[id] = true;
+    }
+  });
+  return map;
+}
+
+function createRoleTemplate(overrides?: Partial<RoleDefinition>): RoleDefinition {
+  return {
+    id: overrides?.id ?? `role-${Math.random().toString(36).slice(2, 8)}`,
+    name: overrides?.name ?? 'Custom Role',
+    description: overrides?.description ?? 'Tailored permissions for unique access needs.',
+    accent: overrides?.accent ?? 'bg-gradient-to-r from-slate-600 to-slate-800',
+    badgeClass: overrides?.badgeClass ?? 'bg-slate-100 text-slate-800 border border-slate-200',
+    permissions: overrides?.permissions ? cloneMatrix(overrides.permissions) : cloneMatrix(baseMatrix),
+    formsAccess: overrides?.formsAccess ? cloneForms(overrides.formsAccess) : cloneForms(baseForms),
+    lastUpdated: overrides?.lastUpdated ?? 'Just now',
+    isSystem: overrides?.isSystem ?? false,
+  };
+}
+
+function cloneRole(role: RoleDefinition): RoleDefinition {
+  return {
+    ...role,
+    permissions: cloneMatrix(role.permissions),
+    formsAccess: cloneForms(role.formsAccess),
+  };
+}
+
+const rolePresets: RoleDefinition[] = [
+  createRoleTemplate({
+    id: 'admin',
+    name: 'Atlas Admin',
+    description: 'Full platform control, approvals, and publishing.',
+    accent: 'bg-gradient-to-r from-indigo-500 to-blue-500',
+    badgeClass: 'bg-indigo-100 text-indigo-800 border border-indigo-200',
+    permissions: createMatrix({
+      users: ['view', 'invite', 'edit', 'suspend'],
+      deployments: ['view', 'create', 'edit', 'approve'],
+      forms: ['view', 'create', 'assign', 'publish'],
+      insights: ['view', 'export'],
+    }),
+    formsAccess: createFormsAccess(formsCatalog.map(form => form.id)),
+    lastUpdated: '2h ago',
+    isSystem: true,
+  }),
+  createRoleTemplate({
+    id: 'ops',
+    name: 'Operations Lead',
+    description: 'Runs field deployments and assigns responders.',
+    accent: 'bg-gradient-to-r from-emerald-500 to-teal-500',
+    badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+    permissions: createMatrix({
+      users: ['view'],
+      deployments: ['view', 'create', 'edit', 'approve'],
+      forms: ['view', 'assign'],
+      insights: ['view'],
+    }),
+    formsAccess: createFormsAccess(['damage', 'supply', 'shelter']),
+    lastUpdated: '4h ago',
+    isSystem: true,
+  }),
+  createRoleTemplate({
+    id: 'field',
+    name: 'Field Reporter',
+    description: 'Captures needs and status updates on site.',
+    accent: 'bg-gradient-to-r from-amber-500 to-orange-500',
+    badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
+    permissions: createMatrix({
+      deployments: ['view'],
+      forms: ['view', 'assign'],
+      insights: ['view'],
+    }),
+    formsAccess: createFormsAccess(['damage', 'supply', 'medical']),
+    lastUpdated: 'Yesterday',
+    isSystem: true,
+  }),
+  createRoleTemplate({
+    id: 'analyst',
+    name: 'Insights Analyst',
+    description: 'Reviews submissions and exports trend data.',
+    accent: 'bg-gradient-to-r from-sky-500 to-cyan-500',
+    badgeClass: 'bg-sky-100 text-sky-800 border border-sky-200',
+    permissions: createMatrix({
+      users: ['view'],
+      deployments: ['view'],
+      forms: ['view'],
+      insights: ['view', 'export'],
+    }),
+    formsAccess: createFormsAccess(['damage', 'water']),
+    lastUpdated: '3d ago',
+    isSystem: true,
+  }),
+];
+
+const initialUsers: UserRecord[] = [
+  {
+    id: 'USR-2411',
+    name: 'Nia Morgan',
+    email: 'nia.morgan@atlas.tm',
+      status: 'active',
+    roleId: 'admin',
+    location: 'Kingston HQ',
+    teams: ['Command Center'],
+    lastActive: '2 min ago',
+    createdAt: '2024-03-14',
+  },
+  {
+    id: 'USR-2412',
+    name: 'David Park',
+    email: 'david.park@atlas.tm',
+    status: 'active',
+    roleId: 'ops',
+    location: 'St. Mary',
+    teams: ['Deployments', 'Logistics'],
+    lastActive: '15 min ago',
+    createdAt: '2024-05-02',
+  },
+  {
+    id: 'USR-2413',
+    name: 'Simone Graves',
+    email: 'simone.graves@atlas.tm',
+    status: 'suspended',
+    roleId: 'analyst',
+    location: 'Remote - Montego Bay',
+    teams: ['Insights'],
+    lastActive: '5d ago',
+    createdAt: '2023-11-20',
+  },
+  {
+    id: 'USR-2414',
+    name: 'Andre Miller',
+    email: 'andre.miller@atlas.tm',
+    status: 'active',
+    roleId: 'field',
+    location: 'Portland Parish',
+    teams: ['Field Recon'],
+    lastActive: '50 min ago',
+    createdAt: '2024-01-07',
+  },
+  {
+    id: 'USR-2415',
+    name: 'Maya Chen',
+    email: 'maya.chen@atlas.tm',
+    status: 'active',
+    roleId: CUSTOM_ROLE_ID,
+    customRole: createRoleTemplate({
+      id: CUSTOM_ROLE_ID,
+      name: 'Needs Only',
+      description: 'Limited view for rapid needs capture.',
+      permissions: createMatrix({
+        deployments: ['view'],
+        forms: ['view'],
+        insights: ['view'],
+      }),
+      formsAccess: createFormsAccess(['damage']),
+      accent: 'bg-gradient-to-r from-rose-500 to-orange-500',
+      badgeClass: 'bg-rose-100 text-rose-800 border border-rose-200',
+      lastUpdated: '1d ago',
+    }),
+    location: 'St. Thomas',
+    teams: ['Needs Assessment'],
+    lastActive: '1h ago',
+    createdAt: '2024-02-18',
+  },
+];
+
+const usersPerPage = 6;
+
+function parseBadgeClass(badgeClass: string) {
+  // Parse Tailwind classes to Mantine-compatible styles
+  if (badgeClass.includes('indigo')) {
+    return { backgroundColor: '#e0e7ff', color: '#4338ca', borderColor: '#c7d2fe' };
+  }
+  if (badgeClass.includes('emerald')) {
+    return { backgroundColor: '#d1fae5', color: '#065f46', borderColor: '#a7f3d0' };
+  }
+  if (badgeClass.includes('amber')) {
+    return { backgroundColor: '#fef3c7', color: '#92400e', borderColor: '#fde68a' };
+  }
+  if (badgeClass.includes('sky')) {
+    return { backgroundColor: '#e0f2fe', color: '#0c4a6e', borderColor: '#bae6fd' };
+  }
+  if (badgeClass.includes('rose')) {
+    return { backgroundColor: '#ffe4e6', color: '#9f1239', borderColor: '#fecdd3' };
+  }
+  if (badgeClass.includes('slate')) {
+    return { backgroundColor: '#f1f5f9', color: '#1e293b', borderColor: '#cbd5e1' };
+  }
+  return { backgroundColor: '#f3f4f6', color: '#374151', borderColor: '#e5e7eb' };
+}
 
 export default function AdminUsersPage() {
-  const [roles] = useState<any[]>(mockRoles);
-  const [users, setUsers] = useState<User[]>(mockUsers);
-  const [userSearch, setUserSearch] = useState('');
-  const [userRoleFilter, setUserRoleFilter] = useState('all');
-  const [userStatusFilter, setUserStatusFilter] = useState('all');
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'Viewer' });
-  const [userPage, setUserPage] = useState(1);
-  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
-  const [showUserModal, setShowUserModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [roles, setRoles] = useState<RoleDefinition[]>(rolePresets);
+  const [users, setUsers] = useState<UserRecord[]>(initialUsers);
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | Status>('all');
+  const [page, setPage] = useState(1);
 
-  const handleCreateUser = () => {
-    const user: User = {
-      id: String(users.length + 1),
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
-      status: 'active',
-      lastLogin: 'Never',
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    setUsers([...users, user]);
-    setShowCreateUserModal(false);
-    setNewUser({ name: '', email: '', role: 'Viewer' });
-    toast.success('User created successfully');
+  const [userModalOpened, { open: openUserModal, close: closeUserModal }] = useDisclosure(false);
+  const [userDraft, setUserDraft] = useState<UserRecord | null>(null);
+  const [roleMode, setRoleMode] = useState<RoleMode>('preset');
+  const [userCustomRole, setUserCustomRole] = useState<RoleDefinition>(() => createRoleTemplate());
+
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+
+  const roleOptions = useMemo(
+    () => [
+      ...roles.map(role => ({ id: role.id, label: role.name })),
+      { id: CUSTOM_ROLE_ID, label: 'Custom roles' },
+    ],
+    [roles],
+  );
+
+  const filteredUsers = useMemo(() => {
+    return users.filter(user => {
+      const query = search.toLowerCase();
+      const matchesSearch =
+        !query ||
+        user.name.toLowerCase().includes(query) ||
+        user.email.toLowerCase().includes(query) ||
+        user.location.toLowerCase().includes(query);
+
+      const matchesRole =
+        roleFilter === 'all' ||
+        (roleFilter === CUSTOM_ROLE_ID && user.roleId === CUSTOM_ROLE_ID) ||
+        user.roleId === roleFilter;
+
+      const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+  }, [users, search, roleFilter, statusFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, roleFilter, statusFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredUsers.length / usersPerPage));
+  const pagedUsers = filteredUsers.slice((page - 1) * usersPerPage, page * usersPerPage);
+
+  const totalActive = users.filter(user => user.status === 'active').length;
+  const totalSuspended = users.length - totalActive;
+  const customRolesCount = roles.filter(role => !role.isSystem).length;
+
+  const simulateNetwork = async (key: string, cb: () => void, message: string) => {
+    setPendingAction(key);
+    await new Promise(resolve => setTimeout(resolve, 600 + Math.random() * 800));
+    cb();
+    toast.success(message);
+    setPendingAction(null);
   };
 
-  const handleUpdateUser = (updatedUser: User) => {
-    setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u));
-    setSelectedUser(null);
-    setShowUserModal(false);
-    toast.success('User updated successfully');
-  };
-
-  const handleToggleUserStatus = (userId: string) => {
-    setUsers(users.map(u =>
-      u.id === userId
-        ? { ...u, status: u.status === 'active' ? 'suspended' : 'active' }
-        : u
-    ));
-  };
-
-  const handleResetPassword = (userId: string) => {
-    toast.info(`Password reset link sent for user ${userId}`);
-  };
-
-  const handleDeleteUser = (userId: string) => {
-    if (confirm('Are you sure you want to delete this user?')) {
-      setUsers(users.filter(u => u.id !== userId));
-      setSelectedUser(null);
-      setShowUserModal(false);
-      toast.success('User deleted successfully');
+  const getRoleMeta = (user: UserRecord) => {
+    if (user.roleId === CUSTOM_ROLE_ID && user.customRole) {
+      return { label: user.customRole.name, badgeClass: user.customRole.badgeClass };
     }
+    const role = roles.find(r => r.id === user.roleId);
+    return {
+      label: role?.name ?? 'Unassigned',
+      badgeClass: role?.badgeClass ?? 'bg-gray-100 text-gray-700 border border-gray-200',
+    };
   };
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(userSearch.toLowerCase()) ||
-      user.email.toLowerCase().includes(userSearch.toLowerCase());
-    const matchesRole = userRoleFilter === 'all' || user.role === userRoleFilter;
-    const matchesStatus = userStatusFilter === 'all' || user.status === userStatusFilter;
-    return matchesSearch && matchesRole && matchesStatus;
-  });
+  const handleOpenUserModal = (user: UserRecord) => {
+    setUserDraft({ ...user });
+    if (user.roleId === CUSTOM_ROLE_ID && user.customRole) {
+      setRoleMode('custom');
+      setUserCustomRole(cloneRole(user.customRole));
+    } else {
+      setRoleMode('preset');
+      setUserCustomRole(createRoleTemplate({ name: `${user.name} Custom Access` }));
+    }
+    openUserModal();
+  };
 
-  const usersPerPage = 5;
-  const paginatedUsers = filteredUsers.slice((userPage - 1) * usersPerPage, userPage * usersPerPage);
+  const resetUserModal = () => {
+    closeUserModal();
+    setUserDraft(null);
+    setRoleMode('preset');
+  };
+
+  const handleSaveUser = async () => {
+    if (!userDraft) return;
+    await simulateNetwork('save-user', () => {
+      setUsers(prev =>
+        prev.map(user => {
+          if (user.id !== userDraft.id) return user;
+          if (roleMode === 'custom') {
+            return {
+              ...userDraft,
+              roleId: CUSTOM_ROLE_ID,
+              customRole: cloneRole({
+                ...userCustomRole,
+                id: `${CUSTOM_ROLE_ID}-${userDraft.id}`,
+                badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
+              }),
+            };
+          }
+          return { ...userDraft, customRole: undefined };
+        }),
+      );
+    }, 'User changes saved');
+    resetUserModal();
+  };
+
+  const handleToggleUserStatus = async (user: UserRecord) => {
+    await simulateNetwork(
+      'toggle-status',
+      () => {
+        setUsers(prev =>
+          prev.map(entry =>
+            entry.id === user.id
+              ? { ...entry, status: entry.status === 'active' ? 'suspended' : 'active' }
+              : entry,
+          ),
+        );
+      },
+      user.status === 'active' ? 'User suspended' : 'User reactivated',
+    );
+  };
+
+  const handleDeleteUser = async (user: UserRecord) => {
+    await simulateNetwork(
+      'delete-user',
+      () => {
+        setUsers(prev => prev.filter(entry => entry.id !== user.id));
+      },
+      'User removed',
+    );
+    resetUserModal();
+  };
+
+  const updateCustomRole = (
+    updater: (current: RoleDefinition) => RoleDefinition,
+  ) => {
+    setUserCustomRole(current => updater(cloneRole(current)));
+  };
 
   return (
-    <div className="space-y-6 p-4 sm:p-0">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900">
-            User Management
-          </h1>
-          <p className="text-gray-600 mt-2">Manage all system users and their permissions</p>
-        </div>
-        <button
-          onClick={() => setShowCreateUserModal(true)}
-          className="flex items-center justify-center gap-2 bg-[#1a1a3c] text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors w-full sm:w-auto shadow-sm"
-        >
-          <Plus size={20} />
-          Create User
-        </button>
-      </div>
+    <Stack gap="md">
+      <Box>
+        <Text size="sm" fw={600} c="blue.6" style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          Admin Panel
+        </Text>
+        <Title order={1} fw={700} c="gray.9" mt="xs">
+          Users & Access
+        </Title>
+        <Text c="gray.6" mt="xs">
+          Manage user accounts and their role assignments.
+        </Text>
+      </Box>
 
-      {/* Search and filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <select
-            value={userRoleFilter}
-            onChange={(e) => setUserRoleFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All Roles</option>
-            {roles.map(role => (
-              <option key={role.id} value={role.name}>{role.name}</option>
-            ))}
-          </select>
-          <select
-            value={userStatusFilter}
-            onChange={(e) => setUserStatusFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="all">All Status</option>
-            <option value="active">Active</option>
-            <option value="suspended">Suspended</option>
-          </select>
-        </div>
-      </div>
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+        <SummaryCard
+          label="Active users"
+          value={totalActive}
+          change="+8 this week"
+          icon={<IconUsers size={20} style={{ color: '#2563eb' }} />}
+        />
+        <SummaryCard
+          label="Suspended"
+          value={totalSuspended}
+          change="Review needed"
+          icon={<IconShield size={20} style={{ color: '#f59e0b' }} />}
+        />
+        <SummaryCard
+          label="Custom roles"
+          value={customRolesCount}
+          change="Locally saved"
+          icon={<IconBadge size={20} style={{ color: '#10b981' }} />}
+        />
+      </SimpleGrid>
 
-      {/* Desktop Table */}
-      <div className="hidden lg:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gradient-to-r from-gray-50 to-blue-50/30">
-              <tr>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">User</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Role</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Last Login</th>
-                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-100">
-              {paginatedUsers.map(user => (
-                <tr
+      <Stack gap="md">
+        <FiltersCard
+          search={search}
+          onSearch={setSearch}
+          roleFilter={roleFilter}
+          statusFilter={statusFilter}
+          onRoleFilter={setRoleFilter}
+          onStatusFilter={setStatusFilter}
+          roleOptions={roleOptions}
+        />
+
+        <Paper withBorder shadow="lg" radius="md" style={{ overflow: 'hidden' }}>
+            {filteredUsers.length === 0 ? (
+              <Stack gap="md" p="xl" align="center">
+                <Box
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: '50%',
+                    backgroundColor: '#eff6ff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#2563eb',
+                  }}
+                >
+                  <IconSearch size={22} />
+                </Box>
+                <Title order={3} fw={600} c="gray.9">No matches found</Title>
+                <Text c="gray.6" style={{ maxWidth: 384 }} ta="center">
+                  Adjust filters or reset search to see the full roster.
+                </Text>
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => {
+                    setSearch('');
+                    setRoleFilter('all');
+                    setStatusFilter('all');
+                  }}
+                >
+                  Clear filters
+                </Button>
+              </Stack>
+            ) : (
+              <>
+                <Box visibleFrom="xl">
+                  <Table.ScrollContainer minWidth={800}>
+                    <Table highlightOnHover>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>User</Table.Th>
+                          <Table.Th>Role</Table.Th>
+                          <Table.Th>Status</Table.Th>
+                          <Table.Th>Last active</Table.Th>
+                          <Table.Th>Location</Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {pagedUsers.map(user => {
+                          const roleMeta = getRoleMeta(user);
+                          return (
+                            <Table.Tr
                   key={user.id}
-                  className="hover:bg-blue-50/50 cursor-pointer transition-colors group"
-                  onClick={() => {
-                    setSelectedUser(user);
-                    setShowUserModal(true);
-                  }}
-                >
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-[#1a1a3c] rounded-full flex items-center justify-center text-white font-semibold">
-                        {user.name.charAt(0)}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-gray-900">{user.name}</div>
-                        <div className="text-sm text-gray-500">{user.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                      {user.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${user.status === 'active'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700'
-                      }`}>
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{user.lastLogin}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => handleToggleUserStatus(user.id)}
-                        className={`p-2 rounded-lg transition-colors ${user.status === 'active'
-                          ? 'text-gray-400 hover:text-red-600 hover:bg-red-50'
-                          : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
-                          }`}
-                        title={user.status === 'active' ? 'Suspend' : 'Activate'}
-                      >
-                        <Power size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleResetPassword(user.id)}
-                        className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                        title="Reset Password"
-                      >
-                        <RefreshCw size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => handleOpenUserModal(user)}
+                            >
+                              <Table.Td>
+                                <Group gap="sm">
+                                  <Box
+                                    style={{
+                                      width: 44,
+                                      height: 44,
+                                      borderRadius: '50%',
+                                      backgroundColor: '#1e293b',
+                                      color: 'white',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {user.name
+                                      .split(' ')
+                                      .map(part => part[0])
+                                      .slice(0, 2)
+                                      .join('')}
+                                  </Box>
+                                  <Box>
+                                    <Text fw={600} c="gray.9">{user.name}</Text>
+                                    <Text size="sm" c="gray.5">{user.email}</Text>
+                                  </Box>
+                                </Group>
+                              </Table.Td>
+                              <Table.Td>
+                                <Badge
+                                  variant="light"
+                                  style={{
+                                    border: '1px solid',
+                                    ...parseBadgeClass(roleMeta.badgeClass),
+                                  }}
+                                >
+                                  {roleMeta.label}
+                                </Badge>
+                              </Table.Td>
+                              <Table.Td>
+                                <StatusBadge status={user.status} />
+                              </Table.Td>
+                              <Table.Td>
+                                <Text size="sm" c="gray.6">{user.lastActive}</Text>
+                              </Table.Td>
+                              <Table.Td>
+                                <Text size="sm" c="gray.6">{user.location}</Text>
+                              </Table.Td>
+                            </Table.Tr>
+                          );
+                        })}
+                      </Table.Tbody>
+                    </Table>
+                  </Table.ScrollContainer>
+                </Box>
 
-        {/* Desktop Pagination */}
-        <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-200">
-          <div className="text-sm text-gray-700">
-            Showing {((userPage - 1) * usersPerPage) + 1} to {Math.min(userPage * usersPerPage, filteredUsers.length)} of {filteredUsers.length} users
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setUserPage(Math.max(1, userPage - 1))}
-              disabled={userPage === 1}
-              className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => setUserPage(Math.min(Math.ceil(filteredUsers.length / usersPerPage), userPage + 1))}
-              disabled={userPage >= Math.ceil(filteredUsers.length / usersPerPage)}
-              className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Mobile Cards */}
-      <div className="lg:hidden space-y-4">
-        {paginatedUsers.map(user => (
-          <div
+                <Stack gap="xs" hiddenFrom="xl">
+                  {pagedUsers.map(user => {
+                    const roleMeta = getRoleMeta(user);
+                    return (
+                      <Paper
             key={user.id}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => {
-              setSelectedUser(user);
-              setShowUserModal(true);
-            }}
-          >
-            <div className="flex items-start gap-4 mb-4">
-              <div className="w-12 h-12 bg-[#1a1a3c] rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0">
-                {user.name.charAt(0)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-gray-900 text-lg">{user.name}</h3>
-                <p className="text-sm text-gray-500 truncate">{user.email}</p>
-              </div>
-            </div>
+                        p="md"
+                        withBorder
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => handleOpenUserModal(user)}
+                      >
+                        <Group justify="space-between" align="flex-start">
+                          <Box>
+                            <Text size="sm" fw={600} c="gray.9">{user.name}</Text>
+                            <Text size="xs" c="gray.5">{user.email}</Text>
+                          </Box>
+                          <StatusBadge status={user.status} />
+                        </Group>
+                        <Group gap="xs" mt="md">
+                          <Badge
+                            variant="light"
+                            size="xs"
+                            style={{
+                              border: '1px solid',
+                              ...parseBadgeClass(roleMeta.badgeClass),
+                            }}
+                          >
+                            {roleMeta.label}
+                          </Badge>
+                          <Badge variant="light" size="xs" color="gray">
+                            {user.location}
+                          </Badge>
+                          <Badge variant="light" size="xs" color="gray">
+                            {user.lastActive}
+                          </Badge>
+                        </Group>
+                      </Paper>
+                    );
+                  })}
+                </Stack>
 
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Role</span>
-                <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                  {user.role}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-500">Status</span>
-                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                  }`}>
-                  {user.status}
-                </span>
-              </div>
-              <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                <span className="text-xs text-gray-500">Last login: {user.lastLogin}</span>
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {/* Mobile Pagination */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="text-sm text-gray-700 text-center">
-              Showing {((userPage - 1) * usersPerPage) + 1} to {Math.min(userPage * usersPerPage, filteredUsers.length)} of {filteredUsers.length}
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <button
-                onClick={() => setUserPage(Math.max(1, userPage - 1))}
-                disabled={userPage === 1}
-                className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                <ChevronLeft size={16} />
-                Previous
-              </button>
-              <button
-                onClick={() => setUserPage(Math.min(Math.ceil(filteredUsers.length / usersPerPage), userPage + 1))}
-                disabled={userPage >= Math.ceil(filteredUsers.length / usersPerPage)}
-                className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                Next
-                <ChevronRight size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* User Detail Modal */}
-      {showUserModal && selectedUser && (
-        <div className="fixed inset-0  backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
-            <div className="bg-[#1a1a3c] p-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold text-white mb-2">User Details</h2>
-                  <p className="text-blue-100 text-sm">Edit user information and permissions</p>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowUserModal(false);
-                    setSelectedUser(null);
-                  }}
-                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all hover:rotate-90"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(90vh-220px)]">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Name</label>
-                  <input
-                    type="text"
-                    value={selectedUser.name}
-                    onChange={(e) => setSelectedUser({ ...selectedUser, name: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <Box p="md" style={{ borderTop: '1px solid #e9ecef' }}>
+                  <MantinePagination
+                    value={page}
+                    total={pageCount}
+                    onChange={setPage}
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
-                  <input
-                    type="email"
-                    value={selectedUser.email}
-                    onChange={(e) => setSelectedUser({ ...selectedUser, email: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Role</label>
-                  <select
-                    value={selectedUser.role}
-                    onChange={(e) => setSelectedUser({ ...selectedUser, role: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {roles.map(role => (
-                      <option key={role.id} value={role.name}>{role.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Status</label>
-                  <div className="flex items-center h-10">
-                    <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-semibold ${selectedUser.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                      }`}>
-                      {selectedUser.status}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Last Login</label>
-                  <p className="text-gray-900 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">{selectedUser.lastLogin}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Created At</label>
-                  <p className="text-gray-900 px-4 py-2 bg-gray-50 rounded-lg border border-gray-200">{selectedUser.createdAt}</p>
-                </div>
-              </div>
-            </div>
+                </Box>
+              </>
+            )}
+        </Paper>
+      </Stack>
 
-            <div className="bg-gray-50 p-6 border-t border-gray-200">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <button
-                  onClick={() => handleUpdateUser(selectedUser)}
-                  className="flex items-center justify-center gap-2 bg-[#1a1a3c] text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Save size={16} />
-                  Save Changes
-                </button>
-                <button
-                  onClick={() => {
-                    handleToggleUserStatus(selectedUser.id);
-                    setSelectedUser({
-                      ...selectedUser,
-                      status: selectedUser.status === 'active' ? 'suspended' : 'active'
-                    });
-                  }}
-                  className={`flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors ${selectedUser.status === 'active'
-                    ? 'bg-red-600 text-white hover:bg-red-700'
-                    : 'bg-green-600 text-white hover:bg-green-700'
-                    }`}
-                >
-                  <Power size={16} />
-                  {selectedUser.status === 'active' ? 'Suspend' : 'Reactivate'}
-                </button>
-                <button
-                  onClick={() => handleResetPassword(selectedUser.id)}
-                  className="flex items-center justify-center gap-2 bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors"
-                >
-                  <RefreshCw size={16} />
-                  Reset Password
-                </button>
-                <button
-                  onClick={() => handleDeleteUser(selectedUser.id)}
-                  className="flex items-center justify-center gap-2 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors"
-                >
-                  <Trash2 size={16} />
-                  Delete User
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        opened={userModalOpened}
+        onClose={resetUserModal}
+        title={
+          <Box>
+            <Text size="sm" fw={600} c="blue.6">User profile</Text>
+            <Title order={2} fw={700} c="gray.9" mt="xs">{userDraft?.name}</Title>
+            <Text size="sm" c="gray.6" mt="xs">{userDraft?.location}</Text>
+          </Box>
+        }
+        size="xl"
+        centered
+      >
+        {userDraft && (
+          <Stack gap="md">
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+              <Field label="Email">
+                <Group gap="xs">
+                  <IconMail size={14} />
+                  <Text size="sm" c="gray.7">{userDraft.email}</Text>
+                </Group>
+              </Field>
+              <Field label="Created">
+                <Group gap="xs">
+                  <IconCalendar size={14} />
+                  <Text size="sm" c="gray.7">{userDraft.createdAt}</Text>
+                </Group>
+              </Field>
+              <Field label="Status">
+                <StatusBadge status={userDraft.status} />
+              </Field>
+              <Field label="Last active">
+                <Group gap="xs">
+                  <IconClock size={14} />
+                  <Text size="sm" c="gray.7">{userDraft.lastActive}</Text>
+                </Group>
+              </Field>
+            </SimpleGrid>
 
-      {/* Create User Modal */}
-      {showCreateUserModal && (
-        <div className="fixed inset-0  backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
-            <div className="bg-[#1a1a3c] p-6">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h2 className="text-2xl font-bold text-white mb-2">Create New User</h2>
-                  <p className="text-blue-100 text-sm">Add a new user to the system</p>
-                </div>
-                <button
-                  onClick={() => setShowCreateUserModal(false)}
-                  className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all hover:rotate-90"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
+            <Paper withBorder radius="md" p="md">
+              <Stack gap="md">
+                <Group gap="xs" wrap="wrap">
+                  <Text size="sm" fw={600} c="gray.9">Role assignment</Text>
+                  <Badge variant="light" size="xs" color="gray">
+                    Shared data
+                  </Badge>
+                </Group>
 
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Name</label>
-                <input
-                  type="text"
-                  value={newUser.name}
-                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter full name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Email</label>
-                <input
-                  type="email"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="user@example.com"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Role</label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {roles.map(role => (
-                    <option key={role.id} value={role.name}>{role.name}</option>
+                <Group gap="xs" wrap="wrap">
+                  {(['preset', 'custom'] as RoleMode[]).map(mode => (
+                    <Button
+                      key={mode}
+                      variant={roleMode === mode ? 'filled' : 'outline'}
+                      color={roleMode === mode ? 'blue' : 'gray'}
+                      size="sm"
+                      radius="xl"
+                      onClick={() => setRoleMode(mode)}
+                      style={
+                        roleMode === mode
+                          ? { backgroundColor: '#eff6ff', borderColor: '#3b82f6', color: '#1e40af' }
+                          : {}
+                      }
+                    >
+                      {mode === 'preset' ? 'Preset role' : 'Custom role'}
+                    </Button>
                   ))}
-                </select>
-              </div>
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-4">
-                <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> Credentials will be automatically generated and sent to the user's email address.
-                </p>
-              </div>
-            </div>
+                </Group>
 
-            <div className="bg-gray-50 p-6 border-t border-gray-200 flex gap-3">
-              <button
-                onClick={handleCreateUser}
-                disabled={!newUser.name || !newUser.email}
-                className="flex-1 bg-[#1a1a3c] text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                {roleMode === 'preset' ? (
+                  <Stack gap="xs">
+                    {roles.map(role => (
+                      <Paper
+                        key={role.id}
+                        p="md"
+                        withBorder
+                        radius="md"
+                        style={{
+                          cursor: 'pointer',
+                          borderColor: userDraft.roleId === role.id ? '#3b82f6' : '#e5e7eb',
+                          backgroundColor: userDraft.roleId === role.id ? '#eff6ff' : 'white',
+                        }}
+                        onClick={() =>
+                          setUserDraft(prev => (prev ? { ...prev, roleId: role.id } : prev))
+                        }
+                      >
+                        <Group justify="space-between">
+                          <Box>
+                            <Text size="sm" fw={600} c="gray.9">{role.name}</Text>
+                            <Text size="xs" c="gray.5">{role.description}</Text>
+                          </Box>
+                  <input
+                            type="radio"
+                            checked={userDraft.roleId === role.id}
+                            onChange={() =>
+                              setUserDraft(prev => (prev ? { ...prev, roleId: role.id } : prev))
+                            }
+                          />
+                        </Group>
+                      </Paper>
+                    ))}
+                  </Stack>
+                ) : (
+                  <Stack gap="md">
+                    <TextInput
+                      value={userCustomRole.name}
+                      onChange={(event) =>
+                        setUserCustomRole(prev => ({ ...prev, name: event.target.value }))
+                      }
+                      placeholder="Custom role name"
+                      radius="md"
+                    />
+                    <PermissionMatrix
+                      matrix={userCustomRole.permissions}
+                      onToggle={(category, action) =>
+                        updateCustomRole(current => {
+                          current.permissions[category][action] = !current.permissions[category][action];
+                          return current;
+                        })
+                      }
+                    />
+                    <FormToggleList
+                      forms={formsCatalog}
+                      access={userCustomRole.formsAccess}
+                      onToggle={formId =>
+                        updateCustomRole(current => {
+                          current.formsAccess[formId] = !current.formsAccess[formId];
+                          return current;
+                        })
+                      }
+                    />
+                  </Stack>
+                )}
+              </Stack>
+            </Paper>
+
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+              <Button
+                disabled={!!pendingAction}
+                onClick={handleSaveUser}
+                leftSection={
+                  pendingAction === 'save-user' ? (
+                    <Loader size={16} />
+                  ) : (
+                    <IconDeviceFloppy size={16} />
+                  )
+                }
+                style={{ backgroundColor: '#1a1a3c' }}
+                radius="md"
+                fullWidth
               >
-                Create User
-              </button>
-              <button
-                onClick={() => setShowCreateUserModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors"
+                Save changes
+              </Button>
+              <Button
+                variant="outline"
+                leftSection={<IconRefresh size={16} />}
+                onClick={() => toast.info('Password reset email queued')}
+                radius="md"
+                fullWidth
               >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+                Send reset link
+              </Button>
+              <Button
+                variant="outline"
+                color="orange"
+                onClick={() => userDraft && handleToggleUserStatus(userDraft)}
+                radius="md"
+                fullWidth
+              >
+                Pause access
+              </Button>
+              <Button
+                variant="outline"
+                color="red"
+                leftSection={<IconTrash size={16} />}
+                onClick={() => userDraft && handleDeleteUser(userDraft)}
+                radius="md"
+                fullWidth
+              >
+                Delete user
+              </Button>
+            </SimpleGrid>
+          </Stack>
+        )}
+      </Modal>
+    </Stack>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  change,
+  icon,
+}: {
+  label: string;
+  value: number;
+  change: string;
+  icon: ReactNode;
+}) {
+  return (
+    <Paper withBorder shadow="sm" radius="md" p="md">
+      <Group justify="space-between" align="flex-start">
+        <Box>
+          <Text size="xs" fw={600} c="gray.5" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            {label}
+          </Text>
+          <Title order={2} fw={700} c="gray.9" mt="xs">{value}</Title>
+        </Box>
+        <Box
+          style={{
+            borderRadius: '50%',
+            backgroundColor: '#f9fafb',
+            padding: 12,
+            color: '#374151',
+          }}
+        >
+          {icon}
+        </Box>
+      </Group>
+      <Text size="sm" c="gray.6" mt="md">{change}</Text>
+    </Paper>
+  );
+}
+
+function FiltersCard({
+  search,
+  onSearch,
+  roleFilter,
+  statusFilter,
+  onRoleFilter,
+  onStatusFilter,
+  roleOptions,
+}: {
+  search: string;
+  onSearch: (value: string) => void;
+  roleFilter: string;
+  statusFilter: string;
+  onRoleFilter: (value: string) => void;
+  onStatusFilter: (value: 'all' | Status) => void;
+  roleOptions: { id: string; label: string }[];
+}) {
+  return (
+    <Paper withBorder shadow="sm" radius="md" p="md">
+      <Group gap="xs" mb="md">
+        <IconFilter size={16} />
+        <Text size="sm" fw={600} c="gray.9">Filters</Text>
+      </Group>
+      <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
+        <TextInput
+          value={search}
+          onChange={(event) => onSearch(event.target.value)}
+          placeholder="Search users, email, parishes..."
+          leftSection={<IconSearch size={18} />}
+          radius="md"
+        />
+        <Select
+          value={roleFilter}
+          onChange={(value) => value && onRoleFilter(value)}
+          data={[
+            { value: 'all', label: 'All roles' },
+            ...roleOptions.map(role => ({ value: role.id, label: role.label })),
+          ]}
+          radius="md"
+        />
+        <Select
+          value={statusFilter}
+          onChange={(value) => value && onStatusFilter(value as 'all' | Status)}
+          data={[
+            { value: 'all', label: 'All status' },
+            { value: 'active', label: 'Active' },
+            { value: 'suspended', label: 'Suspended' },
+          ]}
+          radius="md"
+        />
+      </SimpleGrid>
+    </Paper>
+  );
+}
+
+
+function PermissionMatrix({
+  matrix,
+  onToggle,
+}: {
+  matrix: PermissionMatrix;
+  onToggle?: (categoryId: string, actionId: string) => void;
+}) {
+  return (
+    <Stack gap="md">
+      {permissionCatalog.map(category => (
+        <Paper key={category.id} withBorder radius="md" p="md">
+          <Box mb="sm">
+            <Text size="sm" fw={600} c="gray.9">{category.label}</Text>
+            <Text size="xs" c="gray.5">{category.description}</Text>
+          </Box>
+          <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
+            {category.actions.map(action => {
+              const active = matrix[category.id]?.[action.id];
+              return (
+                <Button
+                  key={action.id}
+                  variant={active ? 'filled' : 'outline'}
+                  color={active ? 'blue' : 'gray'}
+                  size="xs"
+                  radius="md"
+                  leftSection={active ? <IconCheck size={14} /> : undefined}
+                  onClick={() => onToggle?.(category.id, action.id)}
+                  style={
+                    active
+                      ? { backgroundColor: '#eff6ff', borderColor: '#3b82f6', color: '#1e40af' }
+                      : {}
+                  }
+                >
+                  {action.label}
+                </Button>
+              );
+            })}
+          </SimpleGrid>
+        </Paper>
+      ))}
+    </Stack>
+  );
+}
+
+function FormToggleList({
+  forms,
+  access,
+  onToggle,
+}: {
+  forms: { id: string; label: string }[];
+  access: FormsAccess;
+  onToggle?: (formId: string) => void;
+}) {
+  return (
+    <Stack gap="xs">
+      {forms.map(form => {
+        const enabled = access[form.id];
+        return (
+          <Paper
+            key={form.id}
+            p="sm"
+            withBorder
+            radius="md"
+            style={{ cursor: 'pointer' }}
+            onClick={() => onToggle?.(form.id)}
+          >
+            <Group justify="space-between">
+              <Text size="sm">{form.label}</Text>
+              <Badge
+                variant="light"
+                size="xs"
+                color={enabled ? 'green' : 'gray'}
+                leftSection={enabled ? <IconCheck size={12} /> : undefined}
+              >
+                {enabled ? 'Enabled' : 'Hidden'}
+              </Badge>
+            </Group>
+          </Paper>
+        );
+      })}
+    </Stack>
+  );
+}
+
+function StatusBadge({ status }: { status: Status }) {
+  return (
+    <Badge
+      variant="light"
+      color={status === 'active' ? 'green' : 'red'}
+      style={{ textTransform: 'capitalize' }}
+    >
+      {status}
+    </Badge>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Stack gap="xs">
+      <Text size="xs" fw={600} c="gray.5" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        {label}
+      </Text>
+      <Paper withBorder radius="md" p="sm">
+        {children}
+      </Paper>
+    </Stack>
+  );
+}
+
+function countPermissions(matrix: PermissionMatrix) {
+  return Object.values(matrix).reduce(
+    (sum, actions) => sum + Object.values(actions).filter(Boolean).length,
+    0,
   );
 }

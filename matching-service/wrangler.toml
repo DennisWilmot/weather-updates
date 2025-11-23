@@ -1,0 +1,53 @@
+# Cloudflare Workers configuration for matching-service
+# 
+# Deploy with: npx wrangler deploy
+# 
+# Note: For long-running computations (100k+ records), consider using
+# Cloudflare Workers with Durable Objects or Cloudflare Pages Functions
+# with increased CPU time limits.
+
+name = "matching-service"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Environment variables (set via wrangler secret put <KEY>)
+# Required:
+# - DATABASE_URL
+# Optional:
+# - CORS_ORIGIN (default: '*')
+# - NODE_ENV (default: 'production')
+
+# CPU time limit (milliseconds)
+# Default is 50ms, increase for longer computations
+# Note: Free tier has strict limits, paid plans allow more
+cpu_ms = 50000
+
+# Memory limit (MB)
+# Default is 128MB, increase if needed
+memory_mb = 256
+
+# Workers KV (optional, for caching)
+# Uncomment if you want to use KV for caching results
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "your-kv-namespace-id"
+
+# Durable Objects (optional, for stateful computations)
+# Uncomment if you want to use Durable Objects for long-running tasks
+# [[durable_objects.bindings]]
+# name = "PLANNER"
+# class_name = "PlannerDO"
+# script_name = "matching-service"
+
+# Routes (optional, for custom domains)
+# routes = [
+#   { pattern = "matching.yourdomain.com/*", zone_name = "yourdomain.com" }
+# ]
+
+# Environment-specific configs
+[env.production]
+name = "matching-service-prod"
+
+[env.staging]
+name = "matching-service-staging"
+

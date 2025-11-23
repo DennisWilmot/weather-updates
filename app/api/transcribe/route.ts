@@ -25,13 +25,8 @@ function compressVideoToAudio(inputPath: string, outputPath: string) {
   });
 }
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: "5000mb", // or "100mb"
-    },
-  },
-};
+// Route segment config for App Router
+export const maxDuration = 300; // 5 minutes max duration
 
 export async function POST(req: Request) {
   let inputPath = "";
@@ -129,6 +124,16 @@ ${(transcription as any).text}
     const jsonStr = text.substring(start, end);
 
     const jsonObj = JSON.parse(jsonStr);
+
+    // Normalize skills if present
+    if (jsonObj.skills && Array.isArray(jsonObj.skills)) {
+      // Import normalization function
+      const { normalizeSkillName } = await import('@/lib/skill-normalization');
+      jsonObj.skills = jsonObj.skills.map((skill: string) => {
+        // Normalize but keep original for display - we'll use normalized version for matching
+        return skill.trim();
+      });
+    }
 
     return NextResponse.json(jsonObj);
   } catch (err: any) {

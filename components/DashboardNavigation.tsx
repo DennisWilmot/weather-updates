@@ -11,9 +11,9 @@ export default function DashboardNavigation() {
 
     const tabs = [
         { name: "Dashboard", href: "/" },
-        { name: "Admin", href: "/users" },
-        { name: "Aid Forms", href: "/portal" },
-        { name: "Data View ", href: "/sa" },
+        { name: "Forms", href: "/forms" },
+        { name: "Insights", href: "/insights" },
+        { name: "Admin Panel", href: "/admin" },
         // { name: "Settings", href: "/dashboard/settings" },
     ];
 

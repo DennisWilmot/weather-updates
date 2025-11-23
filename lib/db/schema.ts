@@ -10,6 +10,7 @@ import {
   integer,
   decimal,
   index,
+  pgEnum,
 } from "drizzle-orm/pg-core";
 
 // Parish table - Top level (14 parishes of Jamaica)
@@ -247,6 +248,8 @@ export const people = pgTable(
     contactEmail: text("contact_email"),
     organization: text("organization"), // For aid workers
     userId: text("user_id").references(() => user.id), // FK to user table if registered
+    needs: text("needs").array(), // Array of strings - needs
+    skills: text("skills").array(), // Array of strings - skills
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
@@ -254,6 +257,42 @@ export const people = pgTable(
     parishIdIdx: index("people_parish_id_idx").on(table.parishId),
     communityIdIdx: index("people_community_id_idx").on(table.communityId),
     userIdIdx: index("people_user_id_idx").on(table.userId),
+  })
+);
+
+// Skills table - Normalized skills for people
+export const skills = pgTable(
+  "skills",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull().unique(), // Display name (e.g., "Search & Rescue")
+    normalizedName: text("normalized_name").notNull().unique(), // Normalized for matching (e.g., "search and rescue")
+    description: text("description"), // Optional description
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    normalizedNameIdx: index("skills_normalized_name_idx").on(table.normalizedName),
+  })
+);
+
+// People-Skills junction table - Links people to their skills
+export const peopleSkills = pgTable(
+  "people_skills",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    personId: uuid("person_id")
+      .references(() => people.id, { onDelete: "cascade" })
+      .notNull(),
+    skillId: uuid("skill_id")
+      .references(() => skills.id, { onDelete: "cascade" })
+      .notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    personIdIdx: index("people_skills_person_id_idx").on(table.personId),
+    skillIdIdx: index("people_skills_skill_id_idx").on(table.skillId),
+    uniquePersonSkill: unique().on(table.personId, table.skillId), // Prevent duplicate associations
   })
 );
 
@@ -533,6 +572,7 @@ export const peopleNeeds = pgTable(
     longitude: decimal("longitude", { precision: 10, scale: 7 }),
 
     needs: jsonb("needs").notNull(), // Array of strings
+    skills: jsonb("skills"), // Array of strings - skills needed/helpful
 
     // Legacy: Keep for backward compatibility during migration
     contactName: text("contact_name").notNull(), // Will reference person.contact_name after migration
@@ -727,5 +767,112 @@ export const verification = pgTable(
   },
   (table) => ({
     identifierIdx: index("verification_identifier_idx").on(table.identifier),
+  })
+);
+
+// Warehouses table - Storage locations for relief supplies (depots/warehouses)
+export const warehouses = pgTable(
+  "warehouses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    parishId: uuid("parish_id")
+      .references(() => parishes.id)
+      .notNull(),
+    communityId: uuid("community_id").references(() => communities.id),
+    latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
+    longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+    address: text("address"),
+    status: text("status", {
+      enum: ["active", "inactive", "maintenance"],
+    })
+      .notNull()
+      .default("active"),
+    capacity: integer("capacity"), // Optional: total capacity metric
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    parishIdIdx: index("warehouses_parish_id_idx").on(table.parishId),
+    statusIdx: index("warehouses_status_idx").on(table.status),
+    locationIdx: index("warehouses_location_idx").on(table.latitude, table.longitude),
+  })
+);
+
+// Warehouse Inventory table - Tracks inventory items at warehouses
+export const warehouseInventory = pgTable(
+  "warehouse_inventory",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    warehouseId: uuid("warehouse_id")
+      .references(() => warehouses.id, { onDelete: "cascade" })
+      .notNull(),
+    itemCode: text("item_code").notNull(), // e.g., "food", "water", "medicine"
+    quantity: integer("quantity").notNull().default(0),
+    reservedQuantity: integer("reserved_quantity").notNull().default(0), // Reserved for ongoing plans
+    lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    warehouseIdIdx: index("warehouse_inventory_warehouse_id_idx").on(table.warehouseId),
+    itemCodeIdx: index("warehouse_inventory_item_code_idx").on(table.itemCode),
+    uniqueWarehouseItem: unique().on(table.warehouseId, table.itemCode), // One row per warehouse-item
+  })
+);
+
+// Allocation Plans table - Stores allocation plan metadata and status
+export const allocationPlans = pgTable(
+  "allocation_plans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planName: text("plan_name").notNull(),
+    status: text("status", {
+      enum: ["draft", "pending", "approved", "executing", "completed", "cancelled"],
+    })
+      .notNull()
+      .default("draft"),
+    constraints: jsonb("constraints").notNull(), // Store GlobalPlanningConstraints as JSONB
+    createdBy: text("created_by"), // User ID who created the plan
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    executedAt: timestamp("executed_at"), // When plan execution started
+    completedAt: timestamp("completed_at"), // When plan execution finished
+  },
+  (table) => ({
+    statusIdx: index("allocation_plans_status_idx").on(table.status),
+    createdAtIdx: index("allocation_plans_created_at_idx").on(table.createdAt),
+  })
+);
+
+// Allocation Shipments table - Stores individual shipments from allocation plans
+export const allocationShipments = pgTable(
+  "allocation_shipments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    planId: uuid("plan_id")
+      .references(() => allocationPlans.id, { onDelete: "cascade" })
+      .notNull(),
+    fromWarehouseId: uuid("from_warehouse_id")
+      .references(() => warehouses.id)
+      .notNull(),
+    toCommunityId: uuid("to_community_id")
+      .references(() => communities.id)
+      .notNull(),
+    itemCode: text("item_code").notNull(),
+    quantity: integer("quantity").notNull(),
+    cost: decimal("cost", { precision: 10, scale: 2 }), // Computed cost from planner
+    status: text("status", {
+      enum: ["planned", "scheduled", "in_transit", "delivered", "cancelled"],
+    })
+      .notNull()
+      .default("planned"),
+    scheduledDate: timestamp("scheduled_date"), // When shipment is scheduled
+    executedDate: timestamp("executed_date"), // When shipment actually happened
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    planIdIdx: index("allocation_shipments_plan_id_idx").on(table.planId),
+    warehouseIdIdx: index("allocation_shipments_warehouse_id_idx").on(table.fromWarehouseId),
+    communityIdIdx: index("allocation_shipments_community_id_idx").on(table.toCommunityId),
+    statusIdx: index("allocation_shipments_status_idx").on(table.status),
   })
 );

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { people, parishes, communities } from '@/lib/db/schema';
+import { people, parishes, communities, skills, peopleSkills } from '@/lib/db/schema';
 import { eq, and, inArray, isNotNull } from 'drizzle-orm';
+import { associatePersonWithSkills, getPersonSkills } from '@/lib/skill-normalization';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,12 +54,18 @@ export async function GET(request: Request) {
       .leftJoin(communities, eq(people.communityId, communities.id))
       .where(and(...conditions));
 
-    // Transform results
-    const peopleWithRelations = results.map((r) => ({
-      ...r.person,
-      parish: r.parish,
-      community: r.community,
-    }));
+    // Transform results and fetch skills for each person
+    const peopleWithRelations = await Promise.all(
+      results.map(async (r) => {
+        const personSkills = await getPersonSkills(r.person.id);
+        return {
+          ...r.person,
+          parish: r.parish,
+          community: r.community,
+          skills: personSkills, // Array of { id, name } objects
+        };
+      })
+    );
 
     // Return GeoJSON or JSON format
     if (format === 'geojson') {
@@ -110,6 +117,116 @@ export async function GET(request: Request) {
     console.error('Error fetching people:', error);
     return NextResponse.json(
       { error: 'Failed to fetch people' },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/people
+ * Create a new person record
+ * Body:
+ *   - name: string (required)
+ *   - type: 'person_in_need' | 'aid_worker' (required)
+ *   - parishId: string (required)
+ *   - communityId: string (optional)
+ *   - contactName: string (required)
+ *   - contactPhone: string (optional)
+ *   - contactEmail: string (optional)
+ *   - organization: string (optional)
+ *   - latitude: number (optional)
+ *   - longitude: number (optional)
+ *   - needs: string[] (optional)
+ *   - skills: string[] (optional) - Will be normalized and stored in people_skills table
+ */
+export async function POST(request: Request) {
+  try {
+    const body = await request.json();
+    const {
+      name,
+      type,
+      parishId,
+      communityId,
+      contactName,
+      contactPhone,
+      contactEmail,
+      organization,
+      latitude,
+      longitude,
+      needs,
+      skills: skillsArray,
+    } = body;
+
+    // Validate required fields
+    if (!name || !type || !parishId || !contactName) {
+      return NextResponse.json(
+        { error: 'Missing required fields: name, type, parishId, contactName' },
+        { status: 400 }
+      );
+    }
+
+    if (type !== 'person_in_need' && type !== 'aid_worker') {
+      return NextResponse.json(
+        { error: 'Invalid type. Must be "person_in_need" or "aid_worker"' },
+        { status: 400 }
+      );
+    }
+
+    // Create person record
+    const [newPerson] = await db
+      .insert(people)
+      .values({
+        name: name.trim(),
+        type: type as 'person_in_need' | 'aid_worker',
+        parishId,
+        communityId: communityId || null,
+        contactName: contactName.trim(),
+        contactPhone: contactPhone?.trim() || null,
+        contactEmail: contactEmail?.trim() || null,
+        organization: organization?.trim() || null,
+        latitude: latitude ? String(latitude) : null,
+        longitude: longitude ? String(longitude) : null,
+        needs: Array.isArray(needs) ? needs : null,
+        // Keep skills array for backward compatibility, but we'll also use normalized table
+        skills: Array.isArray(skillsArray) ? skillsArray : null,
+      })
+      .returning();
+
+    // Associate skills if provided
+    if (Array.isArray(skillsArray) && skillsArray.length > 0) {
+      await associatePersonWithSkills(newPerson.id, skillsArray);
+    }
+
+    // Fetch the created person with relations and skills
+    const [personWithRelations] = await db
+      .select({
+        person: people,
+        parish: parishes,
+        community: communities,
+      })
+      .from(people)
+      .leftJoin(parishes, eq(people.parishId, parishes.id))
+      .leftJoin(communities, eq(people.communityId, communities.id))
+      .where(eq(people.id, newPerson.id));
+
+    const personSkills = await getPersonSkills(newPerson.id);
+
+    return NextResponse.json(
+      {
+        ...personWithRelations.person,
+        parish: personWithRelations.parish,
+        community: personWithRelations.community,
+        skills: personSkills,
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    console.error('Error creating person:', error);
+    return NextResponse.json(
+      {
+        error: 'Failed to create person',
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 }
     );
   }

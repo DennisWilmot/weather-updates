@@ -1,16 +1,17 @@
 "use client";
 
 import AdminNavigation from "./nav";
+import { Box, Container } from '@mantine/core';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div>
+        <Box>
             <AdminNavigation />
-            <div className="min-h-screen bg-gray-100">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <Box bg="#f8f9fa" style={{ minHeight: '100vh' }}>
+                <Container size="xl" py="md">
                     {children}
-                </div>
-            </div>
-        </div>
+                </Container>
+            </Box>
+        </Box>
     );
 }

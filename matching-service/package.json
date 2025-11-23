@@ -1,0 +1,38 @@
+{
+  "name": "matching-service",
+  "version": "0.1.0",
+  "description": "Global allocation planner for disaster relief logistics",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "type-check": "tsc --noEmit",
+    "docker:build": "docker build -t matching-service .",
+    "docker:run": "docker run -p 3001:3001 --env-file .env matching-service",
+    "cf:deploy": "wrangler deploy",
+    "cf:dev": "wrangler dev"
+  },
+  "keywords": [
+    "allocation",
+    "planner",
+    "logistics",
+    "disaster-relief"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@hono/node-server": "^1.13.0",
+    "drizzle-orm": "^0.44.7",
+    "hono": "^4.10.6",
+    "postgres": "^3.4.7",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "wrangler": "^4.50.0"
+  }
+}
