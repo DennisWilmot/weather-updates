@@ -26,19 +26,22 @@ import {
 } from "@tabler/icons-react";
 import type { GlobalPlanningResult, Shipment } from "@/lib/types/planning";
 import type { MapFilters as MapFiltersType } from "@/lib/maps/filters";
+import RouteMetrics from "./RouteMetrics";
 
 interface AIMatchingPanelProps {
   onMatchClick?: (shipment: Shipment) => void;
   filters?: MapFiltersType;
   visibleLayers?: Set<string>;
   subTypeFilters?: Record<string, Set<string>>;
+  routeMetadata?: { distance: number; duration: number; coordinates: number[][] } | null;
 }
 
 export default function AIMatchingPanel({ 
   onMatchClick, 
   filters, 
   visibleLayers, 
-  subTypeFilters 
+  subTypeFilters,
+  routeMetadata
 }: AIMatchingPanelProps) {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -273,6 +276,16 @@ export default function AIMatchingPanel({
             <IconRefresh size={18} />
           </ActionIcon>
         </Group>
+
+        {/* ROUTE METRICS - Show when route is selected */}
+        {routeMetadata && (
+          <RouteMetrics
+            distance={routeMetadata.distance}
+            duration={routeMetadata.duration}
+            routePoints={routeMetadata.coordinates.length}
+            showFullDetails={true}
+          />
+        )}
 
         {/* SUMMARY STATS */}
         {planResult && (
