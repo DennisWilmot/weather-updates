@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Paper,
   Stack,
@@ -44,9 +45,6 @@ export default function AIMatchingPanel({
   routeMetadata
 }: AIMatchingPanelProps) {
   const [page, setPage] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [planResult, setPlanResult] = useState<GlobalPlanningResult | null>(null);
   const [warehouseMap, setWarehouseMap] = useState<Map<string, { lat: number; lng: number; name?: string }>>(new Map());
   const [communityMap, setCommunityMap] = useState<Map<string, { lat: number; lng: number; name?: string }>>(new Map());
   const [warehouseNames, setWarehouseNames] = useState<Map<string, string>>(new Map());
@@ -54,99 +52,151 @@ export default function AIMatchingPanel({
 
   const pageSize = 5;
 
-  // Fetch allocation plan when filters or visible layers change
-  useEffect(() => {
-    fetchAllocationPlan();
+  // Create query key based on filters for proper caching
+  const queryKey = useMemo(() => {
+    const keyParts: any[] = ['allocation-plan'];
+    
+    // Add filter parts to key
+    if (filters?.locations?.parishIds) {
+      keyParts.push(['parishIds', filters.locations.parishIds.sort().join(',')]);
+    }
+    if (filters?.locations?.communityIds) {
+      keyParts.push(['communityIds', filters.locations.communityIds.sort().join(',')]);
+    }
+    if (filters?.dateRange) {
+      keyParts.push(['startDate', filters.dateRange.start.toISOString()]);
+      keyParts.push(['endDate', filters.dateRange.end.toISOString()]);
+    }
+    if (visibleLayers && visibleLayers.size > 0) {
+      keyParts.push(['layers', Array.from(visibleLayers).sort().join(',')]);
+    }
+    if (subTypeFilters) {
+      const subTypeFiltersSerializable: Record<string, string[]> = {};
+      Object.keys(subTypeFilters).forEach(key => {
+        if (subTypeFilters[key] && subTypeFilters[key].size > 0) {
+          subTypeFiltersSerializable[key] = Array.from(subTypeFilters[key]).sort();
+        }
+      });
+      if (Object.keys(subTypeFiltersSerializable).length > 0) {
+        keyParts.push(['subTypeFilters', JSON.stringify(subTypeFiltersSerializable)]);
+      }
+    }
+    
+    return keyParts;
   }, [filters, visibleLayers, subTypeFilters]);
 
-  const fetchAllocationPlan = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Step 1: Build query params from filters
-      const params = new URLSearchParams();
-      
-      // Location filters
-      if (filters?.locations?.parishIds && filters.locations.parishIds.length > 0) {
-        params.set('parishIds', filters.locations.parishIds.join(','));
-      }
-      if (filters?.locations?.communityIds && filters.locations.communityIds.length > 0) {
-        params.set('communityIds', filters.locations.communityIds.join(','));
-      }
-      
-      // Date filters
-      if (filters?.dateRange) {
-        params.set('startDate', filters.dateRange.start.toISOString());
-        params.set('endDate', filters.dateRange.end.toISOString());
-      }
-      
-      // Visible layers
-      if (visibleLayers && visibleLayers.size > 0) {
-        params.set('layers', Array.from(visibleLayers).join(','));
-      }
-      
-      // Subtype filters (convert Sets to JSON)
-      if (subTypeFilters) {
-        // Convert Sets to arrays for JSON serialization
-        const subTypeFiltersSerializable: Record<string, string[]> = {};
-        Object.keys(subTypeFilters).forEach(key => {
-          if (subTypeFilters[key] && subTypeFilters[key].size > 0) {
-            subTypeFiltersSerializable[key] = Array.from(subTypeFilters[key]);
-          }
-        });
-        if (Object.keys(subTypeFiltersSerializable).length > 0) {
-          params.set('subTypeFilters', JSON.stringify(subTypeFiltersSerializable));
+  // Query function to fetch allocation plan
+  const fetchAllocationPlan = async (): Promise<{
+    result: GlobalPlanningResult;
+    problem: any;
+  }> => {
+    // Step 1: Build query params from filters
+    const params = new URLSearchParams();
+    
+    // Location filters
+    if (filters?.locations?.parishIds && filters.locations.parishIds.length > 0) {
+      params.set('parishIds', filters.locations.parishIds.join(','));
+    }
+    if (filters?.locations?.communityIds && filters.locations.communityIds.length > 0) {
+      params.set('communityIds', filters.locations.communityIds.join(','));
+    }
+    
+    // Date filters
+    if (filters?.dateRange) {
+      params.set('startDate', filters.dateRange.start.toISOString());
+      params.set('endDate', filters.dateRange.end.toISOString());
+    }
+    
+    // Visible layers
+    if (visibleLayers && visibleLayers.size > 0) {
+      params.set('layers', Array.from(visibleLayers).join(','));
+    }
+    
+    // Subtype filters (convert Sets to JSON)
+    if (subTypeFilters) {
+      // Convert Sets to arrays for JSON serialization
+      const subTypeFiltersSerializable: Record<string, string[]> = {};
+      Object.keys(subTypeFilters).forEach(key => {
+        if (subTypeFilters[key] && subTypeFilters[key].size > 0) {
+          subTypeFiltersSerializable[key] = Array.from(subTypeFilters[key]);
         }
-      }
-      
-      // Fetch filtered data from database
-      const dataResponse = await fetch(`/api/planning/data?${params.toString()}`);
-      
-      if (!dataResponse.ok) {
-        const errorData = await dataResponse.json().catch(() => ({}));
-        throw new Error(errorData.message || errorData.error || `Failed to fetch planning data: ${dataResponse.status}`);
-      }
-
-      const { problem, metadata } = await dataResponse.json();
-      console.log('[AIMatchingPanel] Fetched planning data:', metadata);
-
-      // Step 2: Send problem to planning service
-      const response = await fetch("/api/planning", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(problem),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
-        const suggestion = errorData.suggestion || '';
-        
-        // Format validation error details if present
-        let detailsMessage = '';
-        if (errorData.details && Array.isArray(errorData.details)) {
-          const validationErrors = errorData.details
-            .map((d: any) => `${d.path?.join('.') || 'unknown'}: ${d.message || 'Invalid'}`)
-            .slice(0, 5) // Show first 5 errors
-            .join('; ');
-          if (validationErrors) {
-            detailsMessage = ` Validation errors: ${validationErrors}`;
-          }
-        } else if (errorData.details && typeof errorData.details === 'string') {
-          detailsMessage = ` ${errorData.details}`;
-        }
-        
-        const fullMessage = `${errorMessage}${detailsMessage}${suggestion ? `. ${suggestion}` : ''}`;
-        throw new Error(fullMessage);
+      if (Object.keys(subTypeFiltersSerializable).length > 0) {
+        params.set('subTypeFilters', JSON.stringify(subTypeFiltersSerializable));
       }
+    }
+    
+    // Fetch filtered data from database
+    const dataResponse = await fetch(`/api/planning/data?${params.toString()}`);
+    
+    if (!dataResponse.ok) {
+      const errorData = await dataResponse.json().catch(() => ({}));
+      throw new Error(errorData.message || errorData.error || `Failed to fetch planning data: ${dataResponse.status}`);
+    }
 
-      const result = await response.json() as GlobalPlanningResult;
-      setPlanResult(result);
+    const { problem, metadata } = await dataResponse.json();
+    console.log('[AIMatchingPanel] Fetched planning data:', metadata);
 
-      // Step 3: Store warehouse and community data (coordinates + names) for drawing lines and display
+    // Step 2: Send problem to planning service
+    const response = await fetch("/api/planning", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(problem),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.message || errorData.error || `HTTP ${response.status}`;
+      const suggestion = errorData.suggestion || '';
+      
+      // Format validation error details if present
+      let detailsMessage = '';
+      if (errorData.details && Array.isArray(errorData.details)) {
+        const validationErrors = errorData.details
+          .map((d: any) => `${d.path?.join('.') || 'unknown'}: ${d.message || 'Invalid'}`)
+          .slice(0, 5) // Show first 5 errors
+          .join('; ');
+        if (validationErrors) {
+          detailsMessage = ` Validation errors: ${validationErrors}`;
+        }
+      } else if (errorData.details && typeof errorData.details === 'string') {
+        detailsMessage = ` ${errorData.details}`;
+      }
+      
+      const fullMessage = `${errorMessage}${detailsMessage}${suggestion ? `. ${suggestion}` : ''}`;
+      throw new Error(fullMessage);
+    }
+
+    const result = await response.json() as GlobalPlanningResult;
+    
+    return { result, problem };
+  };
+
+  // React Query with manual control and caching
+  const { 
+    data: queryData, 
+    isLoading: loading, 
+    error: queryError, 
+    refetch 
+  } = useQuery({
+    queryKey,
+    queryFn: fetchAllocationPlan,
+    enabled: false, // Don't auto-fetch on mount or filter changes
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+  });
+
+  const planResult = queryData?.result || null;
+  const error = queryError ? (queryError as Error).message : null;
+
+  // Update warehouse/community maps and names when query data changes
+  useEffect(() => {
+    if (queryData) {
+      const { result, problem } = queryData;
+      
+      // Store warehouse and community data (coordinates + names) for drawing lines and display
       const wMap = new Map<string, { lat: number; lng: number; name?: string }>();
       const cMap = new Map<string, { lat: number; lng: number; name?: string }>();
       const wNames = new Map<string, string>();
@@ -200,19 +250,14 @@ export default function AIMatchingPanel({
       });
       
       // Wait for all name fetches to complete
-      await Promise.all([...warehouseNamePromises, ...communityNamePromises]);
-      
-      setWarehouseMap(wMap);
-      setCommunityMap(cMap);
-      setWarehouseNames(wNames);
-      setCommunityNames(cNames);
-    } catch (err: any) {
-      console.error("Error fetching allocation plan:", err);
-      setError(err.message || "Failed to fetch allocation plan");
-    } finally {
-      setLoading(false);
+      Promise.all([...warehouseNamePromises, ...communityNamePromises]).then(() => {
+        setWarehouseMap(wMap);
+        setCommunityMap(cMap);
+        setWarehouseNames(wNames);
+        setCommunityNames(cNames);
+      });
     }
-  };
+  }, [queryData]);
 
   const shipments = planResult?.shipments || [];
   const totalPages = Math.ceil(shipments.length / pageSize);
@@ -269,7 +314,7 @@ export default function AIMatchingPanel({
           </Group>
           <ActionIcon
             variant="subtle"
-            onClick={fetchAllocationPlan}
+            onClick={() => refetch()}
             loading={loading}
             title="Refresh plan"
           >
@@ -358,7 +403,6 @@ export default function AIMatchingPanel({
             icon={<IconAlertCircle size={16} />}
             title="Error"
             color="red"
-            onClose={() => setError(null)}
             withCloseButton
           >
             {error}
@@ -493,7 +537,7 @@ export default function AIMatchingPanel({
               <Button
                 variant="light"
                 leftSection={<IconRefresh size={16} />}
-                onClick={fetchAllocationPlan}
+                onClick={() => refetch()}
               >
                 Generate Plan
               </Button>
