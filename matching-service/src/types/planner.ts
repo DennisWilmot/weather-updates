@@ -123,3 +123,4 @@ export interface GlobalPlanningResult {
   summary: PlanningSummary;
 }
 
+

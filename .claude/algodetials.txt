@@ -1,0 +1,412 @@
+Here’s a Cursor-ready prompt you can drop in that assumes:
+
+You’re creating a separate Hono worker (TypeScript) alongside your Next.js app.
+
+The worker’s job is to run the global allocation algorithm for relief logistics.
+
+You’ll wire it up to Postgres (or feed it JSON) yourself.
+
+Prompt for Cursor (Hono Planner Worker + Algorithm)
+You are an expert TypeScript + Hono + Postgres + algorithms engineer.
+
+I want you to help me design and scaffold a **separate Hono worker** that acts as the **global planner** for a relief logistics system. This is NOT a Next.js app; think of it as a dedicated planner microservice that the Next.js app will call.
+
+## High-Level Role of This Hono Worker
+
+The worker’s job is to implement a **global allocation algorithm** for disaster relief:
+
+- We have **warehouses / depots** with inventory (supply).
+- We have **communities / locations** with expressed needs (demand).
+- We want to compute a **national-level allocation plan**:
+
+  - Decide how much of each item to ship from each warehouse to each community.
+  - Respect stock limits and strategic reserves.
+  - Try to satisfy needs as much as possible.
+  - Minimize a composite cost (distance, risk, fairness penalties, etc.).
+
+This is the **global planner (allocation)**, not the local truck routing (VRP) layer.
+
+## Algorithm We Are Implementing (Conceptually)
+
+We are modeling this as a **min-cost flow / linear allocation** problem, but we’ll implement it in a way that:
+
+- Is **pluggable**: easy to swap a simple heuristic today for a proper LP/MIP solver later.
+- Is memory-conscious: we do NOT materialize all possible (warehouse × community × item) combinations if they are huge.
+
+Conceptual data:
+
+- **Warehouses (supply nodes)**:
+  - `id: string`
+  - `parishId: string` (or region)
+  - `lat: number`
+  - `lng: number`
+  - For each item:
+    - `itemCode: string`
+    - `quantity: number`
+
+- **Communities / demand nodes**:
+  - `id: string`
+  - `parishId: string`
+  - `lat: number`
+  - `lng: number`
+  - For each needed item:
+    - `itemCode: string`
+    - `quantity: number`
+    - `priority: number` (1 = highest)
+
+- **Global planner constraints**:
+  - Each warehouse cannot ship more than its stock minus a **reserve fraction** (e.g. keep 20% in reserve).
+  - We want to maximize satisfaction of demand (ideally meet all needs, but partial is allowed).
+  - We want to minimize a cost function per shipment.
+
+Cost per potential shipment arc combines:
+
+- **Distance cost**:
+  - Approximate via haversine between warehouse and community.
+- **Risk cost** (optional / pluggable later):
+  - Could be a numeric risk factor provided in input (e.g. flood or security risk on that route).
+- **Fairness cost**:
+  - We want to avoid starving under-served parishes.
+  - There can be a fairness weight that either:
+    - rewards serving parishes that have been under-allocated so far, OR
+    - penalizes adding too much to already well-served parishes.
+
+Total arc cost example:
+
+```ts
+cost = distanceKm * distanceWeight
+     + riskScore * riskWeight
+     + fairnessPenalty * fairnessWeight;
+
+
+For v1, it’s fine if we initially just use distanceKm + a simple fairness component.
+
+Solving Approach
+
+We want a pluggable solver abstraction:
+
+Define a GlobalPlanner interface:
+
+interface GlobalPlanner {
+  plan(problem: GlobalPlanningProblem): GlobalPlanningResult;
+}
+
+
+GlobalPlanningProblem includes:
+
+Arrays of warehouses, inventory, community needs.
+
+Global parameters:
+
+reserveFraction
+
+maxDistanceKm (to filter arcs)
+
+weights for distance / risk / fairness.
+
+GlobalPlanningResult includes:
+
+shipments: Shipment[], where each Shipment is:
+
+fromWarehouseId: string
+
+toCommunityId: string
+
+itemCode: string
+
+quantity: number
+
+cost: number (computed).
+
+For the initial solver, implement a capacity-aware “min-cost-ish” heuristic that approximates min-cost flow but is simple enough to run in Node:
+
+For each CommunityNeed:
+
+Sort its candidate warehouses by cost (distance + weights).
+
+Try to fulfill its demand greedily from cheapest → more expensive warehouses.
+
+Respect:
+
+Available stock at each warehouse for that item.
+
+Reserve fraction constraint: warehouse cannot go below reserveFraction * originalStock.
+
+Allocate shipments incrementally until:
+
+Demand is fully satisfied, OR
+
+All feasible warehouses are exhausted.
+
+To incorporate fairness:
+
+Track how much each parish has already received for that item.
+
+When computing fairnessPenalty for a candidate shipment:
+
+If a parish has received less than some target per-capita amount, reduce cost (or subtract a bonus).
+
+If a parish has received more, slightly increase cost.
+
+The result is not globally optimal, but:
+
+The code structure is aligned with a true min-cost flow model.
+
+Later we can plug in a real LP/MIP solver (Python/OR-Tools) under the same GlobalPlanner interface.
+
+We must also avoid memory blow-ups by limiting candidate arcs:
+
+For each demand node:
+
+Only consider warehouses:
+
+Within maxDistanceKm, OR
+
+In the same or neighboring parishes.
+
+Do not build arcs beyond those filtered warehouses.
+
+What I Want You To Generate
+
+I want you to scaffold a TypeScript Hono app (worker) that exposes this planner via HTTP. Assume a typical Node/Hono setup (not Cloudflare-specific unless you detect we are on CF in this repo).
+
+1. Core Types
+
+Create a src/types/planner.ts (or similar) with:
+
+Warehouse type:
+
+id: string
+
+parishId: string
+
+lat: number
+
+lng: number
+
+inventory: WarehouseItemTotal[]
+
+WarehouseItemTotal:
+
+warehouseId: string
+
+itemCode: string
+
+quantity: number
+
+Community:
+
+id: string
+
+parishId: string
+
+lat: number
+
+lng: number
+
+CommunityNeed:
+
+communityId: string
+
+itemCode: string
+
+quantity: number
+
+priority: number
+
+GlobalPlanningConstraints:
+
+reserveFraction: number
+
+maxDistanceKm: number
+
+distanceWeight: number
+
+riskWeight: number
+
+fairnessWeight: number
+
+GlobalPlanningProblem:
+
+warehouses: Warehouse[]
+
+communityNeeds: CommunityNeed[]
+
+constraints: GlobalPlanningConstraints
+
+(Optional) riskLayers or parishStats if needed as a placeholder.
+
+Shipment and GlobalPlanningResult as described above.
+
+2. Planner Interface + Heuristic Implementation
+
+Create:
+
+src/planner/GlobalPlanner.ts with:
+
+export interface GlobalPlanner {
+  plan(problem: GlobalPlanningProblem): GlobalPlanningResult;
+}
+
+
+src/planner/GreedyMinCostPlanner.ts with:
+
+A concrete class that implements GlobalPlanner.
+
+Steps:
+
+Pre-compute:
+
+initialStock per (warehouse, item).
+
+minAllowedStock = initialStock * reserveFraction.
+
+For each unique community + item need:
+
+Gather candidate warehouses that:
+
+Have that item.
+
+Are within maxDistanceKm (use haversine).
+
+Have stock above minAllowedStock.
+
+For each candidate, compute:
+
+distanceKm,
+
+riskScore (if present in problem, otherwise 0),
+
+fairnessPenalty (e.g. based on how much that parish has already received so far).
+
+cost = weighted sum.
+
+Sort candidates by cost ascending.
+
+Iterate candidates:
+
+Let needed be remaining need.
+
+Let availableToShip = currentStock - minAllowedStock.
+
+Allocate allocated = min(needed, availableToShip).
+
+Create shipment entry if allocated > 0.
+
+Decrease needed, currentStock.
+
+Update fairness stats (how much that parish received).
+
+Stop when needed <= 0 or no more candidates.
+
+Return GlobalPlanningResult with all shipments and summary (e.g. totalAllocated, totalUnmet).
+
+Include helper functions:
+
+haversineDistanceKm(lat1, lon1, lat2, lon2).
+
+Maybe a simple fairness-tracking map by parishId.
+
+3. Hono App & Endpoints
+
+Create a src/app.ts (or src/index.ts) that:
+
+Instantiates a Hono app.
+
+Registers a POST /plan endpoint that:
+
+Accepts a JSON body containing GlobalPlanningProblem.
+
+Validates the shape (either manually or with zod).
+
+Instantiates GreedyMinCostPlanner.
+
+Calls plan(problem).
+
+Returns GlobalPlanningResult as JSON.
+
+Optionally also expose a GET /health endpoint.
+
+Pseudo-structure:
+
+import { Hono } from 'hono';
+import { GreedyMinCostPlanner } from './planner/GreedyMinCostPlanner';
+import { GlobalPlanningProblem } from './types/planner';
+
+const app = new Hono();
+
+app.get('/health', (c) => c.text('ok'));
+
+app.post('/plan', async (c) => {
+  const body = await c.req.json<GlobalPlanningProblem>();
+  const planner = new GreedyMinCostPlanner();
+  const result = planner.plan(body);
+  return c.json(result);
+});
+
+export default app;
+
+
+You can assume that wiring this up to the runtime (Node, Bun, adapter) will be handled externally.
+
+4. From-DB Version (Optional Skeleton)
+
+Add a second endpoint POST /plan/from-db that:
+
+Accepts a minimal config (e.g. target region/parish, constraints).
+
+Connects to Postgres using our existing DB client or a new one.
+
+Fetches:
+
+Warehouses + inventory,
+
+Communities,
+
+Community needs.
+
+Assembles a GlobalPlanningProblem.
+
+Runs the planner and returns the result.
+
+You can stub the DB queries with clear TODOs, but please show the function shape and a clean separation:
+
+loadProblemFromDb(config): Promise<GlobalPlanningProblem> in src/db/loadProblem.ts.
+
+5. Code Style & Quality
+
+Use TypeScript with strict typing.
+
+Organize code into small modules:
+
+types/
+
+planner/
+
+db/ (optional, stubbed).
+
+Use clean function signatures, clear interfaces, and minimal side effects.
+
+Add comments describing the algorithm steps near the heuristic.
+
+Output
+
+Please:
+
+Generate the core files with realistic code for:
+
+src/types/planner.ts
+
+src/planner/GlobalPlanner.ts
+
+src/planner/GreedyMinCostPlanner.ts
+
+src/app.ts (Hono app)
+
+src/db/loadProblem.ts stub (optional, with TODOs for DB queries)
+
+Make the heuristic planner fully functional for in-memory problems (the /plan endpoint with JSON input).
+
+Include enough comments explaining the algorithm and where a future LP/MIP solver would plug in under the same GlobalPlanner interface.
+
+Do NOT worry about Next.js or frontend here. This is strictly the standalone Hono planner worker.

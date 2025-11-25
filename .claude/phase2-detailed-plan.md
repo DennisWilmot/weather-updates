@@ -325,3 +325,4 @@ Once Phase 2 is complete, proceed to:
 - The fairness algorithm is a heuristic - document that it can be refined later
 - Haversine is accurate enough for our use case (within ~0.5% for distances < 1000km)
 
+
