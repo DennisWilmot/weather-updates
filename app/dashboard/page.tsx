@@ -403,7 +403,7 @@ function DashboardContent() {
 
     // Update URL with filters
     const params = serializeFilters(newFilters);
-    router.push(`/dashboard?${params.toString()}`, { scroll: false });
+    router.push(`/?${params.toString()}`, { scroll: false });
   }, [router]);
 
   // Initialize real-time connection

@@ -14,6 +14,7 @@ export default function DashboardNavigation() {
         { name: "Forms", href: "/forms" },
         { name: "Insights", href: "/insights" },
         { name: "Admin Panel", href: "/admin" },
+        { name: "Logout", href: "/logout" },
         // { name: "Settings", href: "/dashboard/settings" },
     ];
 

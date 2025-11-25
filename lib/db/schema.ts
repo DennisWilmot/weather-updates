@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -272,7 +273,9 @@ export const skills = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => ({
-    normalizedNameIdx: index("skills_normalized_name_idx").on(table.normalizedName),
+    normalizedNameIdx: index("skills_normalized_name_idx").on(
+      table.normalizedName
+    ),
   })
 );
 
@@ -552,6 +555,12 @@ export const placeStatus = pgTable(
   })
 );
 
+export const roles = pgTable("roles", {
+  name: text("name").primaryKey(),
+  description: text("description"),
+  permissions: text("permissions").array().notNull().default([]),
+});
+
 // People Needs table - Reports of people in need
 export const peopleNeeds = pgTable(
   "people_needs",
@@ -795,7 +804,10 @@ export const warehouses = pgTable(
   (table) => ({
     parishIdIdx: index("warehouses_parish_id_idx").on(table.parishId),
     statusIdx: index("warehouses_status_idx").on(table.status),
-    locationIdx: index("warehouses_location_idx").on(table.latitude, table.longitude),
+    locationIdx: index("warehouses_location_idx").on(
+      table.latitude,
+      table.longitude
+    ),
   })
 );
 
@@ -814,7 +826,9 @@ export const warehouseInventory = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => ({
-    warehouseIdIdx: index("warehouse_inventory_warehouse_id_idx").on(table.warehouseId),
+    warehouseIdIdx: index("warehouse_inventory_warehouse_id_idx").on(
+      table.warehouseId
+    ),
     itemCodeIdx: index("warehouse_inventory_item_code_idx").on(table.itemCode),
     uniqueWarehouseItem: unique().on(table.warehouseId, table.itemCode), // One row per warehouse-item
   })
@@ -827,7 +841,14 @@ export const allocationPlans = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     planName: text("plan_name").notNull(),
     status: text("status", {
-      enum: ["draft", "pending", "approved", "executing", "completed", "cancelled"],
+      enum: [
+        "draft",
+        "pending",
+        "approved",
+        "executing",
+        "completed",
+        "cancelled",
+      ],
     })
       .notNull()
       .default("draft"),
@@ -871,8 +892,12 @@ export const allocationShipments = pgTable(
   },
   (table) => ({
     planIdIdx: index("allocation_shipments_plan_id_idx").on(table.planId),
-    warehouseIdIdx: index("allocation_shipments_warehouse_id_idx").on(table.fromWarehouseId),
-    communityIdIdx: index("allocation_shipments_community_id_idx").on(table.toCommunityId),
+    warehouseIdIdx: index("allocation_shipments_warehouse_id_idx").on(
+      table.fromWarehouseId
+    ),
+    communityIdIdx: index("allocation_shipments_community_id_idx").on(
+      table.toCommunityId
+    ),
     statusIdx: index("allocation_shipments_status_idx").on(table.status),
   })
 );

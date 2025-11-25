@@ -1,17 +1,31 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
-  // Allow Better Auth API routes to pass through (when Better Auth is configured)
-  if (request.nextUrl.pathname.startsWith('/api/auth')) {
-    return NextResponse.next();
+export async function middleware(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+  const isAuthPage =
+    path.startsWith("/auth") || path.startsWith("/reset-password");
+
+  // Check for session token in cookies (edge-compatible)
+  const cookieStore = cookies();
+  const sessionToken = cookieStore.get("better-auth.session_token")?.value;
+
+  console.log(sessionToken);
+
+  const hasSession = !!sessionToken;
+
+  if (!hasSession && !isAuthPage) {
+    return NextResponse.redirect(new URL("/auth", req.url));
   }
 
-  // No authentication - all routes are public
-  // Better Auth integration will be added when fully configured
+  if (hasSession && isAuthPage) {
+    return NextResponse.redirect(new URL("/", req.url));
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/((?!_next|.*\\..*).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api/auth).*)"],
 };

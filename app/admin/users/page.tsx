@@ -31,16 +31,20 @@ import {
   IconClock,
   IconFilter,
   IconMail,
+  IconMapPin,
+  IconPlus,
   IconRefresh,
   IconDeviceFloppy,
   IconSearch,
   IconShield,
   IconTrash,
+  IconUser,
   IconUsers,
   IconX,
 } from '@tabler/icons-react';
 import { useDisclosure } from '@mantine/hooks';
 import { toast } from 'sonner';
+import { authClient } from '@/lib/auth-client';
 
 const CUSTOM_ROLE_ID = 'custom-inline';
 
@@ -140,6 +144,29 @@ const permissionCatalog: PermissionCategoryConfig[] = [
   },
 ];
 
+const locationOptions = [
+  'Kingston HQ',
+  'St. Mary',
+  'Montego Bay',
+  'Portland Parish',
+  'St. Thomas',
+  'St. Andrew',
+  'Clarendon',
+  'Manchester',
+  'Remote - Montego Bay',
+];
+
+const teamOptions = [
+  'Command Center',
+  'Deployments',
+  'Logistics',
+  'Insights',
+  'Field Recon',
+  'Needs Assessment',
+  'Medical Response',
+  'Supply Chain',
+];
+
 const baseMatrix = buildBaseMatrix();
 const baseForms = buildBaseForms();
 
@@ -214,23 +241,62 @@ function cloneRole(role: RoleDefinition): RoleDefinition {
   };
 }
 
+// Helper function to convert backend role to frontend RoleDefinition
+function convertBackendRole(backendRole: any): RoleDefinition {
+  const permissions = cloneMatrix(baseMatrix);
+  const formsAccess = cloneForms(baseForms);
+
+  if (Array.isArray(backendRole.permissions)) {
+    backendRole.permissions.forEach((perm: string) => {
+      // Handle permission format like "users_view", "deployments_create"
+      const [category, action] = perm.split('_');
+      if (permissions[category] && action in permissions[category]) {
+        permissions[category][action] = true;
+      }
+
+      // Handle form access like "form_damage", "form_supply"
+      if (category === 'form' && formsCatalog.find(f => f.id === action)) {
+        formsAccess[action] = true;
+      }
+    });
+  }
+
+  return createRoleTemplate({
+    id: backendRole.name.toLowerCase().replace(/\s+/g, '-'),
+    name: backendRole.name,
+    description: backendRole.description || '',
+    permissions,
+    formsAccess,
+    isSystem: false,
+    lastUpdated: 'Synced',
+  });
+}
+
+// Helper function to convert frontend role to backend format
+function convertToBackendFormat(role: RoleDefinition): string[] {
+  const permissions: string[] = [];
+
+  // Convert permission matrix to array of strings
+  Object.entries(role.permissions).forEach(([category, actions]) => {
+    Object.entries(actions).forEach(([action, enabled]) => {
+      if (enabled) {
+        permissions.push(`${category}_${action}`);
+      }
+    });
+  });
+
+  // Convert form access to permissions
+  Object.entries(role.formsAccess).forEach(([formId, enabled]) => {
+    if (enabled) {
+      permissions.push(`form_${formId}`);
+    }
+  });
+
+  return permissions;
+}
+
 const rolePresets: RoleDefinition[] = [
-  createRoleTemplate({
-    id: 'admin',
-    name: 'Atlas Admin',
-    description: 'Full platform control, approvals, and publishing.',
-    accent: 'bg-gradient-to-r from-indigo-500 to-blue-500',
-    badgeClass: 'bg-indigo-100 text-indigo-800 border border-indigo-200',
-    permissions: createMatrix({
-      users: ['view', 'invite', 'edit', 'suspend'],
-      deployments: ['view', 'create', 'edit', 'approve'],
-      forms: ['view', 'create', 'assign', 'publish'],
-      insights: ['view', 'export'],
-    }),
-    formsAccess: createFormsAccess(formsCatalog.map(form => form.id)),
-    lastUpdated: '2h ago',
-    isSystem: true,
-  }),
+
   createRoleTemplate({
     id: 'ops',
     name: 'Operations Lead',
@@ -285,7 +351,7 @@ const initialUsers: UserRecord[] = [
     id: 'USR-2411',
     name: 'Nia Morgan',
     email: 'nia.morgan@atlas.tm',
-      status: 'active',
+    status: 'active',
     roleId: 'admin',
     location: 'Kingston HQ',
     teams: ['Command Center'],
@@ -355,7 +421,6 @@ const initialUsers: UserRecord[] = [
 const usersPerPage = 6;
 
 function parseBadgeClass(badgeClass: string) {
-  // Parse Tailwind classes to Mantine-compatible styles
   if (badgeClass.includes('indigo')) {
     return { backgroundColor: '#e0e7ff', color: '#4338ca', borderColor: '#c7d2fe' };
   }
@@ -384,13 +449,51 @@ export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | Status>('all');
   const [page, setPage] = useState(1);
+  const [loadingRoles, setLoadingRoles] = useState(true);
 
+  // Edit user modal
   const [userModalOpened, { open: openUserModal, close: closeUserModal }] = useDisclosure(false);
   const [userDraft, setUserDraft] = useState<UserRecord | null>(null);
   const [roleMode, setRoleMode] = useState<RoleMode>('preset');
   const [userCustomRole, setUserCustomRole] = useState<RoleDefinition>(() => createRoleTemplate());
 
+  // Create user modal
+  const [createModalOpened, { open: openCreateModal, close: closeCreateModal }] = useDisclosure(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserLocation, setNewUserLocation] = useState('');
+  const [newUserTeams, setNewUserTeams] = useState<string[]>([]);
+  const [newUserRoleId, setNewUserRoleId] = useState('');
+  const [newUserStatus, setNewUserStatus] = useState<Status>('active');
+  const [createRoleMode, setCreateRoleMode] = useState<RoleMode>('preset');
+  const [createCustomRole, setCreateCustomRole] = useState<RoleDefinition>(() => createRoleTemplate());
+
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+
+  // Fetch roles from backend on mount
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const res = await fetch('/api/roles');
+        if (!res.ok) throw new Error('Failed to fetch roles');
+
+        const backendRoles = await res.json();
+        const convertedRoles = backendRoles.map(convertBackendRole);
+
+        // Merge with system roles (keep system roles + add backend roles)
+        setRoles([...rolePresets, ...convertedRoles]);
+        toast.success('Roles loaded from database');
+      } catch (error) {
+        console.error('Error fetching roles:', error);
+        toast.error('Failed to load roles from database');
+        // Keep using preset roles as fallback
+      } finally {
+        setLoadingRoles(false);
+      }
+    };
+
+    fetchRoles();
+  }, []);
 
   const roleOptions = useMemo(
     () => [
@@ -469,6 +572,38 @@ export default function AdminUsersPage() {
 
   const handleSaveUser = async () => {
     if (!userDraft) return;
+
+    // If using custom role and it needs to be saved to backend
+    if (roleMode === 'custom' && !userCustomRole.isSystem) {
+      try {
+        setPendingAction('save-role');
+
+        const backendPermissions = convertToBackendFormat(userCustomRole);
+
+        const res = await fetch('/api/roles', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: userCustomRole.name,
+            description: userCustomRole.description,
+            permissions: backendPermissions,
+          }),
+        });
+
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.error || 'Failed to save role');
+        }
+
+        toast.success('Custom role saved to database');
+      } catch (error) {
+        console.error('Error saving role:', error);
+        toast.error(error instanceof Error ? error.message : 'Failed to save custom role');
+        setPendingAction(null);
+        return;
+      }
+    }
+
     await simulateNetwork('save-user', () => {
       setUsers(prev =>
         prev.map(user => {
@@ -518,25 +653,218 @@ export default function AdminUsersPage() {
     resetUserModal();
   };
 
-  const updateCustomRole = (
-    updater: (current: RoleDefinition) => RoleDefinition,
-  ) => {
+  const updateCustomRole = (updater: (current: RoleDefinition) => RoleDefinition) => {
     setUserCustomRole(current => updater(cloneRole(current)));
   };
 
+  const handleOpenCreateModal = () => {
+    setNewUserName('');
+    setNewUserEmail('');
+    setNewUserLocation('');
+    setNewUserTeams([]);
+    setNewUserRoleId('');
+    setNewUserStatus('active');
+    setCreateRoleMode('preset');
+    setCreateCustomRole(createRoleTemplate({ name: 'New Custom Access' }));
+    openCreateModal();
+  };
+
+  const handleCreateUser = async () => {
+    // Validation
+    if (!newUserName.trim()) {
+      toast.error('Please enter a user name');
+      return;
+    }
+    if (!newUserEmail.trim() || !newUserEmail.includes('@')) {
+      toast.error('Please enter a valid email address');
+      return;
+    }
+    if (!newUserLocation) {
+      toast.error('Please select a location');
+      return;
+    }
+    if (!newUserRoleId && createRoleMode === 'preset') {
+      toast.error('Please select a role');
+      return;
+    }
+
+    setPendingAction('create-user');
+
+    try {
+      // If custom role, save it first
+      let roleToAssign = newUserRoleId;
+
+      if (createRoleMode === 'custom') {
+        try {
+          const backendPermissions = convertToBackendFormat(createCustomRole);
+
+          const roleRes = await fetch('/api/roles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: createCustomRole.name,
+              description: createCustomRole.description,
+              permissions: backendPermissions,
+            }),
+          });
+
+          if (!roleRes.ok) {
+            const error = await roleRes.json();
+            throw new Error(error.error || 'Failed to create custom role');
+          }
+
+          roleToAssign = createCustomRole.name;
+          toast.success('Custom role created');
+        } catch (error) {
+          console.error('Error creating custom role:', error);
+          toast.error(error instanceof Error ? error.message : 'Failed to create custom role');
+          setPendingAction(null);
+          return;
+        }
+      }
+
+      // Prepare the user data payload
+      const payload: any = {
+        fullName: newUserName,
+        email: newUserEmail,
+        location: newUserLocation,
+        status: newUserStatus,
+        role: roleToAssign,
+      };
+
+      // Add teams if any
+      if (newUserTeams.length > 0) {
+        payload.teams = newUserTeams;
+      }
+
+      // Make the API call
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const response = await res.json();
+
+      if (!res.ok) {
+        throw new Error(response.error || 'Failed to create user');
+      }
+
+      if (response.user) {
+        // Transform the backend response to match your frontend structure
+        const newUser: UserRecord = {
+          id: response.user.id || `USR-${Math.floor(2400 + Math.random() * 100)}`,
+          name: response.user.fullName || newUserName,
+          email: response.user.email,
+          status: response.user.status || newUserStatus,
+          roleId: createRoleMode === 'custom' ? CUSTOM_ROLE_ID : newUserRoleId,
+          customRole:
+            createRoleMode === 'custom'
+              ? cloneRole({
+                ...createCustomRole,
+                id: `${CUSTOM_ROLE_ID}-${response.user.id}`,
+                badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
+              })
+              : undefined,
+          location: response.user.location || newUserLocation,
+          teams: newUserTeams,
+          lastActive: 'Just now',
+          createdAt: response.user.createdAt || new Date().toISOString().split('T')[0],
+        };
+
+        const { data, error } = await authClient.signUp.email({
+          email: response.user.email,
+          password: 'Password123',
+          name: response.user.fullName,
+          callbackURL: '/',
+        });
+
+        if (error) {
+          console.error('Signup error:', error);
+          toast.error(error.message);
+          closeCreateModal();
+          return;
+        } else {
+          console.log('User created:', data);
+
+          let resetRes = await authClient.requestPasswordReset({
+            email: response.user.email,
+            redirectTo: `${window.location.origin}/reset-password`,
+          });
+
+          console.log(resetRes);
+
+          if (resetRes.error) {
+            console.error('Failed to send welcome email');
+            toast.warning('User created but welcome email failed to send');
+          } else {
+            toast.success('Welcome email sent!');
+          }
+        }
+
+        setUsers(prev => [...prev, newUser]);
+        toast.success(`User ${newUserName} created successfully`);
+        closeCreateModal();
+      }
+    } catch (error) {
+      console.error('Error creating user:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to create user');
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const updateCreateCustomRole = (updater: (current: RoleDefinition) => RoleDefinition) => {
+    setCreateCustomRole(current => updater(cloneRole(current)));
+  };
+
+  const resetPassword = async (email: any) => {
+    let resetRes = await authClient.requestPasswordReset({
+      email,
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    console.log(resetRes);
+
+    if (resetRes.error) {
+      toast.error('Failed to send password reset email');
+    } else {
+      toast.success('Password reset email sent!');
+    }
+  };
+
+  if (loadingRoles) {
+    return (
+      <Stack gap="md" align="center" justify="center" style={{ minHeight: '400px' }}>
+        <Loader size="xl" />
+        <Text c="gray.6">Loading roles...</Text>
+      </Stack>
+    );
+  }
+
   return (
     <Stack gap="md">
-      <Box>
-        <Text size="sm" fw={600} c="blue.6" style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-          Admin Panel
-        </Text>
-        <Title order={1} fw={700} c="gray.9" mt="xs">
-          Users & Access
-        </Title>
-        <Text c="gray.6" mt="xs">
-          Manage user accounts and their role assignments.
-        </Text>
-      </Box>
+      <Group justify="space-between" align="flex-start" wrap="wrap">
+        <Box>
+          <Text size="sm" fw={600} c="blue.6" style={{ textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            Admin Panel
+          </Text>
+          <Title order={1} fw={700} c="gray.9" mt="xs">
+            Users & Access
+          </Title>
+          <Text c="gray.6" mt="xs">
+            Manage user accounts and their role assignments.
+          </Text>
+        </Box>
+        <Button
+          onClick={handleOpenCreateModal}
+          leftSection={<IconPlus size={20} />}
+          style={{ backgroundColor: '#1a1a3c' }}
+          radius="md"
+        >
+          Create User
+        </Button>
+      </Group>
 
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
         <SummaryCard
@@ -554,7 +882,7 @@ export default function AdminUsersPage() {
         <SummaryCard
           label="Custom roles"
           value={customRolesCount}
-          change="Locally saved"
+          change="From database"
           icon={<IconBadge size={20} style={{ color: '#10b981' }} />}
         />
       </SimpleGrid>
@@ -571,177 +899,194 @@ export default function AdminUsersPage() {
         />
 
         <Paper withBorder shadow="lg" radius="md" style={{ overflow: 'hidden' }}>
-            {filteredUsers.length === 0 ? (
-              <Stack gap="md" p="xl" align="center">
-                <Box
-                  style={{
-                    width: 56,
-                    height: 56,
-                    borderRadius: '50%',
-                    backgroundColor: '#eff6ff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#2563eb',
-                  }}
-                >
-                  <IconSearch size={22} />
-                </Box>
-                <Title order={3} fw={600} c="gray.9">No matches found</Title>
-                <Text c="gray.6" style={{ maxWidth: 384 }} ta="center">
-                  Adjust filters or reset search to see the full roster.
-                </Text>
-                <Button
-                  variant="subtle"
-                  size="sm"
-                  onClick={() => {
-                    setSearch('');
-                    setRoleFilter('all');
-                    setStatusFilter('all');
-                  }}
-                >
-                  Clear filters
-                </Button>
-              </Stack>
-            ) : (
-              <>
-                <Box visibleFrom="xl">
-                  <Table.ScrollContainer minWidth={800}>
-                    <Table highlightOnHover>
-                      <Table.Thead>
-                        <Table.Tr>
-                          <Table.Th>User</Table.Th>
-                          <Table.Th>Role</Table.Th>
-                          <Table.Th>Status</Table.Th>
-                          <Table.Th>Last active</Table.Th>
-                          <Table.Th>Location</Table.Th>
-                        </Table.Tr>
-                      </Table.Thead>
-                      <Table.Tbody>
-                        {pagedUsers.map(user => {
-                          const roleMeta = getRoleMeta(user);
-                          return (
-                            <Table.Tr
-                  key={user.id}
-                              style={{ cursor: 'pointer' }}
-                              onClick={() => handleOpenUserModal(user)}
-                            >
-                              <Table.Td>
-                                <Group gap="sm">
-                                  <Box
-                                    style={{
-                                      width: 44,
-                                      height: 44,
-                                      borderRadius: '50%',
-                                      backgroundColor: '#1e293b',
-                                      color: 'white',
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      fontWeight: 600,
-                                    }}
-                                  >
-                                    {user.name
-                                      .split(' ')
-                                      .map(part => part[0])
-                                      .slice(0, 2)
-                                      .join('')}
-                                  </Box>
-                                  <Box>
-                                    <Text fw={600} c="gray.9">{user.name}</Text>
-                                    <Text size="sm" c="gray.5">{user.email}</Text>
-                                  </Box>
-                                </Group>
-                              </Table.Td>
-                              <Table.Td>
-                                <Badge
-                                  variant="light"
+          {filteredUsers.length === 0 ? (
+            <Stack gap="md" p="xl" align="center">
+              <Box
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: '50%',
+                  backgroundColor: '#eff6ff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#2563eb',
+                }}
+              >
+                <IconSearch size={22} />
+              </Box>
+              <Title order={3} fw={600} c="gray.9">
+                No matches found
+              </Title>
+              <Text c="gray.6" style={{ maxWidth: 384 }} ta="center">
+                Adjust filters or reset search to see the full roster.
+              </Text>
+              <Button
+                variant="subtle"
+                size="sm"
+                onClick={() => {
+                  setSearch('');
+                  setRoleFilter('all');
+                  setStatusFilter('all');
+                }}
+              >
+                Clear filters
+              </Button>
+            </Stack>
+          ) : (
+            <>
+              <Box visibleFrom="xl">
+                <Table.ScrollContainer minWidth={800}>
+                  <Table highlightOnHover>
+                    <Table.Thead>
+                      <Table.Tr>
+                        <Table.Th>User</Table.Th>
+                        <Table.Th>Role</Table.Th>
+                        <Table.Th>Status</Table.Th>
+                        <Table.Th>Last active</Table.Th>
+                        <Table.Th>Location</Table.Th>
+                      </Table.Tr>
+                    </Table.Thead>
+                    <Table.Tbody>
+                      {pagedUsers.map(user => {
+                        const roleMeta = getRoleMeta(user);
+                        return (
+                          <Table.Tr
+                            key={user.id}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => handleOpenUserModal(user)}
+                          >
+                            <Table.Td>
+                              <Group gap="sm">
+                                <Box
                                   style={{
-                                    border: '1px solid',
-                                    ...parseBadgeClass(roleMeta.badgeClass),
+                                    width: 44,
+                                    height: 44,
+                                    borderRadius: '50%',
+                                    backgroundColor: '#1e293b',
+                                    color: 'white',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: 600,
                                   }}
                                 >
-                                  {roleMeta.label}
-                                </Badge>
-                              </Table.Td>
-                              <Table.Td>
-                                <StatusBadge status={user.status} />
-                              </Table.Td>
-                              <Table.Td>
-                                <Text size="sm" c="gray.6">{user.lastActive}</Text>
-                              </Table.Td>
-                              <Table.Td>
-                                <Text size="sm" c="gray.6">{user.location}</Text>
-                              </Table.Td>
-                            </Table.Tr>
-                          );
-                        })}
-                      </Table.Tbody>
-                    </Table>
-                  </Table.ScrollContainer>
-                </Box>
+                                  {user.name
+                                    .split(' ')
+                                    .map(part => part[0])
+                                    .slice(0, 2)
+                                    .join('')}
+                                </Box>
+                                <Box>
+                                  <Text fw={600} c="gray.9">
+                                    {user.name}
+                                  </Text>
+                                  <Text size="sm" c="gray.5">
+                                    {user.email}
+                                  </Text>
+                                </Box>
+                              </Group>
+                            </Table.Td>
+                            <Table.Td>
+                              <Badge
+                                variant="light"
+                                style={{
+                                  border: '1px solid',
+                                  ...parseBadgeClass(roleMeta.badgeClass),
+                                }}
+                              >
+                                {roleMeta.label}
+                              </Badge>
+                            </Table.Td>
+                            <Table.Td>
+                              <StatusBadge status={user.status} />
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm" c="gray.6">
+                                {user.lastActive}
+                              </Text>
+                            </Table.Td>
+                            <Table.Td>
+                              <Text size="sm" c="gray.6">
+                                {user.location}
+                              </Text>
+                            </Table.Td>
+                          </Table.Tr>
+                        );
+                      })}
+                    </Table.Tbody>
+                  </Table>
+                </Table.ScrollContainer>
+              </Box>
 
-                <Stack gap="xs" hiddenFrom="xl">
-                  {pagedUsers.map(user => {
-                    const roleMeta = getRoleMeta(user);
-                    return (
-                      <Paper
-            key={user.id}
-                        p="md"
-                        withBorder
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => handleOpenUserModal(user)}
-                      >
-                        <Group justify="space-between" align="flex-start">
-                          <Box>
-                            <Text size="sm" fw={600} c="gray.9">{user.name}</Text>
-                            <Text size="xs" c="gray.5">{user.email}</Text>
-                          </Box>
-                          <StatusBadge status={user.status} />
-                        </Group>
-                        <Group gap="xs" mt="md">
-                          <Badge
-                            variant="light"
-                            size="xs"
-                            style={{
-                              border: '1px solid',
-                              ...parseBadgeClass(roleMeta.badgeClass),
-                            }}
-                          >
-                            {roleMeta.label}
-                          </Badge>
-                          <Badge variant="light" size="xs" color="gray">
-                            {user.location}
-                          </Badge>
-                          <Badge variant="light" size="xs" color="gray">
-                            {user.lastActive}
-                          </Badge>
-                        </Group>
-                      </Paper>
-                    );
-                  })}
-                </Stack>
+              <Stack gap="xs" hiddenFrom="xl">
+                {pagedUsers.map(user => {
+                  const roleMeta = getRoleMeta(user);
+                  return (
+                    <Paper
+                      key={user.id}
+                      p="md"
+                      withBorder
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleOpenUserModal(user)}
+                    >
+                      <Group justify="space-between" align="flex-start">
+                        <Box>
+                          <Text size="sm" fw={600} c="gray.9">
+                            {user.name}
+                          </Text>
+                          <Text size="xs" c="gray.5">
+                            {user.email}
+                          </Text>
+                        </Box>
+                        <StatusBadge status={user.status} />
+                      </Group>
+                      <Group gap="xs" mt="md">
+                        <Badge
+                          variant="light"
+                          size="xs"
+                          style={{
+                            border: '1px solid',
+                            ...parseBadgeClass(roleMeta.badgeClass),
+                          }}
+                        >
+                          {roleMeta.label}
+                        </Badge>
+                        <Badge variant="light" size="xs" color="gray">
+                          {user.location}
+                        </Badge>
+                        <Badge variant="light" size="xs" color="gray">
+                          {user.lastActive}
+                        </Badge>
+                      </Group>
+                    </Paper>
+                  );
+                })}
+              </Stack>
 
-                <Box p="md" style={{ borderTop: '1px solid #e9ecef' }}>
-                  <MantinePagination
-                    value={page}
-                    total={pageCount}
-                    onChange={setPage}
-                  />
-                </Box>
-              </>
-            )}
+              <Box p="md" style={{ borderTop: '1px solid #e9ecef' }}>
+                <MantinePagination value={page} total={pageCount} onChange={setPage} />
+              </Box>
+            </>
+          )}
         </Paper>
       </Stack>
 
+      {/* Edit User Modal */}
       <Modal
         opened={userModalOpened}
         onClose={resetUserModal}
         title={
           <Box>
-            <Text size="sm" fw={600} c="blue.6">User profile</Text>
-            <Title order={2} fw={700} c="gray.9" mt="xs">{userDraft?.name}</Title>
-            <Text size="sm" c="gray.6" mt="xs">{userDraft?.location}</Text>
+            <Text size="sm" fw={600} c="blue.6">
+              User profile
+            </Text>
+            <Title order={2} fw={700} c="gray.9" mt="xs">
+              {userDraft?.name}
+            </Title>
+            <Text size="sm" c="gray.6" mt="xs">
+              {userDraft?.location}
+            </Text>
           </Box>
         }
         size="xl"
@@ -753,13 +1098,17 @@ export default function AdminUsersPage() {
               <Field label="Email">
                 <Group gap="xs">
                   <IconMail size={14} />
-                  <Text size="sm" c="gray.7">{userDraft.email}</Text>
+                  <Text size="sm" c="gray.7">
+                    {userDraft.email}
+                  </Text>
                 </Group>
               </Field>
               <Field label="Created">
                 <Group gap="xs">
                   <IconCalendar size={14} />
-                  <Text size="sm" c="gray.7">{userDraft.createdAt}</Text>
+                  <Text size="sm" c="gray.7">
+                    {userDraft.createdAt}
+                  </Text>
                 </Group>
               </Field>
               <Field label="Status">
@@ -768,7 +1117,9 @@ export default function AdminUsersPage() {
               <Field label="Last active">
                 <Group gap="xs">
                   <IconClock size={14} />
-                  <Text size="sm" c="gray.7">{userDraft.lastActive}</Text>
+                  <Text size="sm" c="gray.7">
+                    {userDraft.lastActive}
+                  </Text>
                 </Group>
               </Field>
             </SimpleGrid>
@@ -776,9 +1127,11 @@ export default function AdminUsersPage() {
             <Paper withBorder radius="md" p="md">
               <Stack gap="md">
                 <Group gap="xs" wrap="wrap">
-                  <Text size="sm" fw={600} c="gray.9">Role assignment</Text>
+                  <Text size="sm" fw={600} c="gray.9">
+                    Role assignment
+                  </Text>
                   <Badge variant="light" size="xs" color="gray">
-                    Shared data
+                    Saved to database
                   </Badge>
                 </Group>
 
@@ -821,10 +1174,14 @@ export default function AdminUsersPage() {
                       >
                         <Group justify="space-between">
                           <Box>
-                            <Text size="sm" fw={600} c="gray.9">{role.name}</Text>
-                            <Text size="xs" c="gray.5">{role.description}</Text>
+                            <Text size="sm" fw={600} c="gray.9">
+                              {role.name}
+                            </Text>
+                            <Text size="xs" c="gray.5">
+                              {role.description}
+                            </Text>
                           </Box>
-                  <input
+                          <input
                             type="radio"
                             checked={userDraft.roleId === role.id}
                             onChange={() =>
@@ -839,7 +1196,7 @@ export default function AdminUsersPage() {
                   <Stack gap="md">
                     <TextInput
                       value={userCustomRole.name}
-                      onChange={(event) =>
+                      onChange={event =>
                         setUserCustomRole(prev => ({ ...prev, name: event.target.value }))
                       }
                       placeholder="Custom role name"
@@ -849,7 +1206,8 @@ export default function AdminUsersPage() {
                       matrix={userCustomRole.permissions}
                       onToggle={(category, action) =>
                         updateCustomRole(current => {
-                          current.permissions[category][action] = !current.permissions[category][action];
+                          current.permissions[category][action] =
+                            !current.permissions[category][action];
                           return current;
                         })
                       }
@@ -874,7 +1232,7 @@ export default function AdminUsersPage() {
                 disabled={!!pendingAction}
                 onClick={handleSaveUser}
                 leftSection={
-                  pendingAction === 'save-user' ? (
+                  pendingAction === 'save-user' || pendingAction === 'save-role' ? (
                     <Loader size={16} />
                   ) : (
                     <IconDeviceFloppy size={16} />
@@ -889,7 +1247,7 @@ export default function AdminUsersPage() {
               <Button
                 variant="outline"
                 leftSection={<IconRefresh size={16} />}
-                onClick={() => toast.info('Password reset email queued')}
+                onClick={() => resetPassword(userDraft.email)}
                 radius="md"
                 fullWidth
               >
@@ -918,6 +1276,233 @@ export default function AdminUsersPage() {
           </Stack>
         )}
       </Modal>
+
+      {/* Create User Modal */}
+      <Modal
+        opened={createModalOpened}
+        onClose={closeCreateModal}
+        title={
+          <Box>
+            <Text size="sm" fw={600} c="blue.6">
+              New User
+            </Text>
+            <Title order={2} fw={700} c="gray.9" mt="xs">
+              Create User Account
+            </Title>
+            <Text size="sm" c="gray.6" mt="xs">
+              Add a new user to the platform
+            </Text>
+          </Box>
+        }
+        size="xl"
+        centered
+      >
+        <Stack gap="md">
+          {/* Basic Information */}
+          <Paper withBorder radius="md" p="md" bg="gray.0">
+            <Text size="sm" fw={600} c="gray.9" mb="md">
+              Basic Information
+            </Text>
+            <Stack gap="md">
+              <TextInput
+                label="Full Name"
+                placeholder="Enter user's full name"
+                value={newUserName}
+                onChange={e => setNewUserName(e.currentTarget.value)}
+                leftSection={<IconUser size={16} />}
+                radius="md"
+                required
+              />
+              <TextInput
+                label="Email Address"
+                placeholder="user@atlas.tm"
+                value={newUserEmail}
+                onChange={e => setNewUserEmail(e.currentTarget.value)}
+                leftSection={<IconMail size={16} />}
+                radius="md"
+                type="email"
+                required
+              />
+              <Select
+                label="Location"
+                placeholder="Select location"
+                value={newUserLocation}
+                onChange={value => value && setNewUserLocation(value)}
+                data={locationOptions}
+                leftSection={<IconMapPin size={16} />}
+                radius="md"
+                searchable
+                required
+              />
+            </Stack>
+          </Paper>
+
+          {/* Teams */}
+          <Paper withBorder radius="md" p="md" bg="gray.0">
+            <Text size="sm" fw={600} c="gray.9" mb="md">
+              Teams
+            </Text>
+            <Stack gap="md">
+              <Group gap="xs" wrap="wrap">
+                {newUserTeams.map(team => (
+                  <Badge
+                    key={team}
+                    variant="light"
+                    color="blue"
+                    rightSection={
+                      <Box
+                        onClick={() =>
+                          setNewUserTeams(prev => prev.filter(t => t !== team))
+                        }
+                        style={{
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <IconX size={12} />
+                      </Box>
+                    }
+                    style={{ paddingRight: 4 }}
+                  >
+                    {team}
+                  </Badge>
+                ))}
+                {newUserTeams.length === 0 && (
+                  <Text size="sm" c="gray.5">
+                    No teams assigned
+                  </Text>
+                )}
+              </Group>
+              <Select
+                placeholder="Add team"
+                data={teamOptions.filter(team => !newUserTeams.includes(team))}
+                leftSection={<IconUsers size={16} />}
+                radius="md"
+                searchable
+                onChange={value => {
+                  if (value && !newUserTeams.includes(value)) {
+                    setNewUserTeams(prev => [...prev, value]);
+                  }
+                }}
+                value={null}
+              />
+            </Stack>
+          </Paper>
+
+          {/* Role Assignment */}
+          <Paper withBorder radius="md" p="md" bg="gray.0">
+            <Stack gap="md">
+              <Group gap="xs">
+                <Text size="sm" fw={600} c="gray.9">
+                  Role Assignment
+                </Text>
+                <Badge variant="light" size="xs" color="gray">
+                  Required
+                </Badge>
+              </Group>
+
+              <Group gap="xs" wrap="wrap">
+                <Button
+                  variant={'filled'}
+                  color={'blue'}
+                  size="sm"
+                  radius="xl"
+                  style={{
+                    backgroundColor: '#eff6ff', borderColor: '#3b82f6', color: '#1e40af'
+                  }}
+                >
+                  Preset role
+                </Button>
+              </Group>
+
+              <Stack gap="xs">
+                {roles.map(role => (
+                  <Paper
+                    key={role.id}
+                    p="md"
+                    withBorder
+                    radius="md"
+                    style={{
+                      cursor: 'pointer',
+                      borderColor: newUserRoleId === role.id ? '#3b82f6' : '#e5e7eb',
+                      backgroundColor: newUserRoleId === role.id ? '#eff6ff' : 'white',
+                    }}
+                    onClick={() => setNewUserRoleId(role.id)}
+                  >
+                    <Group justify="space-between">
+                      <Box>
+                        <Group gap="sm" mb="xs">
+                          <Text size="sm" fw={600} c="gray.9">
+                            {role.name}
+                          </Text>
+                          <Badge
+                            variant="light"
+                            size="xs"
+                            style={{
+                              border: '1px solid',
+                              ...parseBadgeClass(role.badgeClass),
+                            }}
+                          >
+                            {role.name}
+                          </Badge>
+                        </Group>
+                        <Text size="xs" c="gray.5">
+                          {role.description}
+                        </Text>
+                      </Box>
+                      <input
+                        type="radio"
+                        checked={newUserRoleId === role.id}
+                        onChange={() => setNewUserRoleId(role.id)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </Group>
+                  </Paper>
+                ))}
+              </Stack>
+
+            </Stack>
+          </Paper>
+
+          {/* Status */}
+          <Paper withBorder radius="md" p="md" bg="gray.0">
+            <Text size="sm" fw={600} c="gray.9" mb="md">
+              Account Status
+            </Text>
+            <Group gap="md">
+              <Checkbox
+                label="Active"
+                checked={newUserStatus === 'active'}
+                onChange={e =>
+                  setNewUserStatus(e.currentTarget.checked ? 'active' : 'suspended')
+                }
+              />
+              <Text size="xs" c="gray.5">
+                User will have immediate access to the platform
+              </Text>
+            </Group>
+          </Paper>
+
+          {/* Actions */}
+          <Group justify="flex-end" gap="sm" mt="md">
+            <Button variant="outline" onClick={closeCreateModal} radius="md">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateUser}
+              disabled={!!pendingAction}
+              leftSection={
+                pendingAction === 'create-user' ? <Loader size={16} /> : <IconPlus size={16} />
+              }
+              style={{ backgroundColor: '#1a1a3c' }}
+              radius="md"
+            >
+              Create User
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
     </Stack>
   );
 }
@@ -937,10 +1522,17 @@ function SummaryCard({
     <Paper withBorder shadow="sm" radius="md" p="md">
       <Group justify="space-between" align="flex-start">
         <Box>
-          <Text size="xs" fw={600} c="gray.5" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <Text
+            size="xs"
+            fw={600}
+            c="gray.5"
+            style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
+          >
             {label}
           </Text>
-          <Title order={2} fw={700} c="gray.9" mt="xs">{value}</Title>
+          <Title order={2} fw={700} c="gray.9" mt="xs">
+            {value}
+          </Title>
         </Box>
         <Box
           style={{
@@ -953,7 +1545,9 @@ function SummaryCard({
           {icon}
         </Box>
       </Group>
-      <Text size="sm" c="gray.6" mt="md">{change}</Text>
+      <Text size="sm" c="gray.6" mt="md">
+        {change}
+      </Text>
     </Paper>
   );
 }
@@ -979,19 +1573,21 @@ function FiltersCard({
     <Paper withBorder shadow="sm" radius="md" p="md">
       <Group gap="xs" mb="md">
         <IconFilter size={16} />
-        <Text size="sm" fw={600} c="gray.9">Filters</Text>
+        <Text size="sm" fw={600} c="gray.9">
+          Filters
+        </Text>
       </Group>
       <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
         <TextInput
           value={search}
-          onChange={(event) => onSearch(event.target.value)}
+          onChange={event => onSearch(event.target.value)}
           placeholder="Search users, email, parishes..."
           leftSection={<IconSearch size={18} />}
           radius="md"
         />
         <Select
           value={roleFilter}
-          onChange={(value) => value && onRoleFilter(value)}
+          onChange={value => value && onRoleFilter(value)}
           data={[
             { value: 'all', label: 'All roles' },
             ...roleOptions.map(role => ({ value: role.id, label: role.label })),
@@ -1000,7 +1596,7 @@ function FiltersCard({
         />
         <Select
           value={statusFilter}
-          onChange={(value) => value && onStatusFilter(value as 'all' | Status)}
+          onChange={value => value && onStatusFilter(value as 'all' | Status)}
           data={[
             { value: 'all', label: 'All status' },
             { value: 'active', label: 'Active' },
@@ -1012,7 +1608,6 @@ function FiltersCard({
     </Paper>
   );
 }
-
 
 function PermissionMatrix({
   matrix,
@@ -1026,8 +1621,12 @@ function PermissionMatrix({
       {permissionCatalog.map(category => (
         <Paper key={category.id} withBorder radius="md" p="md">
           <Box mb="sm">
-            <Text size="sm" fw={600} c="gray.9">{category.label}</Text>
-            <Text size="xs" c="gray.5">{category.description}</Text>
+            <Text size="sm" fw={600} c="gray.9">
+              {category.label}
+            </Text>
+            <Text size="xs" c="gray.5">
+              {category.description}
+            </Text>
           </Box>
           <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
             {category.actions.map(action => {
@@ -1113,19 +1712,17 @@ function StatusBadge({ status }: { status: Status }) {
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <Stack gap="xs">
-      <Text size="xs" fw={600} c="gray.5" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+      <Text
+        size="xs"
+        fw={600}
+        c="gray.5"
+        style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
+      >
         {label}
       </Text>
       <Paper withBorder radius="md" p="sm">
         {children}
       </Paper>
     </Stack>
-  );
-}
-
-function countPermissions(matrix: PermissionMatrix) {
-  return Object.values(matrix).reduce(
-    (sum, actions) => sum + Object.values(actions).filter(Boolean).length,
-    0,
   );
 }

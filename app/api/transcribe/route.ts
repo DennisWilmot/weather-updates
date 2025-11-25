@@ -106,7 +106,7 @@ Now analyze the following transcription:
 TRANSCRIPTION:
 ${(transcription as any).text}
 `;
-
+    console.log(transcription);
     // Run DeepSeek — left untouched
     const output = await replicate.run("deepseek-ai/deepseek-v3.1", {
       input: {
@@ -114,6 +114,7 @@ ${(transcription as any).text}
         response_format: "json",
       },
     });
+    console.log(output);
 
     // DeepSeek returns array chunks — merge them into a single string
     const text = Array.isArray(output) ? output.join("") : String(output);
@@ -128,7 +129,7 @@ ${(transcription as any).text}
     // Normalize skills if present
     if (jsonObj.skills && Array.isArray(jsonObj.skills)) {
       // Import normalization function
-      const { normalizeSkillName } = await import('@/lib/skill-normalization');
+      const { normalizeSkillName } = await import("@/lib/skill-normalization");
       jsonObj.skills = jsonObj.skills.map((skill: string) => {
         // Normalize but keep original for display - we'll use normalized version for matching
         return skill.trim();
