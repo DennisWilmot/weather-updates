@@ -51,7 +51,7 @@ export default function LoginPage() {
                 toast.success('Logged in successfully!');
                 // The client will handle the redirect based on callbackURL
                 router.push('/');
-                router.refresh(); // Refresh to update session state
+                // router.refresh(); // Refresh to update session state
             }
         } catch (err: any) {
             console.error('Login exception:', err);
