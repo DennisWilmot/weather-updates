@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { formSubmissions, forms } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { assertPermission, getCurrentUser } from "@/lib/actions";
 import { auditLogFormSubmission } from "@/lib/audit";
 
@@ -114,7 +114,13 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(url.searchParams.get("limit") || "50");
     const offset = parseInt(url.searchParams.get("offset") || "0");
 
-    let query = db
+    // Build query conditions
+    const conditions = [];
+    if (formId) {
+      conditions.push(eq(formSubmissions.formId, formId));
+    }
+
+    const submissions = await db
       .select({
         id: formSubmissions.id,
         formId: formSubmissions.formId,
@@ -123,14 +129,8 @@ export async function GET(request: NextRequest) {
         submittedAt: formSubmissions.submittedAt,
         ipAddress: formSubmissions.ipAddress,
       })
-      .from(formSubmissions);
-
-    // Filter by form ID if provided
-    if (formId) {
-      query = query.where(eq(formSubmissions.formId, formId));
-    }
-
-    const submissions = await query
+      .from(formSubmissions)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .limit(limit)
       .offset(offset)
       .orderBy(formSubmissions.submittedAt);

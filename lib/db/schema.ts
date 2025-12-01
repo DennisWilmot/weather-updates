@@ -971,3 +971,33 @@ export const formSubmissions = pgTable(
     ),
   })
 );
+
+// Audit Logs table - For tracking user actions and system events
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    action: text("action").notNull(),
+    userId: uuid("user_id").references(() => appUsers.id),
+    userEmail: text("user_email"),
+    userName: text("user_name"),
+    details: text("details").notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    resourceType: text("resource_type"),
+    resourceId: text("resource_id"),
+    beforeValue: jsonb("before_value"),
+    afterValue: jsonb("after_value"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    userIdIdx: index("audit_logs_user_id_idx").on(table.userId),
+    actionIdx: index("audit_logs_action_idx").on(table.action),
+    createdAtIdx: index("audit_logs_created_at_idx").on(table.createdAt),
+    resourceTypeIdx: index("audit_logs_resource_type_idx").on(
+      table.resourceType
+    ),
+    resourceIdIdx: index("audit_logs_resource_id_idx").on(table.resourceId),
+  })
+);

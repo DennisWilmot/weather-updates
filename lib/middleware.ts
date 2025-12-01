@@ -3,19 +3,19 @@
  * Provides route protection and permission checking for API endpoints
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-import { auth } from './auth';
-import { db } from './db';
-import { appUsers } from './db/schema';
-import { eq } from 'drizzle-orm';
-import type { Permission, UserRole, UserWithRole } from './permissions';
-import { 
-  getPermissionsForRole, 
-  roleHasPermission, 
-  roleHasAnyPermission, 
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "./auth";
+import { db } from "./db";
+import { appUsers } from "./db/schema";
+import { eq } from "drizzle-orm";
+import type { Permission, UserRole, UserWithRole } from "./permissions";
+import {
+  getPermissionsForRole,
+  roleHasPermission,
+  roleHasAnyPermission,
   roleHasAllPermissions,
-  isValidRole 
-} from './permissions';
+  isValidRole,
+} from "./permissions";
 
 /**
  * Error class for permission-related errors
@@ -23,19 +23,25 @@ import {
 export class PermissionError extends Error {
   constructor(
     message: string,
-    public code: 'UNAUTHORIZED' | 'FORBIDDEN' | 'INVALID_ROLE' | 'MISSING_PERMISSION',
+    public code:
+      | "UNAUTHORIZED"
+      | "FORBIDDEN"
+      | "INVALID_ROLE"
+      | "MISSING_PERMISSION",
     public requiredPermissions?: Permission[],
     public userRole?: UserRole
   ) {
     super(message);
-    this.name = 'PermissionError';
+    this.name = "PermissionError";
   }
 }
 
 /**
  * Get user with role and permissions from session
  */
-export async function getUserWithRole(request: Request): Promise<UserWithRole | null> {
+export async function getUserWithRole(
+  request: Request
+): Promise<UserWithRole | null> {
   try {
     const session = await auth.api.getSession({
       headers: request.headers,
@@ -72,17 +78,17 @@ export async function getUserWithRole(request: Request): Promise<UserWithRole | 
 
     if (appUser.length === 0) {
       throw new PermissionError(
-        'User not found in application database',
-        'INVALID_ROLE'
+        "User not found in application database",
+        "INVALID_ROLE"
       );
     }
 
     const userData = appUser[0];
-    
+
     if (!isValidRole(userData.role)) {
       throw new PermissionError(
         `Invalid user role: ${userData.role}`,
-        'INVALID_ROLE'
+        "INVALID_ROLE"
       );
     }
 
@@ -94,14 +100,18 @@ export async function getUserWithRole(request: Request): Promise<UserWithRole | 
       name: session.user.name,
       image: session.user.image,
       role: userRole,
+      permissions: getPermissionsForRole(userRole),
       canViewSensitiveData: userData.canViewSensitiveData,
       canExportData: userData.canExportData,
       canManageUsers: userData.canManageUsers,
-      canCreateDeployments: roleHasPermission(userRole, 'deployments_create'),
-      canAssignForms: roleHasPermission(userRole, 'forms_assign'),
-      canApproveRequests: roleHasPermission(userRole, 'relief_approve_requests'),
-      canAccessAdmin: roleHasPermission(userRole, 'system_access_settings'),
-      canSubmitPeopleNeeds: roleHasPermission(userRole, 'form_people_needs'),
+      canCreateDeployments: roleHasPermission(userRole, "deployments_create"),
+      canAssignForms: roleHasPermission(userRole, "forms_assign"),
+      canApproveRequests: roleHasPermission(
+        userRole,
+        "relief_approve_requests"
+      ),
+      canAccessAdmin: roleHasPermission(userRole, "system_access_settings"),
+      canSubmitPeopleNeeds: roleHasPermission(userRole, "form_people_needs"),
       firstName: userData.firstName || undefined,
       lastName: userData.lastName || undefined,
       fullName: userData.fullName || undefined,
@@ -115,7 +125,7 @@ export async function getUserWithRole(request: Request): Promise<UserWithRole | 
       updatedAt: userData.updatedAt,
     };
   } catch (error) {
-    console.error('Error getting user with role:', error);
+    console.error("Error getting user with role:", error);
     return null;
   }
 }
@@ -127,7 +137,11 @@ export async function checkUserPermission(
   request: Request,
   permission: Permission | Permission[],
   requireAll: boolean = true
-): Promise<{ hasPermission: boolean; user: UserWithRole | null; missingPermissions?: Permission[] }> {
+): Promise<{
+  hasPermission: boolean;
+  user: UserWithRole | null;
+  missingPermissions?: Permission[];
+}> {
   const user = await getUserWithRole(request);
 
   if (!user) {
@@ -135,7 +149,7 @@ export async function checkUserPermission(
   }
 
   const permissions = Array.isArray(permission) ? permission : [permission];
-  
+
   let hasPermission: boolean;
   let missingPermissions: Permission[] = [];
 
@@ -143,7 +157,9 @@ export async function checkUserPermission(
     hasPermission = roleHasAllPermissions(user.role, permissions);
     if (!hasPermission) {
       const userPermissions = getPermissionsForRole(user.role);
-      missingPermissions = permissions.filter(p => !userPermissions.includes(p));
+      missingPermissions = permissions.filter(
+        (p) => !userPermissions.includes(p)
+      );
     }
   } else {
     hasPermission = roleHasAnyPermission(user.role, permissions);
@@ -152,10 +168,11 @@ export async function checkUserPermission(
     }
   }
 
-  return { 
-    hasPermission, 
-    user, 
-    missingPermissions: missingPermissions.length > 0 ? missingPermissions : undefined 
+  return {
+    hasPermission,
+    user,
+    missingPermissions:
+      missingPermissions.length > 0 ? missingPermissions : undefined,
   };
 }
 
@@ -174,16 +191,13 @@ export async function assertPermission(
   );
 
   if (!user) {
-    throw new PermissionError(
-      'Authentication required',
-      'UNAUTHORIZED'
-    );
+    throw new PermissionError("Authentication required", "UNAUTHORIZED");
   }
 
   if (!hasPermission) {
     throw new PermissionError(
-      'Insufficient permissions',
-      'FORBIDDEN',
+      "Insufficient permissions",
+      "FORBIDDEN",
       missingPermissions,
       user.role
     );
@@ -222,10 +236,7 @@ export async function assertRole(
   const user = await getUserWithRole(request);
 
   if (!user) {
-    throw new PermissionError(
-      'Authentication required',
-      'UNAUTHORIZED'
-    );
+    throw new PermissionError("Authentication required", "UNAUTHORIZED");
   }
 
   const allowedRoles = Array.isArray(roles) ? roles : [roles];
@@ -233,8 +244,8 @@ export async function assertRole(
 
   if (!hasRole) {
     throw new PermissionError(
-      'Insufficient role privileges',
-      'FORBIDDEN',
+      "Insufficient role privileges",
+      "FORBIDDEN",
       undefined,
       user.role
     );
@@ -250,10 +261,7 @@ export async function assertAuth(request: Request): Promise<UserWithRole> {
   const user = await getUserWithRole(request);
 
   if (!user) {
-    throw new PermissionError(
-      'Authentication required',
-      'UNAUTHORIZED'
-    );
+    throw new PermissionError("Authentication required", "UNAUTHORIZED");
   }
 
   return user;
