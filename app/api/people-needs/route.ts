@@ -1,8 +1,46 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { people, parishes, communities, skills, peopleSkills } from '@/lib/db/schema';
-import { eq, and, desc, asc, or, like, sql } from 'drizzle-orm';
+import { eq, and, desc, asc, or, like, sql, inArray } from 'drizzle-orm';
 import { getPersonSkills } from '@/lib/skill-normalization';
+
+// Simple in-memory cache with TTL
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+
+const cache = new Map<string, CacheEntry>();
+const CACHE_TTL = 3 * 60 * 1000; // 3 minutes (shorter for dynamic data)
+
+function getCacheKey(searchParams: URLSearchParams): string {
+  const params = new URLSearchParams(searchParams);
+  params.sort(); // Ensure consistent ordering
+  return `people-needs:${params.toString()}`;
+}
+
+function getFromCache(key: string): any | null {
+  const entry = cache.get(key);
+  if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
+    return entry.data;
+  }
+  cache.delete(key); // Remove expired entry
+  return null;
+}
+
+function setCache(key: string, data: any): void {
+  cache.set(key, { data, timestamp: Date.now() });
+  
+  // Simple cleanup: remove old entries periodically
+  if (cache.size > 100) {
+    const now = Date.now();
+    for (const [k, entry] of cache.entries()) {
+      if (now - entry.timestamp > CACHE_TTL) {
+        cache.delete(k);
+      }
+    }
+  }
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +67,16 @@ export async function GET(request: Request) {
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = (page - 1) * limit;
+
+    // Check cache first
+    const cacheKey = getCacheKey(searchParams);
+    const cachedResult = getFromCache(cacheKey);
+    if (cachedResult) {
+      const response = NextResponse.json(cachedResult);
+      response.headers.set('Cache-Control', 'public, max-age=180, s-maxage=300');
+      response.headers.set('X-Cache', 'HIT');
+      return response;
+    }
 
     // Build query conditions - show all people (we'll aggregate their needs/skills)
     const conditions = [];
@@ -124,29 +172,56 @@ export async function GET(request: Request) {
       .limit(limit)
       .offset(offset);
 
-    // Fetch normalized skills for each person
-    const results = await Promise.all(
-      rows.map(async (row) => {
-        const personSkills = await getPersonSkills(row.id);
-        return {
-          ...row,
-          needs: Array.isArray(row.needs) ? row.needs : [],
-          skills: personSkills.length > 0 ? personSkills.map((s) => s.name) : null, // Return as array of skill names for backward compatibility
-          urgency: null,
-          status: null,
-          description: null,
-          numberOfPeople: null,
-        };
+    // Optimize: Fetch all skills in a single query instead of N+1 queries
+    const personIds = rows.map(row => row.id);
+    
+    // Single query to get all skills for all people
+    const allSkills = personIds.length > 0 ? await db
+      .select({
+        personId: peopleSkills.personId,
+        skillId: skills.id,
+        skillName: skills.name,
       })
-    );
+      .from(peopleSkills)
+      .innerJoin(skills, eq(peopleSkills.skillId, skills.id))
+      .where(inArray(peopleSkills.personId, personIds)) : [];
 
-    return NextResponse.json({
+    // Group skills by person ID for O(1) lookup
+    const skillsByPersonId = new Map<string, string[]>();
+    for (const skill of allSkills) {
+      if (!skillsByPersonId.has(skill.personId)) {
+        skillsByPersonId.set(skill.personId, []);
+      }
+      skillsByPersonId.get(skill.personId)!.push(skill.skillName);
+    }
+
+    // Transform results with O(1) skill lookup
+    const results = rows.map((row) => ({
+      ...row,
+      needs: Array.isArray(row.needs) ? row.needs : [],
+      skills: skillsByPersonId.get(row.id) || null, // O(1) lookup instead of N queries
+      urgency: null,
+      status: null,
+      description: null,
+      numberOfPeople: null,
+    }));
+
+    const responseData = {
       data: results,
       total,
       page,
       totalPages,
       limit,
-    });
+    };
+
+    // Cache the result
+    setCache(cacheKey, responseData);
+
+    const response = NextResponse.json(responseData);
+    response.headers.set('Cache-Control', 'public, max-age=180, s-maxage=300');
+    response.headers.set('X-Cache', 'MISS');
+    
+    return response;
   } catch (error) {
     console.error('Error fetching people needs:', error);
     // Log the full error for debugging

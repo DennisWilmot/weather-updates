@@ -555,11 +555,23 @@ export const placeStatus = pgTable(
   })
 );
 
-export const roles = pgTable("roles", {
-  name: text("name").primaryKey(),
-  description: text("description"),
-  permissions: text("permissions").array().notNull().default([]),
-});
+export const roles = pgTable(
+  "roles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull().unique(),
+    description: text("description"),
+    permissions: jsonb("permissions").notNull().default("[]"), // Array of Permission strings
+    isDefault: boolean("is_default").notNull().default(false), // System roles vs custom roles
+    createdBy: uuid("created_by").references(() => appUsers.id), // Who created this role (null for system roles)
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    nameIdx: index("roles_name_idx").on(table.name),
+    isDefaultIdx: index("roles_is_default_idx").on(table.isDefault),
+  })
+);
 
 // People Needs table - Reports of people in need
 export const peopleNeeds = pgTable(
@@ -677,6 +689,9 @@ export const appUsers = pgTable(
     imageUrl: text("image_url"),
 
     role: text("role").notNull(), // admin | responder | viewer | etc
+    status: text("status", { enum: ["active", "suspended"] })
+      .notNull()
+      .default("active"),
     organization: text("organization"),
     department: text("department"),
 
@@ -899,5 +914,60 @@ export const allocationShipments = pgTable(
       table.toCommunityId
     ),
     statusIdx: index("allocation_shipments_status_idx").on(table.status),
+  })
+);
+
+// Custom Forms table - For user-created forms
+export const forms = pgTable(
+  "forms",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    description: text("description").notNull(),
+    status: text("status", { enum: ["draft", "published", "archived"] })
+      .notNull()
+      .default("draft"),
+    fields: jsonb("fields").notNull(), // Array of FormField objects
+    allowedRoles: jsonb("allowed_roles").notNull().default('["admin"]'), // Array of UserRole strings that can access this form
+    createdBy: uuid("created_by")
+      .references(() => appUsers.id)
+      .notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+    publishedAt: timestamp("published_at"),
+    archivedAt: timestamp("archived_at"),
+  },
+  (table) => ({
+    createdByIdx: index("forms_created_by_idx").on(table.createdBy),
+    statusIdx: index("forms_status_idx").on(table.status),
+    nameIdx: index("forms_name_idx").on(table.name),
+  })
+);
+
+// Form Submissions table - For storing form responses
+export const formSubmissions = pgTable(
+  "form_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+
+    // ✅ FIXED HERE
+    formId: uuid("form_id")
+      .references(() => forms.id, { onDelete: "cascade" })
+      .notNull(),
+
+    submittedBy: uuid("submitted_by").references(() => appUsers.id),
+    submissionData: jsonb("submission_data").notNull(),
+    submittedAt: timestamp("submitted_at").defaultNow().notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+  },
+  (table) => ({
+    formIdIdx: index("form_submissions_form_id_idx").on(table.formId),
+    submittedByIdx: index("form_submissions_submitted_by_idx").on(
+      table.submittedBy
+    ),
+    submittedAtIdx: index("form_submissions_submitted_at_idx").on(
+      table.submittedAt
+    ),
   })
 );

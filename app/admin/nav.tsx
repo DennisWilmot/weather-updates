@@ -42,7 +42,7 @@ export default function AdminNavigation() {
                 <Text size="sm" fw={500} c="gray.6">Back to Dashboard</Text>
               </Group>
             </Anchor>
-            
+
             {/* Desktop navigation */}
             <Group gap="lg" ml="auto" visibleFrom="md">
               {tabs.map(tab => {
@@ -53,6 +53,7 @@ export default function AdminNavigation() {
                     key={tab.href}
                     component={Link}
                     href={tab.href}
+                    prefetch
                     style={{
                       paddingBottom: '4px',
                       borderBottom: active ? '2px solid #1478FF' : '2px solid transparent',
@@ -113,6 +114,7 @@ export default function AdminNavigation() {
                 key={tab.href}
                 component={Link}
                 href={tab.href}
+                prefetch
                 onClick={closeMobileMenu}
                 style={{
                   padding: '8px 12px',

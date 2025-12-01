@@ -16,6 +16,8 @@ import {
 import { notifications } from '@mantine/notifications';
 import { IconAlertCircle, IconCheck } from '@tabler/icons-react';
 import { signIn } from '@/lib/auth-client';
+import { updateLastActive } from '@/lib/update-last-active-client';
+import { toast } from 'sonner';
 
 function LoginForm() {
   const router = useRouter();
@@ -24,7 +26,7 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Get redirect URL from query params
   const redirectTo = searchParams.get('redirect') || '/maps';
 
@@ -32,6 +34,7 @@ function LoginForm() {
     e.preventDefault();
     setError(null);
     setLoading(true);
+    const toastId = toast.loading('Logging in...');
 
     try {
       // Convert username to email format for Better Auth
@@ -46,6 +49,7 @@ function LoginForm() {
         throw new Error(result.error.message || 'Login failed');
       }
 
+      toast.dismiss(toastId);
       notifications.show({
         title: 'Success',
         message: 'Logged in successfully',
@@ -56,19 +60,23 @@ function LoginForm() {
       // CRITICAL FIX: Wait for session to be available before redirect
       // Better Auth's signIn sets the cookie via HTTP response headers, but we need to ensure
       // the cookie is persisted and the session can be fetched before redirecting
-      
+
       // Refresh router to ensure server components pick up the new session state
       router.refresh();
-      
+
       // Wait longer to ensure cookie is set and session can be fetched
       // The cookie is set via HTTP-only Set-Cookie header, so we need to give the browser
       // time to persist it before redirecting
       await new Promise(resolve => setTimeout(resolve, 500));
-      
+
+      // Update last active timestamp after successful login
+      await updateLastActive();
+
       // Now redirect - the cookie should be set and available
       // Using window.location.href ensures a full page reload that picks up the session cookie
       window.location.href = redirectTo;
     } catch (err: any) {
+      toast.dismiss(toastId);
       setError(err.message || 'Invalid username or password');
       notifications.show({
         title: 'Error',
@@ -82,9 +90,9 @@ function LoginForm() {
   };
 
   return (
-    <Box style={{ 
-      minHeight: '100vh', 
-      backgroundColor: '#0f0f23', 
+    <Box style={{
+      minHeight: '100vh',
+      backgroundColor: '#0f0f23',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -155,9 +163,9 @@ function LoginForm() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <Box style={{ 
-        minHeight: '100vh', 
-        backgroundColor: '#0f0f23', 
+      <Box style={{
+        minHeight: '100vh',
+        backgroundColor: '#0f0f23',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

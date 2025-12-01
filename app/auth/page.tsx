@@ -29,6 +29,7 @@ export default function LoginPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        const toastId = toast.loading('Logging in...');
 
         try {
             // ⭐ Use the Better Auth client - it handles the correct endpoint
@@ -40,11 +41,13 @@ export default function LoginPage() {
 
             if (error) {
                 console.error('Login error:', error);
+                toast.dismiss(toastId);
                 toast.error(error.message || 'Invalid email or password');
                 return;
             }
 
             if (data) {
+                toast.dismiss(toastId);
                 toast.success('Logged in successfully!');
                 // The client will handle the redirect based on callbackURL
                 router.push('/');
@@ -52,6 +55,7 @@ export default function LoginPage() {
             }
         } catch (err: any) {
             console.error('Login exception:', err);
+            toast.dismiss(toastId);
             toast.error('An error occurred during login');
         } finally {
             setLoading(false);

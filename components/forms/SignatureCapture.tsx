@@ -11,6 +11,7 @@ import { useMediaQuery } from '@mantine/hooks';
 import { IconTrash, IconCheck, IconUpload } from '@tabler/icons-react';
 import imageCompression from 'browser-image-compression';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface SignatureCaptureProps {
   label?: string;
@@ -159,11 +160,13 @@ export default function SignatureCapture({
     if (!canvas || !hasSignature) return;
 
     setIsUploading(true);
+    let toastId: string | number | undefined = toast.loading('Saving signature...');
 
     try {
       // Convert canvas to blob
       canvas.toBlob(async (blob) => {
         if (!blob) {
+          if (toastId) toast.dismiss(toastId);
           setIsUploading(false);
           return;
         }
@@ -199,16 +202,22 @@ export default function SignatureCapture({
             } = supabase.storage.from('signatures').getPublicUrl(filePath);
 
             onChange(publicUrl);
+            if (toastId) toast.dismiss(toastId);
+            toast.success('Signature saved successfully');
           } else {
             // Convert to base64
             const reader = new FileReader();
             reader.onloadend = () => {
               onChange(reader.result as string);
+              if (toastId) toast.dismiss(toastId);
+              toast.success('Signature saved successfully');
             };
             reader.readAsDataURL(compressedBlob);
           }
         } catch (err) {
           console.error('Error processing signature:', err);
+          if (toastId) toast.dismiss(toastId);
+          toast.error('Failed to save signature');
           // Fallback to base64
           const dataUrl = canvas.toDataURL('image/png');
           onChange(dataUrl);
@@ -218,6 +227,8 @@ export default function SignatureCapture({
       }, 'image/png');
     } catch (err) {
       console.error('Error saving signature:', err);
+      if (toastId) toast.dismiss(toastId);
+      toast.error('Failed to save signature');
       setIsUploading(false);
     }
   };

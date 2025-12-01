@@ -28,6 +28,7 @@ import {
 import { Dropzone } from '@mantine/dropzone';
 import { useMediaQuery } from '@mantine/hooks';
 import { IconUpload, IconVideo, IconX, IconCheck, IconPlus, IconSparkles } from '@tabler/icons-react';
+import { toast } from 'sonner';
 import { peopleNeedsSchema, URGENCY_LEVELS } from '@/lib/schemas/people-needs-schema';
 import FormSection from '@/components/forms/FormSection';
 import FormField from '@/components/forms/FormField';
@@ -219,6 +220,7 @@ export default function PeopleNeedsForm({
     }
 
     setIsSubmitting(true);
+    const toastId = toast.loading('Submitting needs report...');
     try {
       const response = await fetch('/api/people/needs', {
         method: 'POST',
@@ -236,6 +238,8 @@ export default function PeopleNeedsForm({
         throw new Error(error.message || 'Failed to submit people needs');
       }
 
+      toast.dismiss(toastId);
+      toast.success('Needs report submitted successfully!');
       form.reset();
       setUploadedVideo(null);
       setTranscription('');
@@ -243,7 +247,10 @@ export default function PeopleNeedsForm({
       setSkillsSuggestions(COMMON_SKILLS);
       onSuccess?.();
     } catch (err) {
-      onError?.(err instanceof Error ? err.message : 'An error occurred while submitting the form');
+      toast.dismiss(toastId);
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred while submitting the form';
+      toast.error(errorMessage);
+      onError?.(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

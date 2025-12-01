@@ -1,7 +1,12 @@
 // app/api/logout/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { getUserWithRole } from "../../../lib/middleware";
+import { auditLogLogout } from "../../../lib/audit";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  // Get user before clearing session
+  const currentUser = await getUserWithRole(request);
+  
   const res = NextResponse.json({ ok: true });
 
   res.cookies.set("better-auth.session_token", "", {
@@ -13,6 +18,11 @@ export async function POST() {
     maxAge: 0,
     path: "/",
   });
+
+  // Log audit event for logout (if user was authenticated)
+  if (currentUser) {
+    await auditLogLogout(request, currentUser);
+  }
 
   return res;
 }

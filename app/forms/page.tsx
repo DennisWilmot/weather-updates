@@ -1,7 +1,5 @@
-'use client';
-
 import PortalPage from '@/app/portal/page';
 
-export default PortalPage;
-
-
+export default function FormsPage() {
+    return <PortalPage />;
+}

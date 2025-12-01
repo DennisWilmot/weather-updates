@@ -1,10 +1,19 @@
-import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { people, parishes, communities, skills, peopleSkills } from '@/lib/db/schema';
-import { eq, and, inArray, isNotNull } from 'drizzle-orm';
-import { associatePersonWithSkills, getPersonSkills } from '@/lib/skill-normalization';
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import {
+  people,
+  parishes,
+  communities,
+  skills,
+  peopleSkills,
+} from "@/lib/db/schema";
+import { eq, and, inArray, isNotNull } from "drizzle-orm";
+import {
+  associatePersonWithSkills,
+  getPersonSkills,
+} from "@/lib/skill-normalization";
 
-export const dynamic = 'force-dynamic';
+// export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/people
@@ -18,10 +27,10 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type');
-    const parishId = searchParams.get('parishId');
-    const communityId = searchParams.get('communityId');
-    const format = searchParams.get('format') || 'json';
+    const type = searchParams.get("type");
+    const parishId = searchParams.get("parishId");
+    const communityId = searchParams.get("communityId");
+    const format = searchParams.get("format") || "json";
 
     // Build query conditions
     const conditions = [];
@@ -68,15 +77,15 @@ export async function GET(request: Request) {
     );
 
     // Return GeoJSON or JSON format
-    if (format === 'geojson') {
+    if (format === "geojson") {
       // For aid workers, we'll use a separate endpoint that includes capabilities
       // For now, return basic GeoJSON
       const features = peopleWithRelations
         .filter((p) => p.latitude && p.longitude)
         .map((p) => ({
-          type: 'Feature' as const,
+          type: "Feature" as const,
           geometry: {
-            type: 'Point' as const,
+            type: "Point" as const,
             coordinates: [
               parseFloat(p.longitude!.toString()),
               parseFloat(p.latitude!.toString()),
@@ -98,12 +107,12 @@ export async function GET(request: Request) {
 
       return NextResponse.json(
         {
-          type: 'FeatureCollection',
+          type: "FeatureCollection",
           features,
         },
         {
           headers: {
-            'Content-Type': 'application/geo+json',
+            "Content-Type": "application/geo+json",
           },
         }
       );
@@ -114,9 +123,9 @@ export async function GET(request: Request) {
       count: peopleWithRelations.length,
     });
   } catch (error) {
-    console.error('Error fetching people:', error);
+    console.error("Error fetching people:", error);
     return NextResponse.json(
-      { error: 'Failed to fetch people' },
+      { error: "Failed to fetch people" },
       { status: 500 }
     );
   }
@@ -160,12 +169,12 @@ export async function POST(request: Request) {
     // Validate required fields
     if (!name || !type || !parishId || !contactName) {
       return NextResponse.json(
-        { error: 'Missing required fields: name, type, parishId, contactName' },
+        { error: "Missing required fields: name, type, parishId, contactName" },
         { status: 400 }
       );
     }
 
-    if (type !== 'person_in_need' && type !== 'aid_worker') {
+    if (type !== "person_in_need" && type !== "aid_worker") {
       return NextResponse.json(
         { error: 'Invalid type. Must be "person_in_need" or "aid_worker"' },
         { status: 400 }
@@ -177,7 +186,7 @@ export async function POST(request: Request) {
       .insert(people)
       .values({
         name: name.trim(),
-        type: type as 'person_in_need' | 'aid_worker',
+        type: type as "person_in_need" | "aid_worker",
         parishId,
         communityId: communityId || null,
         contactName: contactName.trim(),
@@ -221,14 +230,13 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Error creating person:', error);
+    console.error("Error creating person:", error);
     return NextResponse.json(
       {
-        error: 'Failed to create person',
+        error: "Failed to create person",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );
   }
 }
-

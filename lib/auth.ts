@@ -2,6 +2,20 @@ import { betterAuth } from "better-auth";
 import { db } from "./db";
 import * as schema from "./db/schema";
 import { Resend } from "resend";
+import { eq } from "drizzle-orm";
+import type { UserRole, Permission } from "./permissions";
+import {
+  getPermissionsForRole,
+  getPermissionFlagsForRole,
+} from "./permissions";
+
+/**
+ * Better Auth types are extended through our custom UserWithRole interface
+ * Module augmentation removed to avoid conflicts with Better Auth's built-in types
+ */
+
+// Re-export key types for convenience
+export type { Permission, UserRole, UserWithRole } from "./permissions";
 
 // Only initialize Better Auth if required environment variables are set
 // BETTER_AUTH_SECRET is required, Google OAuth is optional
@@ -90,9 +104,30 @@ const createAuthInstance = (request?: Request) => {
           verification: schema.verification,
         },
       }),
+
+      // Custom session handling to include role and permissions
+      session: {
+        updateAge: 24 * 60 * 60, // 24 hours
+        expiresIn: 60 * 60 * 24 * 7, // 7 days
+      },
+
+      // Custom user handling
+      user: {
+        additionalFields: {
+          role: {
+            type: "string",
+            required: false,
+          },
+          permissions: {
+            type: "string[]",
+            required: false,
+          },
+        },
+      },
+
+      // Note: Role information will be fetched from appUsers table when needed by middleware
       emailAndPassword: {
         enabled: true,
-        resetPasswordEnabled: true,
         sendResetPassword: async ({ user, url }) => {
           // Send email with reset link
           // url contains the reset token

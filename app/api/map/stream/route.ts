@@ -1,5 +1,5 @@
-import { NextRequest } from 'next/server';
-import { db } from '@/lib/db';
+import { NextRequest } from "next/server";
+import { db } from "@/lib/db";
 import {
   assets,
   places,
@@ -8,8 +8,8 @@ import {
   assetDistributions,
   peopleNeeds,
   placeStatus,
-} from '@/lib/db/schema';
-import { eq, gte, and } from 'drizzle-orm';
+} from "@/lib/db/schema";
+import { eq, gte, and } from "drizzle-orm";
 import {
   assetsToGeoJSON,
   placesToGeoJSON,
@@ -17,11 +17,11 @@ import {
   aidWorkersToGeoJSON,
   assetDistributionsToGeoJSON,
   placeStatusToGeoJSON,
-} from '@/lib/maps/geojson';
-import NotifyManager from '@/lib/db/notify-manager';
-import type { NotificationPayload } from '@/lib/db/notify-client';
+} from "@/lib/maps/geojson";
+import NotifyManager from "@/lib/db/notify-manager";
+import type { NotificationPayload } from "@/lib/db/notify-client";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/map/stream
@@ -33,18 +33,26 @@ export const dynamic = 'force-dynamic';
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const layersParam = searchParams.get('layers');
-  const parishId = searchParams.get('parishId');
-  const lastEventId = searchParams.get('lastEventId');
+  const layersParam = searchParams.get("layers");
+  const parishId = searchParams.get("parishId");
+  const lastEventId = searchParams.get("lastEventId");
 
   // Parse requested layers
   const requestedLayers = layersParam
-    ? layersParam.split(',').map((l) => l.trim())
-    : ['assets', 'places', 'people', 'aid_workers', 'distributions', 'needs', 'status'];
+    ? layersParam.split(",").map((l) => l.trim())
+    : [
+        "assets",
+        "places",
+        "people",
+        "aid_workers",
+        "distributions",
+        "needs",
+        "status",
+      ];
 
   // Create SSE stream
   const encoder = new TextEncoder();
-  
+
   const stream = new ReadableStream({
     async start(controller) {
       // Send initial connection message
@@ -53,7 +61,7 @@ export async function GET(request: NextRequest) {
           const message = `data: ${JSON.stringify(data)}\n\n`;
           controller.enqueue(encoder.encode(message));
         } catch (error) {
-          console.error('Error sending SSE message:', error);
+          console.error("Error sending SSE message:", error);
         }
       };
 
@@ -64,7 +72,7 @@ export async function GET(request: NextRequest) {
           let geoJSON: any = null;
 
           switch (layerType) {
-            case 'assets':
+            case "assets":
               const assetsData = await db
                 .select()
                 .from(assets)
@@ -72,7 +80,7 @@ export async function GET(request: NextRequest) {
               geoJSON = assetsToGeoJSON(assetsData);
               break;
 
-            case 'places':
+            case "places":
               const placesData = await db
                 .select()
                 .from(places)
@@ -80,19 +88,19 @@ export async function GET(request: NextRequest) {
               geoJSON = placesToGeoJSON(placesData);
               break;
 
-            case 'people':
+            case "people":
               const peopleData = await db
                 .select()
                 .from(people)
                 .where(parishId ? eq(people.parishId, parishId) : undefined);
               geoJSON = {
-                type: 'FeatureCollection',
+                type: "FeatureCollection",
                 features: peopleData
                   .filter((p) => p.latitude && p.longitude)
                   .map((p) => ({
-                    type: 'Feature',
+                    type: "Feature",
                     geometry: {
-                      type: 'Point',
+                      type: "Point",
                       coordinates: [
                         parseFloat(p.longitude!.toString()),
                         parseFloat(p.latitude!.toString()),
@@ -107,11 +115,14 @@ export async function GET(request: NextRequest) {
               };
               break;
 
-            case 'aid_workers':
+            case "aid_workers":
               const workersData = await db
                 .select()
                 .from(aidWorkerCapabilities)
-                .innerJoin(people, eq(aidWorkerCapabilities.personId, people.id))
+                .innerJoin(
+                  people,
+                  eq(aidWorkerCapabilities.personId, people.id)
+                )
                 .where(parishId ? eq(people.parishId, parishId) : undefined);
               geoJSON = aidWorkersToGeoJSON(
                 workersData.map((r) => ({
@@ -121,27 +132,35 @@ export async function GET(request: NextRequest) {
               );
               break;
 
-            case 'distributions':
+            case "distributions":
               const distributionsData = await db
                 .select()
                 .from(assetDistributions)
-                .where(parishId ? eq(assetDistributions.parishId, parishId) : undefined);
+                .where(
+                  parishId
+                    ? eq(assetDistributions.parishId, parishId)
+                    : undefined
+                );
               geoJSON = assetDistributionsToGeoJSON(distributionsData);
               break;
 
-            case 'needs':
+            case "needs":
               const needsData = await db
                 .select()
                 .from(peopleNeeds)
-                .where(parishId ? eq(peopleNeeds.parishId, parishId) : undefined);
+                .where(
+                  parishId ? eq(peopleNeeds.parishId, parishId) : undefined
+                );
               geoJSON = peopleNeedsToGeoJSON(needsData);
               break;
 
-            case 'status':
+            case "status":
               const statusData = await db
                 .select()
                 .from(placeStatus)
-                .where(parishId ? eq(placeStatus.parishId, parishId) : undefined);
+                .where(
+                  parishId ? eq(placeStatus.parishId, parishId) : undefined
+                );
               geoJSON = placeStatusToGeoJSON(statusData);
               break;
           }
@@ -156,7 +175,7 @@ export async function GET(request: NextRequest) {
         for (const { layerType, geoJSON } of results) {
           if (geoJSON) {
             send({
-              type: 'initial',
+              type: "initial",
               layerType,
               data: geoJSON.features,
               timestamp: new Date().toISOString(),
@@ -164,10 +183,10 @@ export async function GET(request: NextRequest) {
           }
         }
       } catch (error) {
-        console.error('Error sending initial state:', error);
+        console.error("Error sending initial state:", error);
         send({
-          type: 'error',
-          message: 'Failed to load initial state',
+          type: "error",
+          message: "Failed to load initial state",
           timestamp: new Date().toISOString(),
         });
       }
@@ -181,7 +200,7 @@ export async function GET(request: NextRequest) {
           let geoJSON: any = null;
 
           switch (tableName) {
-            case 'assets':
+            case "assets":
               const assetsData = await db
                 .select()
                 .from(assets)
@@ -189,7 +208,7 @@ export async function GET(request: NextRequest) {
               geoJSON = assetsToGeoJSON(assetsData);
               break;
 
-            case 'places':
+            case "places":
               const placesData = await db
                 .select()
                 .from(places)
@@ -197,19 +216,19 @@ export async function GET(request: NextRequest) {
               geoJSON = placesToGeoJSON(placesData);
               break;
 
-            case 'people':
+            case "people":
               const peopleData = await db
                 .select()
                 .from(people)
                 .where(parishId ? eq(people.parishId, parishId) : undefined);
               geoJSON = {
-                type: 'FeatureCollection',
+                type: "FeatureCollection",
                 features: peopleData
                   .filter((p) => p.latitude && p.longitude)
                   .map((p) => ({
-                    type: 'Feature',
+                    type: "Feature",
                     geometry: {
-                      type: 'Point',
+                      type: "Point",
                       coordinates: [
                         parseFloat(p.longitude!.toString()),
                         parseFloat(p.latitude!.toString()),
@@ -224,11 +243,14 @@ export async function GET(request: NextRequest) {
               };
               break;
 
-            case 'aid_worker_capabilities':
+            case "aid_worker_capabilities":
               const workersData = await db
                 .select()
                 .from(aidWorkerCapabilities)
-                .innerJoin(people, eq(aidWorkerCapabilities.personId, people.id))
+                .innerJoin(
+                  people,
+                  eq(aidWorkerCapabilities.personId, people.id)
+                )
                 .where(parishId ? eq(people.parishId, parishId) : undefined);
               geoJSON = aidWorkersToGeoJSON(
                 workersData.map((r) => ({
@@ -238,21 +260,25 @@ export async function GET(request: NextRequest) {
               );
               break;
 
-            case 'asset_distributions':
+            case "asset_distributions":
               const distributionsData = await db
                 .select()
                 .from(assetDistributions)
                 .where(
-                  parishId ? eq(assetDistributions.parishId, parishId) : undefined
+                  parishId
+                    ? eq(assetDistributions.parishId, parishId)
+                    : undefined
                 );
               geoJSON = assetDistributionsToGeoJSON(distributionsData);
               break;
 
-            case 'place_status':
+            case "place_status":
               const statusData = await db
                 .select()
                 .from(placeStatus)
-                .where(parishId ? eq(placeStatus.parishId, parishId) : undefined);
+                .where(
+                  parishId ? eq(placeStatus.parishId, parishId) : undefined
+                );
               geoJSON = placeStatusToGeoJSON(statusData);
               break;
           }
@@ -266,12 +292,12 @@ export async function GET(request: NextRequest) {
 
       // Map table names to layer types
       const tableToLayerType: Record<string, string> = {
-        assets: 'assets',
-        places: 'places',
-        people: 'people',
-        aid_worker_capabilities: 'aid_workers',
-        asset_distributions: 'distributions',
-        place_status: 'status',
+        assets: "assets",
+        places: "places",
+        people: "people",
+        aid_worker_capabilities: "aid_workers",
+        asset_distributions: "distributions",
+        place_status: "status",
       };
 
       // Set up NOTIFY/LISTEN for event-driven updates (shared connection)
@@ -286,7 +312,7 @@ export async function GET(request: NextRequest) {
             const updateQueries = requestedLayers.map(async (layerType) => {
               let updates: any[] = [];
               switch (layerType) {
-                case 'assets':
+                case "assets":
                   const newAssets = await db
                     .select()
                     .from(assets)
@@ -297,7 +323,7 @@ export async function GET(request: NextRequest) {
                     );
                   updates = assetsToGeoJSON(newAssets).features;
                   break;
-                case 'places':
+                case "places":
                   const newPlaces = await db
                     .select()
                     .from(places)
@@ -308,7 +334,7 @@ export async function GET(request: NextRequest) {
                     );
                   updates = placesToGeoJSON(newPlaces).features;
                   break;
-                case 'distributions':
+                case "distributions":
                   const newDistributions = await db
                     .select()
                     .from(assetDistributions)
@@ -317,9 +343,10 @@ export async function GET(request: NextRequest) {
                         ? eq(assetDistributions.parishId, parishId)
                         : and(gte(assetDistributions.createdAt, since))
                     );
-                  updates = assetDistributionsToGeoJSON(newDistributions).features;
+                  updates =
+                    assetDistributionsToGeoJSON(newDistributions).features;
                   break;
-                case 'needs':
+                case "needs":
                   const newNeeds = await db
                     .select()
                     .from(peopleNeeds)
@@ -337,7 +364,7 @@ export async function GET(request: NextRequest) {
             for (const { layerType, updates } of results) {
               if (updates.length > 0) {
                 send({
-                  type: 'updated',
+                  type: "updated",
                   layerType,
                   data: updates,
                   timestamp: new Date().toISOString(),
@@ -345,11 +372,11 @@ export async function GET(request: NextRequest) {
               }
             }
             send({
-              type: 'heartbeat',
+              type: "heartbeat",
               timestamp: new Date().toISOString(),
             });
           } catch (error) {
-            console.error('Error polling for updates:', error);
+            console.error("Error polling for updates:", error);
           }
         }, 5000);
       };
@@ -357,40 +384,47 @@ export async function GET(request: NextRequest) {
       if (process.env.DATABASE_URL) {
         try {
           // Use shared NotifyManager singleton (one LISTEN connection for all SSE streams)
-          const notifyManager = NotifyManager.getInstance(process.env.DATABASE_URL);
-          
+          const notifyManager = NotifyManager.getInstance(
+            process.env.DATABASE_URL
+          );
+
           // Subscribe to notifications
-          unsubscribe = notifyManager.subscribe(async (payload: NotificationPayload) => {
-            // Only process notifications for requested layers
-            const layerType = tableToLayerType[payload.table];
-            if (!layerType || !requestedLayers.includes(layerType)) {
-              return;
-            }
-
-            try {
-              // Query the affected layer
-              const updates = await queryLayerByTable(
-                payload.table,
-                layerType
-              );
-
-              if (updates.length > 0) {
-                send({
-                  type: 'updated',
-                  layerType,
-                  data: updates,
-                  timestamp: new Date().toISOString(),
-                });
+          unsubscribe = notifyManager.subscribe(
+            async (payload: NotificationPayload) => {
+              // Only process notifications for requested layers
+              const layerType = tableToLayerType[payload.table];
+              if (!layerType || !requestedLayers.includes(layerType)) {
+                return;
               }
-            } catch (error) {
-              console.error(
-                `Error handling notification for ${payload.table}:`,
-                error
-              );
+
+              try {
+                // Query the affected layer
+                const updates = await queryLayerByTable(
+                  payload.table,
+                  layerType
+                );
+
+                if (updates.length > 0) {
+                  send({
+                    type: "updated",
+                    layerType,
+                    data: updates,
+                    timestamp: new Date().toISOString(),
+                  });
+                }
+              } catch (error) {
+                console.error(
+                  `Error handling notification for ${payload.table}:`,
+                  error
+                );
+              }
             }
-          });
+          );
         } catch (error) {
-          console.error('Error setting up NOTIFY/LISTEN, falling back to polling:', error);
+          console.error(
+            "Error setting up NOTIFY/LISTEN, falling back to polling:",
+            error
+          );
           // Fallback to polling if LISTEN fails
           startPolling();
         }
@@ -402,13 +436,13 @@ export async function GET(request: NextRequest) {
       // Send periodic heartbeat (every 30 seconds) to keep connection alive
       const heartbeatInterval = setInterval(() => {
         send({
-          type: 'heartbeat',
+          type: "heartbeat",
           timestamp: new Date().toISOString(),
         });
       }, 30000);
 
       // Cleanup on close
-      request.signal.addEventListener('abort', async () => {
+      request.signal.addEventListener("abort", async () => {
         clearInterval(heartbeatInterval);
         if (pollInterval) {
           clearInterval(pollInterval);
@@ -424,11 +458,10 @@ export async function GET(request: NextRequest) {
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no', // Disable buffering for nginx
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no", // Disable buffering for nginx
     },
   });
 }
-

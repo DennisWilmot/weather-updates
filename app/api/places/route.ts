@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { places, parishes, communities } from '@/lib/db/schema';
-import { eq, and, inArray, isNotNull } from 'drizzle-orm';
-import { placesToGeoJSON } from '@/lib/maps/geojson';
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { places, parishes, communities } from "@/lib/db/schema";
+import { eq, and, inArray, isNotNull } from "drizzle-orm";
+import { placesToGeoJSON } from "@/lib/maps/geojson";
 
-export const dynamic = 'force-dynamic';
+// export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/places
@@ -19,17 +19,17 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const type = searchParams.get('type');
-    const parishId = searchParams.get('parishId');
-    const communityId = searchParams.get('communityId');
-    const verifiedParam = searchParams.get('verified');
-    const format = searchParams.get('format') || 'json';
+    const type = searchParams.get("type");
+    const parishId = searchParams.get("parishId");
+    const communityId = searchParams.get("communityId");
+    const verifiedParam = searchParams.get("verified");
+    const format = searchParams.get("format") || "json";
 
     // Build query conditions
     const conditions = [];
 
     if (type) {
-      const types = type.split(',');
+      const types = type.split(",");
       if (types.length === 1) {
         conditions.push(eq(places.type, types[0] as any));
       } else {
@@ -46,7 +46,7 @@ export async function GET(request: Request) {
     }
 
     if (verifiedParam !== null) {
-      conditions.push(eq(places.verified, verifiedParam === 'true'));
+      conditions.push(eq(places.verified, verifiedParam === "true"));
     }
 
     // Only return places with coordinates
@@ -73,11 +73,11 @@ export async function GET(request: Request) {
     }));
 
     // Return GeoJSON or JSON format
-    if (format === 'geojson') {
+    if (format === "geojson") {
       const geoJSON = placesToGeoJSON(placesWithRelations);
       return NextResponse.json(geoJSON, {
         headers: {
-          'Content-Type': 'application/geo+json',
+          "Content-Type": "application/geo+json",
         },
       });
     }
@@ -87,13 +87,10 @@ export async function GET(request: Request) {
       count: placesWithRelations.length,
     });
   } catch (error) {
-    console.error('Error fetching places:', error);
+    console.error("Error fetching places:", error);
     return NextResponse.json(
-      { error: 'Failed to fetch places' },
+      { error: "Failed to fetch places" },
       { status: 500 }
     );
   }
 }
-
-
-

@@ -14,6 +14,7 @@ import FormSection from '@/components/forms/FormSection';
 import FormField from '@/components/forms/FormField';
 import HierarchicalLocationPicker from '@/components/HierarchicalLocationPicker';
 import { useSession } from '@/lib/auth-client';
+import { toast } from 'sonner';
 
 interface PlaceStatusFormProps {
   onSuccess?: () => void;
@@ -73,6 +74,7 @@ export default function PlaceStatusForm({
     }
 
     setIsSubmitting(true);
+    const toastId = toast.loading('Submitting place status...');
     try {
       const response = await fetch('/api/places/status', {
         method: 'POST',
@@ -90,10 +92,15 @@ export default function PlaceStatusForm({
         throw new Error(error.message || 'Failed to submit place status');
       }
 
+      toast.dismiss(toastId);
+      toast.success('Place status submitted successfully!');
       form.reset();
       onSuccess?.();
     } catch (err) {
-      onError?.(err instanceof Error ? err.message : 'An error occurred while submitting the form');
+      toast.dismiss(toastId);
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred while submitting the form';
+      toast.error(errorMessage);
+      onError?.(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

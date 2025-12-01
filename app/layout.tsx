@@ -1,10 +1,16 @@
 import { ColorSchemeScript, MantineProvider, createTheme } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import QueryProvider from '../components/QueryProvider';
+import { UserProvider } from '../providers/UserProvider';
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
 import "./global.css"
 import { Toaster } from 'sonner';
+
+// Initialize cache dev tools in development
+if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
+  import('../lib/cache-dev-tools');
+}
 
 const theme = createTheme({
   colors: {
@@ -44,10 +50,11 @@ export default function RootLayout({
       <body style={{ backgroundColor: '#f8f9fa', minHeight: '100vh' }}>
         <QueryProvider>
           <MantineProvider theme={theme}>
-            <Notifications />
-            {children}
-            <Toaster richColors={true} position='bottom-center' />
-
+            <UserProvider>
+              <Notifications />
+              {children}
+              <Toaster richColors={true} position='bottom-center' />
+            </UserProvider>
           </MantineProvider>
         </QueryProvider>
       </body>

@@ -105,6 +105,7 @@ function ResetPasswordForm() {
     }
 
     setLoading(true);
+    const toastId = toast.loading('Resetting password...');
 
     try {
       // ⭐ Reset password using Better Auth client
@@ -115,10 +116,12 @@ function ResetPasswordForm() {
 
       if (error) {
         console.error('Reset error:', error);
+        toast.dismiss(toastId);
         toast.error(error.message || 'Failed to reset password');
         return;
       }
 
+      toast.dismiss(toastId);
       toast.success('Password set successfully!');
 
       // Redirect to login page

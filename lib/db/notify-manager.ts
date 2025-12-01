@@ -3,10 +3,12 @@
  * Prevents connection pool exhaustion by reusing one connection for all listeners
  */
 
-import { Client } from 'pg';
-import { NotificationPayload } from './notify-client';
+import { Client } from "pg";
+import { NotificationPayload } from "./notify-client";
 
-type NotificationHandler = (payload: NotificationPayload) => void | Promise<void>;
+type NotificationHandler = (
+  payload: NotificationPayload
+) => void | Promise<void>;
 
 class NotifyManager {
   private static instance: NotifyManager | null = null;
@@ -17,7 +19,7 @@ class NotifyManager {
   private currentDelay: number = 1000;
   private maxDelay: number = 30000;
   private connectionString: string;
-  private channel: string = 'map_updates';
+  private channel: string = "map_updates";
 
   private constructor(connectionString: string) {
     this.connectionString = connectionString;
@@ -29,7 +31,7 @@ class NotifyManager {
   static getInstance(connectionString?: string): NotifyManager {
     if (!NotifyManager.instance) {
       if (!connectionString) {
-        throw new Error('Connection string required for first initialization');
+        throw new Error("Connection string required for first initialization");
       }
       NotifyManager.instance = new NotifyManager(connectionString);
     }
@@ -42,22 +44,22 @@ class NotifyManager {
    */
   subscribe(handler: NotificationHandler): () => void {
     this.subscribers.add(handler);
-    
+
     // Start listening if not already started
     if (!this.isListening) {
       this.start().catch((error) => {
-        console.error('Error starting NotifyManager:', error);
+        console.error("Error starting NotifyManager:", error);
       });
     }
 
     // Return unsubscribe function
     return () => {
       this.subscribers.delete(handler);
-      
+
       // If no more subscribers, stop listening
       if (this.subscribers.size === 0) {
         this.stop().catch((error) => {
-          console.error('Error stopping NotifyManager:', error);
+          console.error("Error stopping NotifyManager:", error);
         });
       }
     };
@@ -86,33 +88,35 @@ class NotifyManager {
       this.currentDelay = 1000; // Reset delay on successful connection
 
       // Set up notification handler - broadcast to all subscribers
-      this.client.on('notification', (msg) => {
+      this.client.on("notification", (msg) => {
         try {
-          const payload: NotificationPayload = JSON.parse(msg.payload || '{}');
-          
+          const payload: NotificationPayload = JSON.parse(msg.payload || "{}");
+
           // Broadcast to all subscribers
           this.subscribers.forEach((handler) => {
             try {
               handler(payload);
             } catch (error) {
-              console.error('Error in notification handler:', error);
+              console.error("Error in notification handler:", error);
             }
           });
         } catch (error) {
-          console.error('Error parsing notification payload:', error);
+          console.error("Error parsing notification payload:", error);
         }
       });
 
       // Set up error handler
-      this.client.on('error', (error) => {
-        console.error('LISTEN connection error:', error);
+      this.client.on("error", (error) => {
+        console.error("LISTEN connection error:", error);
         this.isListening = false;
         this.scheduleReconnect();
       });
 
-      console.log(`[NotifyManager] Started listening on channel: ${this.channel} (${this.subscribers.size} subscribers)`);
+      console.log(
+        `[NotifyManager] Started listening on channel: ${this.channel} (${this.subscribers.size} subscribers)`
+      );
     } catch (error) {
-      console.error('[NotifyManager] Error starting LISTEN:', error);
+      console.error("[NotifyManager] Error starting LISTEN:", error);
       this.isListening = false;
       this.scheduleReconnect();
       throw error;
@@ -133,7 +137,7 @@ class NotifyManager {
         await this.client.query(`UNLISTEN ${this.channel}`);
         await this.client.end();
       } catch (error) {
-        console.error('[NotifyManager] Error stopping LISTEN:', error);
+        console.error("[NotifyManager] Error stopping LISTEN:", error);
       }
       this.client = null;
     }
@@ -155,7 +159,7 @@ class NotifyManager {
       if (this.subscribers.size > 0) {
         // Only reconnect if there are subscribers
         this.start().catch((error) => {
-          console.error('[NotifyManager] Reconnection failed:', error);
+          console.error("[NotifyManager] Reconnection failed:", error);
         });
         // Increase delay for next reconnection (exponential backoff)
         this.currentDelay = Math.min(this.currentDelay * 2, this.maxDelay);
@@ -179,4 +183,3 @@ class NotifyManager {
 }
 
 export default NotifyManager;
-

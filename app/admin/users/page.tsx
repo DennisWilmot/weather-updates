@@ -21,6 +21,7 @@ import {
   ActionIcon,
   Checkbox,
   Textarea,
+  Skeleton,
 } from '@mantine/core';
 import {
   IconBadge,
@@ -45,6 +46,8 @@ import {
 import { useDisclosure } from '@mantine/hooks';
 import { toast } from 'sonner';
 import { authClient } from '@/lib/auth-client';
+import { UserRole, Permission } from '@/lib/permissions';
+import { rolePermissions } from '../../../lib/permissions';
 
 const CUSTOM_ROLE_ID = 'custom-inline';
 
@@ -67,28 +70,45 @@ type PermissionMatrix = Record<string, Record<string, boolean>>;
 type FormsAccess = Record<string, boolean>;
 
 interface RoleDefinition {
-  id: string;
-  name: string;
+  name: UserRole | string;
   description: string;
-  accent: string;
-  badgeClass: string;
-  permissions: PermissionMatrix;
-  formsAccess: FormsAccess;
-  lastUpdated: string;
+  permissions: Permission[];
+  isDefault?: boolean;
+  accent?: string;
+  badgeClass?: string;
+  lastUpdated?: string;
   isSystem?: boolean;
 }
 
 interface UserRecord {
   id: string;
-  name: string;
   email: string;
-  status: Status;
-  roleId: string;
-  customRole?: RoleDefinition;
-  location: string;
-  teams: string[];
-  lastActive: string;
-  createdAt: string;
+  firstName?: string;
+  lastName?: string;
+  fullName?: string;
+  phoneNumber?: string;
+  imageUrl?: string;
+  role: UserRole;
+  organization?: string;
+  department?: string;
+  canViewSensitiveData: boolean;
+  canExportData: boolean;
+  canManageUsers: boolean;
+  canCreateDeployments: boolean;
+  canAssignForms: boolean;
+  canApproveRequests: boolean;
+  canAccessAdmin: boolean;
+  canSubmitPeopleNeeds: boolean;
+  lastActiveAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+  username?: string;
+  status?: 'active' | 'suspended';
+  // Legacy fields for compatibility
+  name?: string;
+  location?: string;
+  teams?: string[];
+  lastActive?: string;
 }
 
 const formsCatalog = [
@@ -221,13 +241,10 @@ function createFormsAccess(enabledIds: string[]): FormsAccess {
 
 function createRoleTemplate(overrides?: Partial<RoleDefinition>): RoleDefinition {
   return {
-    id: overrides?.id ?? `role-${Math.random().toString(36).slice(2, 8)}`,
     name: overrides?.name ?? 'Custom Role',
     description: overrides?.description ?? 'Tailored permissions for unique access needs.',
-    accent: overrides?.accent ?? 'bg-gradient-to-r from-slate-600 to-slate-800',
+    permissions: overrides?.permissions ?? [],
     badgeClass: overrides?.badgeClass ?? 'bg-slate-100 text-slate-800 border border-slate-200',
-    permissions: overrides?.permissions ? cloneMatrix(overrides.permissions) : cloneMatrix(baseMatrix),
-    formsAccess: overrides?.formsAccess ? cloneForms(overrides.formsAccess) : cloneForms(baseForms),
     lastUpdated: overrides?.lastUpdated ?? 'Just now',
     isSystem: overrides?.isSystem ?? false,
   };
@@ -236,189 +253,41 @@ function createRoleTemplate(overrides?: Partial<RoleDefinition>): RoleDefinition
 function cloneRole(role: RoleDefinition): RoleDefinition {
   return {
     ...role,
-    permissions: cloneMatrix(role.permissions),
-    formsAccess: cloneForms(role.formsAccess),
+    permissions: [...role.permissions],
   };
 }
 
-// Helper function to convert backend role to frontend RoleDefinition
-function convertBackendRole(backendRole: any): RoleDefinition {
-  const permissions = cloneMatrix(baseMatrix);
-  const formsAccess = cloneForms(baseForms);
+// These functions are no longer needed with the new RBAC system
+// The permissions are now handled directly as arrays in the Better Auth system
 
-  if (Array.isArray(backendRole.permissions)) {
-    backendRole.permissions.forEach((perm: string) => {
-      // Handle permission format like "users_view", "deployments_create"
-      const [category, action] = perm.split('_');
-      if (permissions[category] && action in permissions[category]) {
-        permissions[category][action] = true;
-      }
-
-      // Handle form access like "form_damage", "form_supply"
-      if (category === 'form' && formsCatalog.find(f => f.id === action)) {
-        formsAccess[action] = true;
-      }
-    });
-  }
-
-  return createRoleTemplate({
-    id: backendRole.name.toLowerCase().replace(/\s+/g, '-'),
-    name: backendRole.name,
-    description: backendRole.description || '',
-    permissions,
-    formsAccess,
-    isSystem: false,
-    lastUpdated: 'Synced',
-  });
-}
-
-// Helper function to convert frontend role to backend format
-function convertToBackendFormat(role: RoleDefinition): string[] {
-  const permissions: string[] = [];
-
-  // Convert permission matrix to array of strings
-  Object.entries(role.permissions).forEach(([category, actions]) => {
-    Object.entries(actions).forEach(([action, enabled]) => {
-      if (enabled) {
-        permissions.push(`${category}_${action}`);
-      }
-    });
-  });
-
-  // Convert form access to permissions
-  Object.entries(role.formsAccess).forEach(([formId, enabled]) => {
-    if (enabled) {
-      permissions.push(`form_${formId}`);
-    }
-  });
-
-  return permissions;
-}
-
-const rolePresets: RoleDefinition[] = [
-
-  createRoleTemplate({
-    id: 'ops',
-    name: 'Operations Lead',
-    description: 'Runs field deployments and assigns responders.',
-    accent: 'bg-gradient-to-r from-emerald-500 to-teal-500',
-    badgeClass: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
-    permissions: createMatrix({
-      users: ['view'],
-      deployments: ['view', 'create', 'edit', 'approve'],
-      forms: ['view', 'assign'],
-      insights: ['view'],
-    }),
-    formsAccess: createFormsAccess(['damage', 'supply', 'shelter']),
-    lastUpdated: '4h ago',
-    isSystem: true,
-  }),
-  createRoleTemplate({
-    id: 'field',
-    name: 'Field Reporter',
-    description: 'Captures needs and status updates on site.',
-    accent: 'bg-gradient-to-r from-amber-500 to-orange-500',
-    badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
-    permissions: createMatrix({
-      deployments: ['view'],
-      forms: ['view', 'assign'],
-      insights: ['view'],
-    }),
-    formsAccess: createFormsAccess(['damage', 'supply', 'medical']),
-    lastUpdated: 'Yesterday',
-    isSystem: true,
-  }),
-  createRoleTemplate({
-    id: 'analyst',
-    name: 'Insights Analyst',
-    description: 'Reviews submissions and exports trend data.',
-    accent: 'bg-gradient-to-r from-sky-500 to-cyan-500',
-    badgeClass: 'bg-sky-100 text-sky-800 border border-sky-200',
-    permissions: createMatrix({
-      users: ['view'],
-      deployments: ['view'],
-      forms: ['view'],
-      insights: ['view', 'export'],
-    }),
-    formsAccess: createFormsAccess(['damage', 'water']),
-    lastUpdated: '3d ago',
-    isSystem: true,
-  }),
-];
-
-const initialUsers: UserRecord[] = [
-  {
-    id: 'USR-2411',
-    name: 'Nia Morgan',
-    email: 'nia.morgan@atlas.tm',
-    status: 'active',
-    roleId: 'admin',
-    location: 'Kingston HQ',
-    teams: ['Command Center'],
-    lastActive: '2 min ago',
-    createdAt: '2024-03-14',
-  },
-  {
-    id: 'USR-2412',
-    name: 'David Park',
-    email: 'david.park@atlas.tm',
-    status: 'active',
-    roleId: 'ops',
-    location: 'St. Mary',
-    teams: ['Deployments', 'Logistics'],
-    lastActive: '15 min ago',
-    createdAt: '2024-05-02',
-  },
-  {
-    id: 'USR-2413',
-    name: 'Simone Graves',
-    email: 'simone.graves@atlas.tm',
-    status: 'suspended',
-    roleId: 'analyst',
-    location: 'Remote - Montego Bay',
-    teams: ['Insights'],
-    lastActive: '5d ago',
-    createdAt: '2023-11-20',
-  },
-  {
-    id: 'USR-2414',
-    name: 'Andre Miller',
-    email: 'andre.miller@atlas.tm',
-    status: 'active',
-    roleId: 'field',
-    location: 'Portland Parish',
-    teams: ['Field Recon'],
-    lastActive: '50 min ago',
-    createdAt: '2024-01-07',
-  },
-  {
-    id: 'USR-2415',
-    name: 'Maya Chen',
-    email: 'maya.chen@atlas.tm',
-    status: 'active',
-    roleId: CUSTOM_ROLE_ID,
-    customRole: createRoleTemplate({
-      id: CUSTOM_ROLE_ID,
-      name: 'Needs Only',
-      description: 'Limited view for rapid needs capture.',
-      permissions: createMatrix({
-        deployments: ['view'],
-        forms: ['view'],
-        insights: ['view'],
-      }),
-      formsAccess: createFormsAccess(['damage']),
-      accent: 'bg-gradient-to-r from-rose-500 to-orange-500',
-      badgeClass: 'bg-rose-100 text-rose-800 border border-rose-200',
-      lastUpdated: '1d ago',
-    }),
-    location: 'St. Thomas',
-    teams: ['Needs Assessment'],
-    lastActive: '1h ago',
-    createdAt: '2024-02-18',
-  },
-];
+// Role definitions will be fetched from the RBAC system
+const initialUsers: UserRecord[] = []
 
 const usersPerPage = 6;
+
+// Helper function to get role description
+function getRoleDescription(role: UserRole): string {
+  const descriptions: Record<UserRole, string> = {
+    admin: 'System Administrator - Full system access with complete administrative privileges',
+    ops: 'Operations Lead - Manages field deployments and coordinates response operations',
+    field: 'Field Reporter - Front-line personnel capturing real-time data and status updates',
+    analyst: 'Insights Analyst - Data analysis specialist focused on reporting and trend analysis',
+    needs: 'Needs Reporter - Limited role specifically for reporting people needs only'
+  };
+  return descriptions[role] || 'Custom role with specific permissions';
+}
+
+// Helper function to get role badge styling
+function getRoleBadgeClass(role: string): string {
+  const roleStyles: Record<string, string> = {
+    admin: 'bg-red-100 text-red-800 border border-red-200',
+    ops: 'bg-blue-100 text-blue-800 border border-blue-200',
+    field: 'bg-green-100 text-green-800 border border-green-200',
+    analyst: 'bg-purple-100 text-purple-800 border border-purple-200',
+    needs: 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+  };
+  return roleStyles[role] || 'bg-gray-100 text-gray-800 border border-gray-200';
+}
 
 function parseBadgeClass(badgeClass: string) {
   if (badgeClass.includes('indigo')) {
@@ -443,13 +312,14 @@ function parseBadgeClass(badgeClass: string) {
 }
 
 export default function AdminUsersPage() {
-  const [roles, setRoles] = useState<RoleDefinition[]>(rolePresets);
+  const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [users, setUsers] = useState<UserRecord[]>(initialUsers);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | Status>('all');
   const [page, setPage] = useState(1);
   const [loadingRoles, setLoadingRoles] = useState(true);
+  const [loadingUsers, setLoadingUsers] = useState(true);
 
   // Edit user modal
   const [userModalOpened, { open: openUserModal, close: closeUserModal }] = useDisclosure(false);
@@ -470,36 +340,64 @@ export default function AdminUsersPage() {
 
   const [pendingAction, setPendingAction] = useState<string | null>(null);
 
-  // Fetch roles from backend on mount
+  // Fetch roles and users from backend on mount
   useEffect(() => {
-    const fetchRoles = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch('/api/roles');
-        if (!res.ok) throw new Error('Failed to fetch roles');
+        // Fetch roles from RBAC system
+        const rolesRes = await fetch('/api/roles');
+        if (rolesRes.ok) {
+          const backendRoles = await rolesRes.json();
+          const convertedRoles: RoleDefinition[] = backendRoles.map((role: any) => ({
+            name: role.name,
+            description: role.description || '',
+            permissions: role.permissions || [],
+            isDefault: role.isDefault || false,
+            badgeClass: getRoleBadgeClass(role.name),
+          }));
+          setRoles(convertedRoles);
+        } else {
+          // Fallback to default roles from permissions system
+          const defaultRoles: RoleDefinition[] = Object.entries(rolePermissions).map(([name, permissions]) => ({
+            name: name as UserRole,
+            description: getRoleDescription(name as UserRole),
+            permissions,
+            isDefault: true,
+            badgeClass: getRoleBadgeClass(name),
+          }));
+          setRoles(defaultRoles);
+        }
 
-        const backendRoles = await res.json();
-        const convertedRoles = backendRoles.map(convertBackendRole);
+        // Fetch users from database
+        const usersRes = await fetch('/api/users');
+        if (!usersRes.ok) throw new Error('Failed to fetch users');
 
-        // Merge with system roles (keep system roles + add backend roles)
-        setRoles([...rolePresets, ...convertedRoles]);
-        toast.success('Roles loaded from database');
+        const { users: dbUsers } = await usersRes.json();
+        const convertedUsers: UserRecord[] = dbUsers.map((user: any) => ({
+          ...user,
+          name: user.fullName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+          location: user.organization || 'Unknown',
+          teams: user.department ? [user.department] : [],
+          lastActive: user.lastActiveAt ? new Date(user.lastActiveAt).toLocaleDateString() : 'Never',
+          status: 'active' as Status, // Default status
+        }));
+        setUsers(convertedUsers);
+
+        toast.success('Data loaded successfully');
       } catch (error) {
-        console.error('Error fetching roles:', error);
-        toast.error('Failed to load roles from database');
-        // Keep using preset roles as fallback
+        console.error('Error fetching data:', error);
+        toast.error('Failed to load data');
       } finally {
         setLoadingRoles(false);
+        setLoadingUsers(false);
       }
     };
 
-    fetchRoles();
+    fetchData();
   }, []);
 
   const roleOptions = useMemo(
-    () => [
-      ...roles.map(role => ({ id: role.id, label: role.name })),
-      { id: CUSTOM_ROLE_ID, label: 'Custom roles' },
-    ],
+    () => roles.map(role => ({ id: role.name, label: typeof role.name === 'string' ? role.name : role.name })),
     [roles],
   );
 
@@ -508,14 +406,13 @@ export default function AdminUsersPage() {
       const query = search.toLowerCase();
       const matchesSearch =
         !query ||
-        user.name.toLowerCase().includes(query) ||
+        (user.name || user.fullName || '').toLowerCase().includes(query) ||
         user.email.toLowerCase().includes(query) ||
-        user.location.toLowerCase().includes(query);
+        (user.location || user.organization || '').toLowerCase().includes(query);
 
       const matchesRole =
         roleFilter === 'all' ||
-        (roleFilter === CUSTOM_ROLE_ID && user.roleId === CUSTOM_ROLE_ID) ||
-        user.roleId === roleFilter;
+        user.role === roleFilter;
 
       const matchesStatus = statusFilter === 'all' || user.status === statusFilter;
       return matchesSearch && matchesRole && matchesStatus;
@@ -533,34 +430,20 @@ export default function AdminUsersPage() {
   const totalSuspended = users.length - totalActive;
   const customRolesCount = roles.filter(role => !role.isSystem).length;
 
-  const simulateNetwork = async (key: string, cb: () => void, message: string) => {
-    setPendingAction(key);
-    await new Promise(resolve => setTimeout(resolve, 600 + Math.random() * 800));
-    cb();
-    toast.success(message);
-    setPendingAction(null);
-  };
+  // Removed simulateNetwork - now using real API calls
 
   const getRoleMeta = (user: UserRecord) => {
-    if (user.roleId === CUSTOM_ROLE_ID && user.customRole) {
-      return { label: user.customRole.name, badgeClass: user.customRole.badgeClass };
-    }
-    const role = roles.find(r => r.id === user.roleId);
+    const role = roles.find(r => r.name === user.role);
     return {
-      label: role?.name ?? 'Unassigned',
-      badgeClass: role?.badgeClass ?? 'bg-gray-100 text-gray-700 border border-gray-200',
+      label: role?.name ?? user.role ?? 'Unassigned',
+      badgeClass: role?.badgeClass ?? getRoleBadgeClass(user.role),
     };
   };
 
   const handleOpenUserModal = (user: UserRecord) => {
     setUserDraft({ ...user });
-    if (user.roleId === CUSTOM_ROLE_ID && user.customRole) {
-      setRoleMode('custom');
-      setUserCustomRole(cloneRole(user.customRole));
-    } else {
-      setRoleMode('preset');
-      setUserCustomRole(createRoleTemplate({ name: `${user.name} Custom Access` }));
-    }
+    setRoleMode('preset');
+    setUserCustomRole(createRoleTemplate({ name: `${user.name || user.fullName || user.email} Custom Access` }));
     openUserModal();
   };
 
@@ -573,84 +456,122 @@ export default function AdminUsersPage() {
   const handleSaveUser = async () => {
     if (!userDraft) return;
 
-    // If using custom role and it needs to be saved to backend
-    if (roleMode === 'custom' && !userCustomRole.isSystem) {
-      try {
-        setPendingAction('save-role');
+    // For now, we'll only support preset roles from the RBAC system
+    // Custom role functionality can be added later if needed
 
-        const backendPermissions = convertToBackendFormat(userCustomRole);
+    // Update user in database
+    let toastId: string | number | undefined;
+    try {
+      setPendingAction('save-user');
+      toastId = toast.loading('Saving user changes...');
 
-        const res = await fetch('/api/roles', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name: userCustomRole.name,
-            description: userCustomRole.description,
-            permissions: backendPermissions,
-          }),
-        });
+      const updatePayload = {
+        id: userDraft.id,
+        role: userDraft.role,
+        firstName: userDraft.firstName,
+        lastName: userDraft.lastName,
+        fullName: userDraft.fullName,
+        organization: userDraft.organization,
+        department: userDraft.department,
+      };
 
-        if (!res.ok) {
-          const error = await res.json();
-          throw new Error(error.error || 'Failed to save role');
-        }
+      const res = await fetch(`/api/users/${userDraft.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatePayload),
+      });
 
-        toast.success('Custom role saved to database');
-      } catch (error) {
-        console.error('Error saving role:', error);
-        toast.error(error instanceof Error ? error.message : 'Failed to save custom role');
-        setPendingAction(null);
-        return;
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to update user');
       }
-    }
 
-    await simulateNetwork('save-user', () => {
+      // Update local state
       setUsers(prev =>
-        prev.map(user => {
-          if (user.id !== userDraft.id) return user;
-          if (roleMode === 'custom') {
-            return {
-              ...userDraft,
-              roleId: CUSTOM_ROLE_ID,
-              customRole: cloneRole({
-                ...userCustomRole,
-                id: `${CUSTOM_ROLE_ID}-${userDraft.id}`,
-                badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
-              }),
-            };
-          }
-          return { ...userDraft, customRole: undefined };
-        }),
+        prev.map(user =>
+          user.id === userDraft.id ? { ...user, ...userDraft } : user
+        )
       );
-    }, 'User changes saved');
+
+      toast.dismiss(toastId);
+      toast.success('User updated successfully');
+    } catch (error) {
+      console.error('Error updating user:', error);
+      if (toastId) toast.dismiss(toastId);
+      toast.error(error instanceof Error ? error.message : 'Failed to update user');
+    } finally {
+      setPendingAction(null);
+    }
     resetUserModal();
   };
 
   const handleToggleUserStatus = async (user: UserRecord) => {
-    await simulateNetwork(
-      'toggle-status',
-      () => {
-        setUsers(prev =>
-          prev.map(entry =>
-            entry.id === user.id
-              ? { ...entry, status: entry.status === 'active' ? 'suspended' : 'active' }
-              : entry,
-          ),
-        );
-      },
-      user.status === 'active' ? 'User suspended' : 'User reactivated',
-    );
+    let toastId: string | number | undefined;
+    try {
+      setPendingAction('toggle-status');
+      toastId = toast.loading(user.status === 'active' ? 'Suspending user...' : 'Reactivating user...');
+
+      const newStatus = user.status === 'active' ? 'suspended' : 'active';
+
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to update user status');
+      }
+
+      // Update local state
+      setUsers(prev =>
+        prev.map(entry =>
+          entry.id === user.id
+            ? { ...entry, status: newStatus }
+            : entry,
+        ),
+      );
+
+      if (toastId) toast.dismiss(toastId);
+      toast.success(user.status === 'active' ? 'User suspended' : 'User reactivated');
+    } catch (error) {
+      console.error('Error toggling user status:', error);
+      if (toastId) toast.dismiss(toastId);
+      toast.error(error instanceof Error ? error.message : 'Failed to update user status');
+    } finally {
+      setPendingAction(null);
+    }
   };
 
   const handleDeleteUser = async (user: UserRecord) => {
-    await simulateNetwork(
-      'delete-user',
-      () => {
-        setUsers(prev => prev.filter(entry => entry.id !== user.id));
-      },
-      'User removed',
-    );
-    resetUserModal();
+    let toastId: string | number | undefined;
+    try {
+      setPendingAction('delete-user');
+      toastId = toast.loading('Deleting user...');
+
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'DELETE',
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to delete user');
+      }
+
+      // Update local state
+      setUsers(prev => prev.filter(entry => entry.id !== user.id));
+
+      if (toastId) toast.dismiss(toastId);
+      toast.success('User removed successfully');
+      resetUserModal();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      if (toastId) toast.dismiss(toastId);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete user');
+    } finally {
+      setPendingAction(null);
+    }
   };
 
   const updateCustomRole = (updater: (current: RoleDefinition) => RoleDefinition) => {
@@ -683,61 +604,30 @@ export default function AdminUsersPage() {
       toast.error('Please select a location');
       return;
     }
-    if (!newUserRoleId && createRoleMode === 'preset') {
+    if (!newUserRoleId) {
       toast.error('Please select a role');
       return;
     }
 
     setPendingAction('create-user');
+    const toastId = toast.loading('Creating user...');
 
     try {
-      // If custom role, save it first
-      let roleToAssign = newUserRoleId;
-
-      if (createRoleMode === 'custom') {
-        try {
-          const backendPermissions = convertToBackendFormat(createCustomRole);
-
-          const roleRes = await fetch('/api/roles', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              name: createCustomRole.name,
-              description: createCustomRole.description,
-              permissions: backendPermissions,
-            }),
-          });
-
-          if (!roleRes.ok) {
-            const error = await roleRes.json();
-            throw new Error(error.error || 'Failed to create custom role');
-          }
-
-          roleToAssign = createCustomRole.name;
-          toast.success('Custom role created');
-        } catch (error) {
-          console.error('Error creating custom role:', error);
-          toast.error(error instanceof Error ? error.message : 'Failed to create custom role');
-          setPendingAction(null);
-          return;
-        }
-      }
-
       // Prepare the user data payload
-      const payload: any = {
-        fullName: newUserName,
+      const [firstName, ...lastNameParts] = newUserName.trim().split(' ');
+      const lastName = lastNameParts.join(' ');
+
+      const payload = {
         email: newUserEmail,
-        location: newUserLocation,
-        status: newUserStatus,
-        role: roleToAssign,
+        firstName,
+        lastName,
+        fullName: newUserName,
+        role: newUserRoleId,
+        organization: newUserLocation,
+        department: newUserTeams.length > 0 ? newUserTeams[0] : undefined,
       };
 
-      // Add teams if any
-      if (newUserTeams.length > 0) {
-        payload.teams = newUserTeams;
-      }
-
-      // Make the API call
+      // Create user in database
       const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -751,27 +641,7 @@ export default function AdminUsersPage() {
       }
 
       if (response.user) {
-        // Transform the backend response to match your frontend structure
-        const newUser: UserRecord = {
-          id: response.user.id || `USR-${Math.floor(2400 + Math.random() * 100)}`,
-          name: response.user.fullName || newUserName,
-          email: response.user.email,
-          status: response.user.status || newUserStatus,
-          roleId: createRoleMode === 'custom' ? CUSTOM_ROLE_ID : newUserRoleId,
-          customRole:
-            createRoleMode === 'custom'
-              ? cloneRole({
-                ...createCustomRole,
-                id: `${CUSTOM_ROLE_ID}-${response.user.id}`,
-                badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200',
-              })
-              : undefined,
-          location: response.user.location || newUserLocation,
-          teams: newUserTeams,
-          lastActive: 'Just now',
-          createdAt: response.user.createdAt || new Date().toISOString().split('T')[0],
-        };
-
+        // Create auth account
         const { data, error } = await authClient.signUp.email({
           email: response.user.email,
           password: 'Password123',
@@ -782,17 +652,14 @@ export default function AdminUsersPage() {
         if (error) {
           console.error('Signup error:', error);
           toast.error(error.message);
-          closeCreateModal();
-          return;
         } else {
           console.log('User created:', data);
 
-          let resetRes = await authClient.requestPasswordReset({
+          // Send password reset email
+          const resetRes = await authClient.requestPasswordReset({
             email: response.user.email,
             redirectTo: `${window.location.origin}/reset-password`,
           });
-
-          console.log(resetRes);
 
           if (resetRes.error) {
             console.error('Failed to send welcome email');
@@ -802,12 +669,24 @@ export default function AdminUsersPage() {
           }
         }
 
+        // Transform the backend response to match frontend structure
+        const newUser: UserRecord = {
+          ...response.user,
+          name: response.user.fullName || newUserName,
+          location: response.user.organization || newUserLocation,
+          teams: newUserTeams,
+          lastActive: 'Just now',
+          status: 'active' as Status,
+        };
+
         setUsers(prev => [...prev, newUser]);
+        toast.dismiss(toastId);
         toast.success(`User ${newUserName} created successfully`);
         closeCreateModal();
       }
     } catch (error) {
       console.error('Error creating user:', error);
+      toast.dismiss(toastId);
       toast.error(error instanceof Error ? error.message : 'Failed to create user');
     } finally {
       setPendingAction(null);
@@ -819,6 +698,7 @@ export default function AdminUsersPage() {
   };
 
   const resetPassword = async (email: any) => {
+    const toastId = toast.loading('Sending password reset email...');
     let resetRes = await authClient.requestPasswordReset({
       email,
       redirectTo: `${window.location.origin}/reset-password`,
@@ -826,6 +706,7 @@ export default function AdminUsersPage() {
 
     console.log(resetRes);
 
+    toast.dismiss(toastId);
     if (resetRes.error) {
       toast.error('Failed to send password reset email');
     } else {
@@ -833,13 +714,8 @@ export default function AdminUsersPage() {
     }
   };
 
-  if (loadingRoles) {
-    return (
-      <Stack gap="md" align="center" justify="center" style={{ minHeight: '400px' }}>
-        <Loader size="xl" />
-        <Text c="gray.6">Loading roles...</Text>
-      </Stack>
-    );
+  if (loadingRoles || loadingUsers) {
+    return <AdminUsersPageSkeleton />;
   }
 
   return (
@@ -971,7 +847,7 @@ export default function AdminUsersPage() {
                                     fontWeight: 600,
                                   }}
                                 >
-                                  {user.name
+                                  {(user.name || user.fullName || user.email)
                                     .split(' ')
                                     .map(part => part[0])
                                     .slice(0, 2)
@@ -979,7 +855,7 @@ export default function AdminUsersPage() {
                                 </Box>
                                 <Box>
                                   <Text fw={600} c="gray.9">
-                                    {user.name}
+                                    {user.name || user.fullName || user.email}
                                   </Text>
                                   <Text size="sm" c="gray.5">
                                     {user.email}
@@ -999,16 +875,16 @@ export default function AdminUsersPage() {
                               </Badge>
                             </Table.Td>
                             <Table.Td>
-                              <StatusBadge status={user.status} />
+                              <StatusBadge status={user.status || 'active'} />
                             </Table.Td>
                             <Table.Td>
                               <Text size="sm" c="gray.6">
-                                {user.lastActive}
+                                {user.lastActive || (user.lastActiveAt ? new Date(user.lastActiveAt).toLocaleDateString() : 'Never')}
                               </Text>
                             </Table.Td>
                             <Table.Td>
                               <Text size="sm" c="gray.6">
-                                {user.location}
+                                {user.location || user.organization || 'Unknown'}
                               </Text>
                             </Table.Td>
                           </Table.Tr>
@@ -1033,13 +909,13 @@ export default function AdminUsersPage() {
                       <Group justify="space-between" align="flex-start">
                         <Box>
                           <Text size="sm" fw={600} c="gray.9">
-                            {user.name}
+                            {user.name || user.fullName || user.email}
                           </Text>
                           <Text size="xs" c="gray.5">
                             {user.email}
                           </Text>
                         </Box>
-                        <StatusBadge status={user.status} />
+                        <StatusBadge status={user.status || 'active'} />
                       </Group>
                       <Group gap="xs" mt="md">
                         <Badge
@@ -1053,10 +929,10 @@ export default function AdminUsersPage() {
                           {roleMeta.label}
                         </Badge>
                         <Badge variant="light" size="xs" color="gray">
-                          {user.location}
+                          {user.location || user.organization || 'Unknown'}
                         </Badge>
                         <Badge variant="light" size="xs" color="gray">
-                          {user.lastActive}
+                          {user.lastActive || (user.lastActiveAt ? new Date(user.lastActiveAt).toLocaleDateString() : 'Never')}
                         </Badge>
                       </Group>
                     </Paper>
@@ -1082,10 +958,10 @@ export default function AdminUsersPage() {
               User profile
             </Text>
             <Title order={2} fw={700} c="gray.9" mt="xs">
-              {userDraft?.name}
+              {userDraft?.name || userDraft?.fullName || userDraft?.email}
             </Title>
             <Text size="sm" c="gray.6" mt="xs">
-              {userDraft?.location}
+              {userDraft?.location || userDraft?.organization || 'Unknown'}
             </Text>
           </Box>
         }
@@ -1107,12 +983,12 @@ export default function AdminUsersPage() {
                 <Group gap="xs">
                   <IconCalendar size={14} />
                   <Text size="sm" c="gray.7">
-                    {userDraft.createdAt}
+                    {userDraft.createdAt ? new Date(userDraft.createdAt).toLocaleDateString() : 'Unknown'}
                   </Text>
                 </Group>
               </Field>
               <Field label="Status">
-                <StatusBadge status={userDraft.status} />
+                <StatusBadge status={userDraft.status || 'active'} />
               </Field>
               <Field label="Last active">
                 <Group gap="xs">
@@ -1159,17 +1035,17 @@ export default function AdminUsersPage() {
                   <Stack gap="xs">
                     {roles.map(role => (
                       <Paper
-                        key={role.id}
+                        key={role.name}
                         p="md"
                         withBorder
                         radius="md"
                         style={{
                           cursor: 'pointer',
-                          borderColor: userDraft.roleId === role.id ? '#3b82f6' : '#e5e7eb',
-                          backgroundColor: userDraft.roleId === role.id ? '#eff6ff' : 'white',
+                          borderColor: userDraft.role === role.name ? '#3b82f6' : '#e5e7eb',
+                          backgroundColor: userDraft.role === role.name ? '#eff6ff' : 'white',
                         }}
                         onClick={() =>
-                          setUserDraft(prev => (prev ? { ...prev, roleId: role.id } : prev))
+                          setUserDraft(prev => (prev ? { ...prev, role: role.name as UserRole } : prev))
                         }
                       >
                         <Group justify="space-between">
@@ -1183,9 +1059,9 @@ export default function AdminUsersPage() {
                           </Box>
                           <input
                             type="radio"
-                            checked={userDraft.roleId === role.id}
+                            checked={userDraft.role === role.name}
                             onChange={() =>
-                              setUserDraft(prev => (prev ? { ...prev, roleId: role.id } : prev))
+                              setUserDraft(prev => (prev ? { ...prev, role: role.name as UserRole } : prev))
                             }
                           />
                         </Group>
@@ -1195,33 +1071,17 @@ export default function AdminUsersPage() {
                 ) : (
                   <Stack gap="md">
                     <TextInput
-                      value={userCustomRole.name}
+                      value={userCustomRole.name as string}
                       onChange={event =>
                         setUserCustomRole(prev => ({ ...prev, name: event.target.value }))
                       }
                       placeholder="Custom role name"
                       radius="md"
                     />
-                    <PermissionMatrix
-                      matrix={userCustomRole.permissions}
-                      onToggle={(category, action) =>
-                        updateCustomRole(current => {
-                          current.permissions[category][action] =
-                            !current.permissions[category][action];
-                          return current;
-                        })
-                      }
-                    />
-                    <FormToggleList
-                      forms={formsCatalog}
-                      access={userCustomRole.formsAccess}
-                      onToggle={formId =>
-                        updateCustomRole(current => {
-                          current.formsAccess[formId] = !current.formsAccess[formId];
-                          return current;
-                        })
-                      }
-                    />
+                    <Text size="sm" c="gray.6">
+                      Custom role functionality will be available in a future update.
+                      For now, please select from the available preset roles.
+                    </Text>
                   </Stack>
                 )}
               </Stack>
@@ -1419,16 +1279,16 @@ export default function AdminUsersPage() {
               <Stack gap="xs">
                 {roles.map(role => (
                   <Paper
-                    key={role.id}
+                    key={role.name}
                     p="md"
                     withBorder
                     radius="md"
                     style={{
                       cursor: 'pointer',
-                      borderColor: newUserRoleId === role.id ? '#3b82f6' : '#e5e7eb',
-                      backgroundColor: newUserRoleId === role.id ? '#eff6ff' : 'white',
+                      borderColor: newUserRoleId === role.name ? '#3b82f6' : '#e5e7eb',
+                      backgroundColor: newUserRoleId === role.name ? '#eff6ff' : 'white',
                     }}
-                    onClick={() => setNewUserRoleId(role.id)}
+                    onClick={() => setNewUserRoleId(role.name as string)}
                   >
                     <Group justify="space-between">
                       <Box>
@@ -1441,7 +1301,7 @@ export default function AdminUsersPage() {
                             size="xs"
                             style={{
                               border: '1px solid',
-                              ...parseBadgeClass(role.badgeClass),
+                              ...parseBadgeClass(role.badgeClass || getRoleBadgeClass(role.name as string)),
                             }}
                           >
                             {role.name}
@@ -1453,8 +1313,8 @@ export default function AdminUsersPage() {
                       </Box>
                       <input
                         type="radio"
-                        checked={newUserRoleId === role.id}
-                        onChange={() => setNewUserRoleId(role.id)}
+                        checked={newUserRoleId === role.name}
+                        onChange={() => setNewUserRoleId(role.name as string)}
                         style={{ cursor: 'pointer' }}
                       />
                     </Group>
@@ -1609,93 +1469,8 @@ function FiltersCard({
   );
 }
 
-function PermissionMatrix({
-  matrix,
-  onToggle,
-}: {
-  matrix: PermissionMatrix;
-  onToggle?: (categoryId: string, actionId: string) => void;
-}) {
-  return (
-    <Stack gap="md">
-      {permissionCatalog.map(category => (
-        <Paper key={category.id} withBorder radius="md" p="md">
-          <Box mb="sm">
-            <Text size="sm" fw={600} c="gray.9">
-              {category.label}
-            </Text>
-            <Text size="xs" c="gray.5">
-              {category.description}
-            </Text>
-          </Box>
-          <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="sm">
-            {category.actions.map(action => {
-              const active = matrix[category.id]?.[action.id];
-              return (
-                <Button
-                  key={action.id}
-                  variant={active ? 'filled' : 'outline'}
-                  color={active ? 'blue' : 'gray'}
-                  size="xs"
-                  radius="md"
-                  leftSection={active ? <IconCheck size={14} /> : undefined}
-                  onClick={() => onToggle?.(category.id, action.id)}
-                  style={
-                    active
-                      ? { backgroundColor: '#eff6ff', borderColor: '#3b82f6', color: '#1e40af' }
-                      : {}
-                  }
-                >
-                  {action.label}
-                </Button>
-              );
-            })}
-          </SimpleGrid>
-        </Paper>
-      ))}
-    </Stack>
-  );
-}
-
-function FormToggleList({
-  forms,
-  access,
-  onToggle,
-}: {
-  forms: { id: string; label: string }[];
-  access: FormsAccess;
-  onToggle?: (formId: string) => void;
-}) {
-  return (
-    <Stack gap="xs">
-      {forms.map(form => {
-        const enabled = access[form.id];
-        return (
-          <Paper
-            key={form.id}
-            p="sm"
-            withBorder
-            radius="md"
-            style={{ cursor: 'pointer' }}
-            onClick={() => onToggle?.(form.id)}
-          >
-            <Group justify="space-between">
-              <Text size="sm">{form.label}</Text>
-              <Badge
-                variant="light"
-                size="xs"
-                color={enabled ? 'green' : 'gray'}
-                leftSection={enabled ? <IconCheck size={12} /> : undefined}
-              >
-                {enabled ? 'Enabled' : 'Hidden'}
-              </Badge>
-            </Group>
-          </Paper>
-        );
-      })}
-    </Stack>
-  );
-}
+// Permission matrix and form toggle components removed
+// These are no longer needed with the new RBAC system
 
 function StatusBadge({ status }: { status: Status }) {
   return (
@@ -1724,5 +1499,142 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
         {children}
       </Paper>
     </Stack>
+  );
+}
+
+function AdminUsersPageSkeleton() {
+  return (
+    <Stack gap="md">
+      {/* Header Section */}
+      <Group justify="space-between" align="flex-start" wrap="wrap">
+        <Box>
+          <Skeleton height={14} width={100} mb="xs" />
+          <Skeleton height={32} width={200} mb="xs" />
+          <Skeleton height={16} width={300} />
+        </Box>
+        <Skeleton height={36} width={120} />
+      </Group>
+
+      {/* Summary Cards */}
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <SummaryCardSkeleton key={index} />
+        ))}
+      </SimpleGrid>
+
+      {/* Filters */}
+      <Paper withBorder shadow="sm" radius="md" p="md">
+        <Group gap="xs" mb="md">
+          <Skeleton height={16} width={16} />
+          <Skeleton height={16} width={60} />
+        </Group>
+        <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
+          <Skeleton height={36} />
+          <Skeleton height={36} />
+          <Skeleton height={36} />
+        </SimpleGrid>
+      </Paper>
+
+      {/* Users Table/Cards */}
+      <Paper withBorder shadow="lg" radius="md" style={{ overflow: 'hidden' }}>
+        {/* Desktop Table Skeleton */}
+        <Box visibleFrom="xl">
+          <Table.ScrollContainer minWidth={800}>
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th><Skeleton height={16} width={60} /></Table.Th>
+                  <Table.Th><Skeleton height={16} width={40} /></Table.Th>
+                  <Table.Th><Skeleton height={16} width={50} /></Table.Th>
+                  <Table.Th><Skeleton height={16} width={80} /></Table.Th>
+                  <Table.Th><Skeleton height={16} width={70} /></Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <UserTableRowSkeleton key={index} />
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        </Box>
+
+        {/* Mobile Cards Skeleton */}
+        <Stack gap="xs" hiddenFrom="xl" p="md">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <UserCardSkeleton key={index} />
+          ))}
+        </Stack>
+
+        {/* Pagination Skeleton */}
+        <Box p="md" style={{ borderTop: '1px solid #e9ecef' }}>
+          <Group justify="center">
+            <Skeleton height={32} width={200} />
+          </Group>
+        </Box>
+      </Paper>
+    </Stack>
+  );
+}
+
+function SummaryCardSkeleton() {
+  return (
+    <Paper withBorder shadow="sm" radius="md" p="md">
+      <Group justify="space-between" align="flex-start">
+        <Box>
+          <Skeleton height={12} width={80} mb="xs" />
+          <Skeleton height={28} width={40} mb="md" />
+          <Skeleton height={14} width={100} />
+        </Box>
+        <Skeleton height={44} width={44} radius="50%" />
+      </Group>
+    </Paper>
+  );
+}
+
+function UserTableRowSkeleton() {
+  return (
+    <Table.Tr>
+      <Table.Td>
+        <Group gap="sm">
+          <Skeleton height={44} width={44} radius="50%" />
+          <Box>
+            <Skeleton height={16} width={120} mb="xs" />
+            <Skeleton height={14} width={180} />
+          </Box>
+        </Group>
+      </Table.Td>
+      <Table.Td>
+        <Skeleton height={24} width={80} radius="md" />
+      </Table.Td>
+      <Table.Td>
+        <Skeleton height={24} width={60} radius="md" />
+      </Table.Td>
+      <Table.Td>
+        <Skeleton height={14} width={90} />
+      </Table.Td>
+      <Table.Td>
+        <Skeleton height={14} width={100} />
+      </Table.Td>
+    </Table.Tr>
+  );
+}
+
+function UserCardSkeleton() {
+  return (
+    <Paper p="md" withBorder>
+      <Group justify="space-between" align="flex-start" mb="md">
+        <Box>
+          <Skeleton height={16} width={140} mb="xs" />
+          <Skeleton height={12} width={180} />
+        </Box>
+        <Skeleton height={24} width={60} radius="md" />
+      </Group>
+      <Group gap="xs">
+        <Skeleton height={20} width={70} radius="md" />
+        <Skeleton height={20} width={90} radius="md" />
+        <Skeleton height={20} width={80} radius="md" />
+      </Group>
+    </Paper>
   );
 }

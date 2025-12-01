@@ -15,6 +15,7 @@ import SignatureCapture from '@/components/forms/SignatureCapture';
 import { TextInput, Select } from '@mantine/core';
 import { useSession } from '@/lib/auth-client';
 import { availableAssetSchema } from "@/lib/schemas/asset-availability-schema";
+import { toast } from 'sonner';
 // organization: "",
 //     assetType: "",
 //     quantity: "",
@@ -87,6 +88,7 @@ export default function AvailableAssetsForm({
         // }
 
         setIsSubmitting(true);
+        const toastId = toast.loading('Submitting asset availability...');
         try {
             const payload = {
                 name: values.assetName,
@@ -116,10 +118,15 @@ export default function AvailableAssetsForm({
                 throw new Error(error.message || 'Failed to submit distribution');
             }
 
+            toast.dismiss(toastId);
+            toast.success('Asset availability submitted successfully!');
             form.reset();
             onSuccess?.();
         } catch (err) {
-            onError?.(err instanceof Error ? err.message : 'An error occurred while submitting the form');
+            toast.dismiss(toastId);
+            const errorMessage = err instanceof Error ? err.message : 'An error occurred while submitting the form';
+            toast.error(errorMessage);
+            onError?.(errorMessage);
         } finally {
             setIsSubmitting(false);
         }

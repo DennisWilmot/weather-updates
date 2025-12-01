@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useMemo, useState, useCallback, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Container,
@@ -22,6 +22,7 @@ import {
   Box,
   Modal,
   SimpleGrid,
+  Skeleton,
 } from '@mantine/core';
 import {
   IconSearch,
@@ -109,6 +110,7 @@ const buildParishSummary = (items: PeopleNeed[], limit = 10): ChartDatum[] => {
 export default function InsightsPage() {
   const [selectedReport, setSelectedReport] = useState<string>('people-needs');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [parishFilter, setParishFilter] = useState<string | null>(null);
   const [sortColumn, setSortColumn] = useState<SortColumn>('contactName');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -120,7 +122,17 @@ export default function InsightsPage() {
   } | null>(null);
   const itemsPerPage = 20;
 
-  // Fetch parishes for filter
+  // Debounce search query to reduce API calls
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+      setCurrentPage(1); // Reset to first page on search
+    }, 500); // 500ms delay
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch parishes for filter (cached for 15 minutes)
   const { data: parishesData } = useQuery({
     queryKey: ['parishes'],
     queryFn: async () => {
@@ -128,13 +140,15 @@ export default function InsightsPage() {
       if (!response.ok) throw new Error('Failed to fetch parishes');
       return response.json();
     },
+    staleTime: 15 * 60 * 1000, // 15 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes
   });
 
   // Fetch people needs data with server-side pagination
   const { data, isLoading, error } = useQuery<{ data: PeopleNeed[]; total: number; page: number; totalPages: number }>({
     queryKey: [
       'people-needs',
-      searchQuery,
+      debouncedSearchQuery,
       parishFilter,
       sortColumn,
       sortOrder,
@@ -142,7 +156,7 @@ export default function InsightsPage() {
     ],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (searchQuery) params.append('search', searchQuery);
+      if (debouncedSearchQuery) params.append('search', debouncedSearchQuery);
       if (parishFilter) params.append('parishId', parishFilter);
       params.append('sortBy', sortColumn);
       params.append('sortOrder', sortOrder);
@@ -153,11 +167,14 @@ export default function InsightsPage() {
       if (!response.ok) throw new Error('Failed to fetch people needs');
       return response.json();
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 3 * 60 * 1000, // 3 minutes (data is cached on server)
+    gcTime: 10 * 60 * 1000, // 10 minutes
+    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes instead of 30 seconds
+    refetchIntervalInBackground: false, // Don't refetch when tab is not active
   });
 
-  // Handle column sorting
-  const handleSort = (column: SortColumn) => {
+  // Handle column sorting (memoized to prevent unnecessary re-renders)
+  const handleSort = useCallback((column: SortColumn) => {
     if (sortColumn === column) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
     } else {
@@ -165,51 +182,13 @@ export default function InsightsPage() {
       setSortOrder('asc');
     }
     setCurrentPage(1);
-  };
+  }, [sortColumn, sortOrder]);
 
 
 
-  // Format needs as badges
-  const formatNeeds = (needs: string[]) => {
-    if (!needs || needs.length === 0) return <Text size="sm" c="dimmed">None</Text>;
-    return (
-      <Group gap={4}>
-        {needs.slice(0, 3).map((need, idx) => (
-          <Badge key={idx} size="sm" variant="light">
-            {need}
-          </Badge>
-        ))}
-        {needs.length > 3 && (
-          <Badge size="sm" variant="light" color="gray">
-            +{needs.length - 3}
-          </Badge>
-        )}
-      </Group>
-    );
-  };
 
-  // Format location
-  const formatLocation = (item: PeopleNeed) => {
-    if (item.latitude && item.longitude) {
-      return `${parseFloat(item.latitude).toFixed(4)}, ${parseFloat(item.longitude).toFixed(4)}`;
-    }
-    return 'N/A';
-  };
-
-  // Format date
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  // Export to CSV - fetches all data
-  const exportToCSV = async () => {
+  // Export to CSV - fetches all data (memoized to prevent recreation)
+  const exportToCSV = useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (searchQuery) params.append('search', searchQuery);
@@ -267,11 +246,57 @@ export default function InsightsPage() {
     } catch (error) {
       console.error('Error exporting CSV:', error);
     }
-  };
+  }, [debouncedSearchQuery, parishFilter, sortColumn, sortOrder]);
 
-  const currentRecords = data?.data ?? [];
+  // Memoize expensive computations with proper dependencies
+  const currentRecords = useMemo(() => data?.data ?? [], [data?.data]);
   const needsSummary = useMemo(() => buildNeedsSummary(currentRecords), [currentRecords]);
   const parishSummary = useMemo(() => buildParishSummary(currentRecords), [currentRecords]);
+
+  // Memoize parish options to prevent unnecessary re-renders
+  const parishOptions = useMemo(() =>
+    parishesData?.parishes?.map((p: { id: string; name: string }) => ({
+      value: p.id,
+      label: p.name,
+    })) || []
+    , [parishesData?.parishes]);
+
+  // Memoize format functions to prevent recreation
+  const formatNeeds = useCallback((needs: string[]) => {
+    if (!needs || needs.length === 0) return <Text size="sm" c="dimmed">None</Text>;
+    return (
+      <Group gap={4}>
+        {needs.slice(0, 3).map((need, idx) => (
+          <Badge key={idx} size="sm" variant="light">
+            {need}
+          </Badge>
+        ))}
+        {needs.length > 3 && (
+          <Badge size="sm" variant="light" color="gray">
+            +{needs.length - 3}
+          </Badge>
+        )}
+      </Group>
+    );
+  }, []);
+
+  const formatLocation = useCallback((item: PeopleNeed) => {
+    if (item.latitude && item.longitude) {
+      return `${parseFloat(item.latitude).toFixed(4)}, ${parseFloat(item.longitude).toFixed(4)}`;
+    }
+    return 'N/A';
+  }, []);
+
+  const formatDate = useCallback((dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }, []);
 
   return (
     <div>
@@ -339,7 +364,9 @@ export default function InsightsPage() {
           {selectedReport === 'people-needs' && (
             <Box pt="lg">
               <Stack gap="lg">
-                {data && data.data.length > 0 && (
+                {isLoading ? (
+                  <InsightsChartsSkeleton />
+                ) : data && data.data.length > 0 ? (
                   <SimpleGrid cols={{ base: 1, md: 2 }}>
                     <NeedsOverviewChart
                       data={needsSummary}
@@ -351,135 +378,128 @@ export default function InsightsPage() {
                       onOpenChart={(payload) => setChartModal(payload)}
                     />
                   </SimpleGrid>
-                )}
+                ) : null}
                 <Card withBorder>
                   <Stack gap="md">
-                  {/* Filters */}
-                  <Group grow>
-                    <TextInput
-                      placeholder="Search by name or description..."
-                      leftSection={<IconSearch size={16} />}
-                      value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        setCurrentPage(1);
-                      }}
-                    />
-                    <Select
-                      placeholder="Filter by Parish"
-                      data={
-                        parishesData?.parishes?.map((p: { id: string; name: string }) => ({
-                          value: p.id,
-                          label: p.name,
-                        })) || []
-                      }
-                      clearable
-                      value={parishFilter}
-                      onChange={setParishFilter}
-                    />
-                  </Group>
+                    {/* Filters */}
+                    <Group grow>
+                      <TextInput
+                        placeholder="Search by name or description..."
+                        leftSection={<IconSearch size={16} />}
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          // Page reset is handled by debounce effect
+                        }}
+                      />
+                      <Select
+                        placeholder="Filter by Parish"
+                        data={parishOptions}
+                        clearable
+                        value={parishFilter}
+                        onChange={setParishFilter}
+                      />
+                    </Group>
 
-                  {/* Results count */}
-                  {data && (
-                    <Text size="sm" c="dimmed">
-                      Showing {data.data.length} of {data.total} results
-                      {data.totalPages > 1 && ` (Page ${data.page} of ${data.totalPages})`}
-                    </Text>
-                  )}
+                    {/* Results count */}
+                    {data && (
+                      <Text size="sm" c="dimmed">
+                        Showing {data.data.length} of {data.total} results
+                        {data.totalPages > 1 && ` (Page ${data.page} of ${data.totalPages})`}
+                      </Text>
+                    )}
 
-                  {/* Table */}
-                  {isLoading ? (
-                    <Center py="xl">
-                      <Loader />
-                    </Center>
-                  ) : error ? (
-                    <Alert icon={<IconAlertTriangle size={16} />} title="Error" color="red">
-                      Failed to load data. Please try again.
-                    </Alert>
-                  ) : !data || data.data.length === 0 ? (
-                    <Alert icon={<IconAlertTriangle size={16} />} title="No Data" color="blue">
-                      No people needs records found matching your filters.
-                    </Alert>
-                  ) : (
-                    <>
-                      <ScrollArea>
-                        <Table striped highlightOnHover>
-                          <Table.Thead>
-                            <Table.Tr>
-                              <Table.Th style={{ cursor: 'pointer' }} onClick={() => handleSort('contactName')}>
-                                Contact
-                              </Table.Th>
-                              <Table.Th>Needs</Table.Th>
-                              <Table.Th>Skills</Table.Th>
-                              <Table.Th style={{ cursor: 'pointer' }} onClick={() => handleSort('parish')}>
-                                Parish
-                              </Table.Th>
-                              <Table.Th style={{ cursor: 'pointer' }} onClick={() => handleSort('community')}>
-                                Community
-                              </Table.Th>
-                              <Table.Th>Location</Table.Th>
-                              <Table.Th style={{ cursor: 'pointer' }} onClick={() => handleSort('createdAt')}>
-                                Created At
-                              </Table.Th>
-                            </Table.Tr>
-                          </Table.Thead>
-                          <Table.Tbody>
-                            {data.data.map((item) => (
-                              <Table.Tr key={item.id}>
-                                <Table.Td>
-                                  <Stack gap={2}>
-                                    <Text size="sm">
-                                      {item.contactName}
-                                    </Text>
-                                    {item.contactPhone && (
-                                      <Text size="xs" c="dimmed">
-                                        {item.contactPhone}
-                                      </Text>
-                                    )}
-                                    {item.contactEmail && (
-                                      <Text size="xs" c="dimmed">
-                                        {item.contactEmail}
-                                      </Text>
-                                    )}
-                                  </Stack>
-                                </Table.Td>
-                                <Table.Td>{formatNeeds(item.needs)}</Table.Td>
-                                <Table.Td>{item.skills && item.skills.length > 0 ? formatNeeds(item.skills) : <Text size="sm" c="dimmed">None</Text>}</Table.Td>
-                                <Table.Td>
-                                  <Text size="sm">{item.parish?.name || 'N/A'}</Text>
-                                </Table.Td>
-                                <Table.Td>
-                                  <Text size="sm">{item.community?.name || 'N/A'}</Text>
-                                </Table.Td>
-                                <Table.Td>
-                                  <Text size="sm" c="dimmed">
-                                    {formatLocation(item)}
-                                  </Text>
-                                </Table.Td>
-                                <Table.Td>
-                                  <Text size="sm" c="dimmed">
-                                    {formatDate(item.createdAt)}
-                                  </Text>
-                                </Table.Td>
+                    {/* Table */}
+                    {isLoading ? (
+                      <InsightsTableSkeleton />
+                    ) : error ? (
+                      <Alert icon={<IconAlertTriangle size={16} />} title="Error" color="red">
+                        Failed to load data. Please try again.
+                      </Alert>
+                    ) : !data || data.data.length === 0 ? (
+                      <Alert icon={<IconAlertTriangle size={16} />} title="No Data" color="blue">
+                        No people needs records found matching your filters.
+                      </Alert>
+                    ) : (
+                      <>
+                        <ScrollArea>
+                          <Table striped highlightOnHover>
+                            <Table.Thead>
+                              <Table.Tr>
+                                <Table.Th style={{ cursor: 'pointer' }} onClick={() => handleSort('contactName')}>
+                                  Contact
+                                </Table.Th>
+                                <Table.Th>Needs</Table.Th>
+                                <Table.Th>Skills</Table.Th>
+                                <Table.Th style={{ cursor: 'pointer' }} onClick={() => handleSort('parish')}>
+                                  Parish
+                                </Table.Th>
+                                <Table.Th style={{ cursor: 'pointer' }} onClick={() => handleSort('community')}>
+                                  Community
+                                </Table.Th>
+                                <Table.Th>Location</Table.Th>
+                                <Table.Th style={{ cursor: 'pointer' }} onClick={() => handleSort('createdAt')}>
+                                  Created At
+                                </Table.Th>
                               </Table.Tr>
-                            ))}
-                          </Table.Tbody>
-                        </Table>
-                      </ScrollArea>
+                            </Table.Thead>
+                            <Table.Tbody>
+                              {data.data.map((item) => (
+                                <Table.Tr key={item.id}>
+                                  <Table.Td>
+                                    <Stack gap={2}>
+                                      <Text size="sm">
+                                        {item.contactName}
+                                      </Text>
+                                      {item.contactPhone && (
+                                        <Text size="xs" c="dimmed">
+                                          {item.contactPhone}
+                                        </Text>
+                                      )}
+                                      {item.contactEmail && (
+                                        <Text size="xs" c="dimmed">
+                                          {item.contactEmail}
+                                        </Text>
+                                      )}
+                                    </Stack>
+                                  </Table.Td>
+                                  <Table.Td>{formatNeeds(item.needs)}</Table.Td>
+                                  <Table.Td>{item.skills && item.skills.length > 0 ? formatNeeds(item.skills) : <Text size="sm" c="dimmed">None</Text>}</Table.Td>
+                                  <Table.Td>
+                                    <Text size="sm">{item.parish?.name || 'N/A'}</Text>
+                                  </Table.Td>
+                                  <Table.Td>
+                                    <Text size="sm">{item.community?.name || 'N/A'}</Text>
+                                  </Table.Td>
+                                  <Table.Td>
+                                    <Text size="sm" c="dimmed">
+                                      {formatLocation(item)}
+                                    </Text>
+                                  </Table.Td>
+                                  <Table.Td>
+                                    <Text size="sm" c="dimmed">
+                                      {formatDate(item.createdAt)}
+                                    </Text>
+                                  </Table.Td>
+                                </Table.Tr>
+                              ))}
+                            </Table.Tbody>
+                          </Table>
+                        </ScrollArea>
 
-                      {/* Pagination */}
-                      {data.totalPages > 1 && (
-                        <Group justify="center" mt="md">
-                          <Pagination
-                            value={currentPage}
-                            onChange={setCurrentPage}
-                            total={data.totalPages}
-                            size="sm"
-                          />
-                        </Group>
-                      )}
-                    </>
-                  )}
+                        {/* Pagination */}
+                        {data.totalPages > 1 && (
+                          <Group justify="center" mt="md">
+                            <Pagination
+                              value={currentPage}
+                              onChange={setCurrentPage}
+                              total={data.totalPages}
+                              size="sm"
+                            />
+                          </Group>
+                        )}
+                      </>
+                    )}
                   </Stack>
                 </Card>
               </Stack>
@@ -494,6 +514,125 @@ export default function InsightsPage() {
         </Stack>
       </Container>
     </div>
+  );
+}
+
+function InsightsChartsSkeleton() {
+  return (
+    <SimpleGrid cols={{ base: 1, md: 2 }}>
+      <Card withBorder p="md">
+        <Stack gap="md">
+          <Group justify="space-between" align="flex-start">
+            <Box>
+              <Skeleton height={20} width={150} mb="xs" />
+              <Skeleton height={14} width={200} />
+            </Box>
+            <Skeleton height={24} width={24} />
+          </Group>
+          <Box style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Skeleton height={180} width="100%" radius="md" />
+          </Box>
+          <Group gap="xs">
+            <Skeleton height={12} width={100} />
+            <Skeleton height={12} width={80} />
+          </Group>
+        </Stack>
+      </Card>
+
+      <Card withBorder p="md">
+        <Stack gap="md">
+          <Group justify="space-between" align="flex-start">
+            <Box>
+              <Skeleton height={20} width={140} mb="xs" />
+              <Skeleton height={14} width={180} />
+            </Box>
+            <Skeleton height={24} width={24} />
+          </Group>
+          <Box style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Skeleton height={180} width="100%" radius="md" />
+          </Box>
+          <Group gap="xs">
+            <Skeleton height={12} width={90} />
+            <Skeleton height={12} width={110} />
+          </Group>
+        </Stack>
+      </Card>
+    </SimpleGrid>
+  );
+}
+
+function InsightsTableSkeleton() {
+  return (
+    <Stack gap="md">
+      {/* Results count skeleton */}
+      <Skeleton height={14} width={200} />
+
+      {/* Table skeleton */}
+      <ScrollArea>
+        <Table striped>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th><Skeleton height={16} width={60} /></Table.Th>
+              <Table.Th><Skeleton height={16} width={50} /></Table.Th>
+              <Table.Th><Skeleton height={16} width={45} /></Table.Th>
+              <Table.Th><Skeleton height={16} width={55} /></Table.Th>
+              <Table.Th><Skeleton height={16} width={70} /></Table.Th>
+              <Table.Th><Skeleton height={16} width={60} /></Table.Th>
+              <Table.Th><Skeleton height={16} width={80} /></Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {Array.from({ length: 10 }).map((_, index) => (
+              <InsightsTableRowSkeleton key={index} />
+            ))}
+          </Table.Tbody>
+        </Table>
+      </ScrollArea>
+
+      {/* Pagination skeleton */}
+      <Group justify="center" mt="md">
+        <Skeleton height={32} width={200} />
+      </Group>
+    </Stack>
+  );
+}
+
+function InsightsTableRowSkeleton() {
+  return (
+    <Table.Tr>
+      <Table.Td>
+        <Stack gap={2}>
+          <Skeleton height={14} width={120} />
+          <Skeleton height={12} width={100} />
+          <Skeleton height={12} width={140} />
+        </Stack>
+      </Table.Td>
+      <Table.Td>
+        <Group gap={4}>
+          <Skeleton height={20} width={60} radius="md" />
+          <Skeleton height={20} width={50} radius="md" />
+          <Skeleton height={20} width={70} radius="md" />
+        </Group>
+      </Table.Td>
+      <Table.Td>
+        <Group gap={4}>
+          <Skeleton height={20} width={55} radius="md" />
+          <Skeleton height={20} width={65} radius="md" />
+        </Group>
+      </Table.Td>
+      <Table.Td>
+        <Skeleton height={14} width={80} />
+      </Table.Td>
+      <Table.Td>
+        <Skeleton height={14} width={90} />
+      </Table.Td>
+      <Table.Td>
+        <Skeleton height={14} width={100} />
+      </Table.Td>
+      <Table.Td>
+        <Skeleton height={14} width={110} />
+      </Table.Td>
+    </Table.Tr>
   );
 }
 

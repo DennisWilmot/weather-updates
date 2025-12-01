@@ -16,6 +16,7 @@ import MultiSelectCheckbox from '@/components/forms/MultiSelectCheckbox';
 import DatePicker from '@/components/forms/DatePicker';
 import LocationMapPicker from '@/components/forms/LocationMapPicker';
 import { useSession } from '@/lib/auth-client';
+import { toast } from 'sonner';
 
 interface AidWorkerScheduleFormProps {
   onSuccess?: () => void;
@@ -80,6 +81,7 @@ export default function AidWorkerScheduleForm({
     }
 
     setIsSubmitting(true);
+    const toastId = toast.loading('Submitting aid worker schedule...');
     try {
       const response = await fetch('/api/aid-workers/schedules', {
         method: 'POST',
@@ -97,10 +99,15 @@ export default function AidWorkerScheduleForm({
         throw new Error(error.message || 'Failed to submit aid worker schedule');
       }
 
+      toast.dismiss(toastId);
+      toast.success('Aid worker schedule submitted successfully!');
       form.reset();
       onSuccess?.();
     } catch (err) {
-      onError?.(err instanceof Error ? err.message : 'An error occurred while submitting the form');
+      toast.dismiss(toastId);
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred while submitting the form';
+      toast.error(errorMessage);
+      onError?.(errorMessage);
     } finally {
       setIsSubmitting(false);
     }
