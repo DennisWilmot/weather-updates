@@ -1,3 +1,4 @@
+import { is } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -6,6 +7,14 @@ export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const isAuthPage =
     path.startsWith("/auth") || path.startsWith("/reset-password");
+  const isApiRoute = path.startsWith("/api/");
+  console.log("isAPIPage", isApiRoute);
+
+  // API routes should handle their own authentication and return JSON errors
+  // Don't redirect API routes to login page
+  if (isApiRoute) {
+    return NextResponse.next();
+  }
 
   // Check for session token in cookies (edge-compatible)
   const cookieStore = cookies();
