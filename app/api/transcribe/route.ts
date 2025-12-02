@@ -200,7 +200,12 @@ ${(transcription as any).text}
     if (blobId && videoUrl) {
       try {
         const { del } = await import("@vercel/blob");
-        await del(videoUrl);
+        const token = process.env.BLOB_READ_WRITE_TOKEN;
+        if (token) {
+          await del(videoUrl, { token });
+        } else {
+          console.warn("BLOB_READ_WRITE_TOKEN not set, skipping blob cleanup");
+        }
       } catch (cleanupError) {
         // Log but don't fail if cleanup fails
         console.error("Failed to cleanup Vercel Blob file:", cleanupError);
