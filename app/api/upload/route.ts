@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/actions";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadBody;
+  console.log("Upload request received:", body);
 
   try {
     // Check authentication
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       request,
       token,
       onBeforeGenerateToken: async (pathname) => {
+        console.log("[Upload] Generating token for pathname:", pathname);
         return {
           allowedContentTypes: [
             "video/mp4",
@@ -40,16 +42,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             "video/x-msvideo",
             "video/3gpp",
             "video/*", // Allow all video types
+            "audio/webm",
+            "audio/webm;codecs=opus",
+            "audio/mpeg",
+            "audio/mp3",
+            "audio/ogg",
+            "audio/opus",
+            "audio/*", // Allow all audio types
           ],
           maximumSizeInBytes: 5 * 1024 * 1024 * 1024, // 5 TB (Vercel Blob maximum with multipart)
         };
       },
-      onUploadCompleted: async ({ blob, tokenPayload }) => {
-        // Optional: Store blob URL in database
-        console.log("Upload completed:", blob.url);
-      },
     });
 
+    console.log("[Upload] Response:", JSON.stringify(jsonResponse, null, 2));
     return NextResponse.json(jsonResponse);
   } catch (error: any) {
     return NextResponse.json(

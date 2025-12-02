@@ -35,6 +35,11 @@ import FormField from '@/components/forms/FormField';
 import LocationMapPicker from '@/components/forms/LocationMapPicker';
 import { useSession } from '@/lib/auth-client';
 import { upload } from '@vercel/blob/client';
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile } from '@ffmpeg/util';
+
+// Single FFmpeg instance for audio extraction
+const ffmpeg = new FFmpeg();
 
 interface PeopleNeedsFormProps {
   onSuccess?: () => void;
@@ -112,27 +117,88 @@ export default function PeopleNeedsForm({
     validate: zodResolver(peopleNeedsSchema),
   });
 
-  async function transcribe(file: File) {
-    // Upload to Vercel Blob first to bypass Vercel's 4.5 MB body size limit
-    // This allows files up to 500 MB to be uploaded directly from client
-    setUploadProgress(10);
+  async function extractAudioFromVideo(videoFile: File): Promise<File> {
+    // Load FFmpeg if not already loaded
+    if (!ffmpeg.loaded) {
+      await ffmpeg.load();
+    }
+
+    const inputFileName = "input.mp4";
+    const outputFileName = "output.mp3";
 
     try {
-      // Upload directly to Vercel Blob from client
-      // Use multipart upload for files > 100 MB for better reliability
-      const useMultipart = file.size > 100 * 1024 * 1024; // 100 MB
+      // Write video file to FFmpeg's virtual filesystem
+      await ffmpeg.writeFile(inputFileName, await fetchFile(videoFile));
 
-      const blob = await upload(file.name, file, {
+      // Extract audio: -i input, -vn (no video), -acodec mp3, -ab 128k (bitrate)
+      await ffmpeg.exec([
+        "-i", inputFileName,
+        "-vn",
+        "-acodec", "mp3",
+        "-ab", "128k",
+        outputFileName
+      ]);
+
+      // Read the output audio file
+      const data = await ffmpeg.readFile(outputFileName);
+
+      // Convert to standard Uint8Array (copy to new ArrayBuffer to avoid SharedArrayBuffer issues)
+      const uint8Array = data instanceof Uint8Array
+        ? new Uint8Array(data)
+        : new Uint8Array(data as any);
+
+      const audioFile = new File(
+        [uint8Array],
+        videoFile.name.replace(/\.[^/.]+$/, "") + ".mp3",
+        { type: "audio/mpeg" }
+      );
+
+      // Cleanup
+      await ffmpeg.deleteFile(inputFileName);
+      await ffmpeg.deleteFile(outputFileName);
+
+      const originalSizeMB = (videoFile.size / 1024 / 1024).toFixed(2);
+      const audioSizeMB = (audioFile.size / 1024 / 1024).toFixed(2);
+      const reduction = ((1 - audioFile.size / videoFile.size) * 100).toFixed(1);
+
+      console.log(`✅ Audio extracted: ${audioSizeMB} MB (was ${originalSizeMB} MB, ${reduction}% reduction)`);
+
+      return audioFile;
+    } catch (error: any) {
+      console.error("FFmpeg error:", error);
+      throw new Error(`Failed to extract audio: ${error?.message || "Unknown error"}`);
+    }
+  }
+
+  async function transcribe(file: File) {
+    setUploadProgress(5);
+
+    try {
+      // Step 1: Extract audio from video (5% -> 15%)
+      console.log("🎵 Extracting audio from video...");
+      setUploadProgress(5);
+      const audioFile = await extractAudioFromVideo(file);
+      setUploadProgress(15);
+      const sizeReduction = ((1 - audioFile.size / file.size) * 100).toFixed(1);
+      console.log(`✅ Audio extracted! ${sizeReduction}% smaller (${(audioFile.size / 1024 / 1024).toFixed(2)} MB)`);
+
+      // Step 2: Upload audio to Vercel Blob (15% -> 30%)
+      // Use multipart upload for files > 50 MB for better reliability
+      const useMultipart = audioFile.size > 50 * 1024 * 1024; // 50 MB
+
+      console.log("Starting Vercel Blob upload, audio size:", audioFile.size, "bytes, multipart:", useMultipart);
+      const blob = await upload(audioFile.name, audioFile, {
         access: 'public',
         handleUploadUrl: '/api/upload',
-        multipart: useMultipart, // Enable multipart for large files (supports up to 5 TB)
+        multipart: useMultipart,
         onUploadProgress: (progressEvent) => {
-          // Update progress: 10% to 30% for upload (assuming upload is 20% of total time)
-          const uploadProgress = 10 + (progressEvent.loaded / progressEvent.total) * 20;
+          // Update progress: 15% to 30% for upload
+          const uploadProgress = 15 + (progressEvent.loaded / progressEvent.total) * 15;
           setUploadProgress(Math.min(uploadProgress, 30));
         },
       });
 
+      console.log("✅ Vercel Blob upload completed successfully!");
       setUploadProgress(30);
 
       // Call transcribe API with Vercel Blob URL (small JSON payload, no size limit issues)
@@ -141,16 +207,22 @@ export default function PeopleNeedsForm({
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ videoUrl: blob.url, blobId: blob.pathname }),
+        body: JSON.stringify({ videoUrl: blob.url, blobId: blob.pathname, isAudio: true }),
       });
 
+      console.log("Transcribe response status:", res.status);
+
       if (!res.ok) {
-        const error = await res.json();
+        const error = await res.json().catch(() => ({ error: 'Unknown error' }));
+        console.error("Transcribe error:", error);
         throw new Error(error.error || 'Transcription failed');
       }
 
-      return res.json();
+      const result = await res.json();
+      console.log("Transcription successful, result:", result);
+      return result;
     } catch (error: any) {
+      console.error("Transcribe function error:", error);
       throw new Error(error?.message || 'Failed to upload video');
     }
   }
@@ -180,7 +252,7 @@ export default function PeopleNeedsForm({
       clearInterval(progressInterval);
       setUploadProgress(100);
 
-      console.log(result)
+      console.log("Transcription result received:", result);
 
 
       if (result) {
@@ -221,10 +293,15 @@ export default function PeopleNeedsForm({
       }
 
     } catch (err) {
-      onError?.(err instanceof Error ? err.message : 'Failed to transcribe video');
+      console.error("handleVideoDrop error:", err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to transcribe video';
+      console.error("Error message:", errorMessage);
+      onError?.(errorMessage);
+      toast.error(errorMessage);
       setUploadedVideo(null);
     } finally {
       setIsTranscribing(false);
+      setUploadProgress(0);
     }
   };
 

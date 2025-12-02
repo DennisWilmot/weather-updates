@@ -34,9 +34,12 @@ export async function POST(req: Request) {
   let videoUrl: string | null = null;
   let blobId: string | null = null;
 
+  console.log("[Transcribe] Request received");
+
   try {
     // Check if request is JSON (Vercel Blob URL) or FormData (direct upload - legacy)
     const contentType = req.headers.get("content-type") || "";
+    console.log("[Transcribe] Content-Type:", contentType);
 
     if (contentType.includes("application/json")) {
       // Handle Vercel Blob URL upload (bypasses 4.5 MB limit)
@@ -44,7 +47,10 @@ export async function POST(req: Request) {
       videoUrl = body.videoUrl;
       blobId = body.blobId;
 
+      console.log("[Transcribe] Processing Vercel Blob URL:", videoUrl);
+
       if (!videoUrl) {
+        console.error("[Transcribe] Missing videoUrl in request body");
         return NextResponse.json(
           {
             error:
@@ -59,8 +65,13 @@ export async function POST(req: Request) {
       inputPath = path.join(tempDir, `upload-${Date.now()}`);
       outputPath = path.join(tempDir, `audio-${Date.now()}.opus`);
 
+      console.log("[Transcribe] Downloading video from:", videoUrl);
       const videoResponse = await fetch(videoUrl);
       if (!videoResponse.ok) {
+        console.error(
+          "[Transcribe] Failed to download video:",
+          videoResponse.statusText
+        );
         return NextResponse.json(
           {
             error: `Failed to download video from URL: ${videoResponse.statusText}`,
@@ -69,8 +80,25 @@ export async function POST(req: Request) {
         );
       }
 
+      console.log("[Transcribe] File downloaded, saving to:", inputPath);
       const buffer = Buffer.from(await videoResponse.arrayBuffer());
       await fs.writeFile(inputPath, buffer);
+      console.log("[Transcribe] File saved to disk");
+
+      // Check if it's already an audio file (check URL or content-type)
+      const contentType = videoResponse.headers.get("content-type") || "";
+      const isAudio =
+        contentType.includes("audio/") ||
+        videoUrl.includes(".opus") ||
+        videoUrl.includes(".webm") ||
+        videoUrl.includes(".mp3") ||
+        videoUrl.includes(".ogg") ||
+        body.isAudio === true;
+
+      if (isAudio) {
+        console.log("[Transcribe] File is already audio, using directly");
+        outputPath = inputPath; // Use input as output since it's already audio
+      }
     } else {
       // Handle direct file upload (legacy - for small files < 4.5 MB)
       const form = await req.formData();
@@ -93,10 +121,25 @@ export async function POST(req: Request) {
       await fs.writeFile(inputPath, buffer);
     }
 
-    // Convert to audio
-    await compressVideoToAudio(inputPath, outputPath);
+    // Convert to audio (only if not already audio)
+    if (outputPath === inputPath) {
+      // Already audio, use it directly
+      console.log(
+        "[Transcribe] Using audio file directly (no conversion needed)"
+      );
+    } else {
+      // Convert video to audio
+      console.log("[Transcribe] Converting video to audio...");
+      await compressVideoToAudio(inputPath, outputPath);
+    }
 
-    const audioBuffer = await fs.readFile(outputPath);
+    const audioFile = outputPath || inputPath;
+    const audioBuffer = await fs.readFile(audioFile);
+    console.log(
+      "[Transcribe] Audio buffer ready, size:",
+      (audioBuffer.length / 1024).toFixed(2),
+      "KB"
+    );
 
     // Run Whisper (Replicate)
     const transcription = await replicate.run(
