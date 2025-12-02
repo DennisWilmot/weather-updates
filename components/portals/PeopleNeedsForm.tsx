@@ -35,11 +35,6 @@ import FormField from '@/components/forms/FormField';
 import LocationMapPicker from '@/components/forms/LocationMapPicker';
 import { useSession } from '@/lib/auth-client';
 import { upload } from '@vercel/blob/client';
-import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile } from '@ffmpeg/util';
-
-// Single FFmpeg instance for audio extraction
-const ffmpeg = new FFmpeg();
 
 interface PeopleNeedsFormProps {
   onSuccess?: () => void;
@@ -117,11 +112,33 @@ export default function PeopleNeedsForm({
     validate: zodResolver(peopleNeedsSchema),
   });
 
-  async function extractAudioFromVideo(videoFile: File): Promise<File> {
+  // Lazy-load FFmpeg instance (only in browser, not during SSR)
+  const ffmpegRef = useRef<any>(null);
+
+  async function getFFmpeg() {
+    // Only initialize in browser
+    if (typeof window === 'undefined') {
+      throw new Error('FFmpeg can only be used in the browser');
+    }
+
+    if (!ffmpegRef.current) {
+      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+      ffmpegRef.current = new FFmpeg();
+    }
+
+    const ffmpeg = ffmpegRef.current;
+
     // Load FFmpeg if not already loaded
     if (!ffmpeg.loaded) {
       await ffmpeg.load();
     }
+
+    return ffmpeg;
+  }
+
+  async function extractAudioFromVideo(videoFile: File): Promise<File> {
+    const { fetchFile } = await import('@ffmpeg/util');
+    const ffmpeg = await getFFmpeg();
 
     const inputFileName = "input.mp4";
     const outputFileName = "output.mp3";

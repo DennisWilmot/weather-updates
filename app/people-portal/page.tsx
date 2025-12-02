@@ -1,11 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Container, Stack, Title, Text, Alert, Paper } from '@mantine/core';
+import dynamic from 'next/dynamic';
+import { Container, Stack, Title, Text, Alert, Paper, Center, Loader } from '@mantine/core';
 import { useMediaQuery } from '@mantine/hooks';
 import { IconUsers, IconCheck, IconAlertCircle } from '@tabler/icons-react';
 import PortalLayout from '@/components/portals/PortalLayout';
-import PeopleNeedsForm from '@/components/portals/PeopleNeedsForm';
+
+// Dynamic import to prevent SSR issues with FFmpeg
+const PeopleNeedsForm = dynamic(() => import('@/components/portals/PeopleNeedsForm'), {
+  ssr: false,
+  loading: () => <Center py="xl"><Loader /></Center>,
+});
 
 export default function PeoplePortal() {
   const isMobile = useMediaQuery('(max-width: 768px)');
