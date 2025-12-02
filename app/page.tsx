@@ -81,7 +81,7 @@ function DashboardContent() {
   const [layerRawData, setLayerRawData] = useState<Record<string, any[]>>({});
   const [layers, setLayers] = useState<any[]>([]);
   const [subTypeFilters, setSubTypeFilters] = useState<Record<string, Set<string>>>({});
-  
+
   // Route details state
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [routeMetadata, setRouteMetadata] = useState<{ distance: number; duration: number; coordinates: number[][] } | null>(null);
@@ -91,7 +91,7 @@ function DashboardContent() {
   const [routeTooltip, setRouteTooltip] = useState<{ distance: number; duration: number; x: number; y: number } | null>(null);
   const [currentRouteCoords, setCurrentRouteCoords] = useState<number[][]>([]);
   const routeMetadataRef = useRef<{ distance: number; duration: number; coordinates: number[][] } | null>(null);
-  
+
   // Route preferences state
   const [routePreferences, setRoutePreferences] = useState({
     avoidTolls: false,
@@ -99,24 +99,24 @@ function DashboardContent() {
     avoidBridges: false,
     avoidResidential: false,
   });
-  
+
   // Store current route endpoints for regeneration
   const currentRouteEndpointsRef = useRef<{ fromLng: number; fromLat: number; toLng: number; toLat: number } | null>(null);
-  
+
   // Waypoints state (Phase 5)
   const [waypoints, setWaypoints] = useState<Array<{ id: string; lng: number; lat: number; name?: string }>>([]);
   const [isAddingWaypoint, setIsAddingWaypoint] = useState(false);
-  
+
   // Refs for waypoint handlers (to access latest state in map callbacks)
   const waypointsRef = useRef<Array<{ id: string; lng: number; lat: number; name?: string }>>([]);
   const isAddingWaypointRef = useRef(false);
   const selectedShipmentRef = useRef<Shipment | null>(null);
-  
+
   // Sync waypoints state with refs (for waypoint click handler)
   useEffect(() => {
     waypointsRef.current = waypoints;
   }, [waypoints]);
-  
+
   // Sync isAddingWaypoint state with ref
   useEffect(() => {
     isAddingWaypointRef.current = isAddingWaypoint;
@@ -189,7 +189,7 @@ function DashboardContent() {
     mapRef.current = map;
     setMapInstance(map);
     setMapLoaded(true);
-    
+
     // Waypoint click handler (Phase 5) - uses refs to access latest state
     // This handler checks if we're in waypoint mode before processing
     // IMPORTANT: This must be added BEFORE other click handlers to check waypoint mode first
@@ -199,7 +199,7 @@ function DashboardContent() {
       if (!isAddingWaypointRef.current || !selectedShipmentRef.current) {
         return; // Not in waypoint mode, let other handlers process
       }
-      
+
       // We're in waypoint mode - process the click
       const currentWaypoints = waypointsRef.current;
       const newWaypoint = {
@@ -208,14 +208,14 @@ function DashboardContent() {
         lat: e.lngLat.lat,
         name: `Waypoint ${currentWaypoints.length + 1}`,
       };
-      
+
       const updatedWaypoints = [...currentWaypoints, newWaypoint];
       waypointsRef.current = updatedWaypoints;
       setWaypoints(updatedWaypoints);
       setIsAddingWaypoint(false);
       isAddingWaypointRef.current = false;
       map.getCanvas().style.cursor = '';
-      
+
       // Auto-regenerate route with new waypoint
       if (currentRouteEndpointsRef.current) {
         const { fromLng, fromLat, toLng, toLat } = currentRouteEndpointsRef.current;
@@ -224,10 +224,10 @@ function DashboardContent() {
         }, 100);
       }
     };
-    
+
     // Store handler reference for cleanup
     (map as any)._waypointClickHandler = handleMapClickForWaypoint;
-    
+
     // Add click handler for waypoints FIRST (before other handlers)
     // This ensures waypoint mode is checked before other click handlers process
     map.on('click', handleMapClickForWaypoint);
@@ -672,7 +672,7 @@ function DashboardContent() {
     if (!mapRef.current || !selectedShipmentRef.current) return;
     const map = mapRef.current;
     const shipment = selectedShipmentRef.current;
-    
+
     // Build routing URL with waypoints and preferences
     const routingParams = new URLSearchParams({
       fromLng: fromLng.toString(),
@@ -681,33 +681,33 @@ function DashboardContent() {
       toLat: toLat.toString(),
       alternatives: 'true',
     });
-    
+
     // Add waypoints if any
     if (currentWaypoints.length > 0) {
       const waypointsStr = currentWaypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
       routingParams.append('waypoints', waypointsStr);
     }
-    
+
     // Add avoid options
     if (routePreferences.avoidTolls) routingParams.append('avoidTolls', 'true');
     if (routePreferences.avoidHighways) routingParams.append('avoidHighways', 'true');
     if (routePreferences.avoidBridges) routingParams.append('avoidBridges', 'true');
     if (routePreferences.avoidResidential) routingParams.append('avoidResidential', 'true');
-    
+
     const routingUrl = `/api/routing?${routingParams.toString()}`;
     console.log('Regenerating route with waypoints:', routingUrl);
-    
+
     try {
       const routeResponse = await fetch(routingUrl);
-      
+
       if (routeResponse.ok) {
         const routeData = await routeResponse.json();
-        
+
         if (routeData.routes && Array.isArray(routeData.routes) && routeData.routes.length > 0) {
           // Update routes
           setAllRoutes(routeData.routes);
           setSelectedRouteIndex(0);
-          
+
           // Use primary route
           const primaryRoute = routeData.routes[0];
           const newRouteMeta = {
@@ -718,7 +718,7 @@ function DashboardContent() {
           setRouteMetadata(newRouteMeta);
           routeMetadataRef.current = newRouteMeta;
           setCurrentRouteCoords(primaryRoute.coordinates);
-          
+
           // Update primary route display
           if (map.getSource("shipment-line")) {
             const lineGeoJSON = {
@@ -740,7 +740,7 @@ function DashboardContent() {
             const src = map.getSource("shipment-line") as maplibregl.GeoJSONSource;
             src.setData(lineGeoJSON as GeoJSON.FeatureCollection);
           }
-          
+
           // Update alternative routes if available
           if (routeData.routes.length > 1) {
             const alternativeRoutesGeoJSON = {
@@ -757,7 +757,7 @@ function DashboardContent() {
                 },
               })),
             };
-            
+
             if (map.getSource("alternative-routes")) {
               const altSrc = map.getSource("alternative-routes") as maplibregl.GeoJSONSource;
               altSrc.setData(alternativeRoutesGeoJSON as GeoJSON.FeatureCollection);
@@ -767,14 +767,14 @@ function DashboardContent() {
                 data: alternativeRoutesGeoJSON as GeoJSON.FeatureCollection,
               });
             }
-            
+
             // Update alternative route layers
             routeData.routes.slice(1).forEach((route: any, altIdx: number) => {
               const altLayerId = `alternative-route-${route.index}`;
               const altOutlineId = `alternative-route-outline-${route.index}`;
               const colors = ["#F59E0B", "#10B981", "#8B5CF6", "#EC4899"];
               const routeColor = colors[altIdx % colors.length];
-              
+
               if (!map.getLayer(altOutlineId)) {
                 map.addLayer({
                   id: altOutlineId,
@@ -793,7 +793,7 @@ function DashboardContent() {
                   },
                 });
               }
-              
+
               if (!map.getLayer(altLayerId)) {
                 map.addLayer({
                   id: altLayerId,
@@ -817,7 +817,7 @@ function DashboardContent() {
               }
             });
           }
-          
+
           console.log('✅ Route regenerated with waypoints:', routeData.routes.length, 'route(s)');
         }
       } else {
@@ -835,7 +835,7 @@ function DashboardContent() {
 
     // Update refs for waypoint handling
     selectedShipmentRef.current = shipment;
-    
+
     // Clear waypoints when selecting a new shipment
     setWaypoints([]);
     waypointsRef.current = [];
@@ -901,7 +901,7 @@ function DashboardContent() {
       let usingMapboxRoute = false;
       let routeMeta: { distance: number; duration: number; coordinates: number[][] } | null = null;
       let fetchedRoutes: Array<{ index: number; coordinates: number[][]; distance: number; duration: number; isPrimary: boolean }> = [];
-      
+
       // Store route endpoints for regeneration
       currentRouteEndpointsRef.current = {
         fromLng: warehouseCoords[0],
@@ -909,7 +909,7 @@ function DashboardContent() {
         toLng: communityCoords[0],
         toLat: communityCoords[1],
       };
-      
+
       try {
         // Build routing URL with preferences and waypoints
         const routingParams = new URLSearchParams({
@@ -919,38 +919,38 @@ function DashboardContent() {
           toLat: communityCoords[1].toString(),
           alternatives: 'true',
         });
-        
+
         // Add waypoints if any
         if (waypoints.length > 0) {
           const waypointsStr = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
           routingParams.append('waypoints', waypointsStr);
         }
-        
-          // Add avoid options
-          if (routePreferences.avoidTolls) routingParams.append('avoidTolls', 'true');
-          if (routePreferences.avoidHighways) routingParams.append('avoidHighways', 'true');
-          if (routePreferences.avoidBridges) routingParams.append('avoidBridges', 'true');
-          if (routePreferences.avoidResidential) routingParams.append('avoidResidential', 'true');
-        
+
+        // Add avoid options
+        if (routePreferences.avoidTolls) routingParams.append('avoidTolls', 'true');
+        if (routePreferences.avoidHighways) routingParams.append('avoidHighways', 'true');
+        if (routePreferences.avoidBridges) routingParams.append('avoidBridges', 'true');
+        if (routePreferences.avoidResidential) routingParams.append('avoidResidential', 'true');
+
         const routingUrl = `/api/routing?${routingParams.toString()}`;
         console.log('Fetching route from Mapbox with alternatives:', routingUrl);
         const routeResponse = await fetch(routingUrl);
-        
+
         if (routeResponse.ok) {
           const routeData = await routeResponse.json();
-          
+
           // Handle new format with multiple routes
           if (routeData.routes && Array.isArray(routeData.routes) && routeData.routes.length > 0) {
             // Store routes locally and in state
             fetchedRoutes = routeData.routes;
             setAllRoutes(routeData.routes);
             setSelectedRouteIndex(0); // Select primary route by default
-            
+
             // Use primary route coordinates
             const primaryRoute = routeData.routes[0];
             routeCoords = primaryRoute.coordinates as [number, number][];
             usingMapboxRoute = true;
-            
+
             // Store primary route metadata for details display
             routeMeta = {
               distance: primaryRoute.distance, // meters
@@ -960,15 +960,15 @@ function DashboardContent() {
             setRouteMetadata(routeMeta);
             routeMetadataRef.current = routeMeta; // Store in ref for event handlers
             setCurrentRouteCoords(primaryRoute.coordinates);
-            
+
             console.log(`✅ Route fetched successfully from Mapbox! Found ${routeData.routes.length} route(s)`);
             console.log('Primary route metadata:', { distance: primaryRoute.distance, duration: primaryRoute.duration });
-          } 
+          }
           // Backward compatibility: handle old format (single route)
           else if (routeData.coordinates && Array.isArray(routeData.coordinates) && routeData.coordinates.length > 0) {
             routeCoords = routeData.coordinates as [number, number][];
             usingMapboxRoute = true;
-            
+
             // Store route metadata for details display
             if (routeData.distance && routeData.duration) {
               routeMeta = {
@@ -979,7 +979,7 @@ function DashboardContent() {
               setRouteMetadata(routeMeta);
               routeMetadataRef.current = routeMeta;
               setCurrentRouteCoords(routeData.coordinates);
-              
+
               // Convert to new format for consistency
               setAllRoutes([{
                 index: 0,
@@ -989,7 +989,7 @@ function DashboardContent() {
                 isPrimary: true,
               }]);
             }
-            
+
             console.log(`✅ Route fetched successfully from Mapbox! Using street route with ${routeCoords.length} points`);
           } else {
             console.warn('⚠️ Invalid route data from Mapbox, falling back to straight line');
@@ -1016,26 +1016,26 @@ function DashboardContent() {
         setAllRoutes([]);
         setSelectedRouteIndex(0);
       }
-      
+
       // Store selected shipment for modal
       setSelectedShipment(shipment);
 
       // Create GeoJSON for line using route coordinates (or straight line fallback)
-    const lineGeoJSON = {
-      type: "FeatureCollection",
-      features: [
-        {
-          type: "Feature",
-          geometry: {
-            type: "LineString",
+      const lineGeoJSON = {
+        type: "FeatureCollection",
+        features: [
+          {
+            type: "Feature",
+            geometry: {
+              type: "LineString",
               coordinates: routeCoords
             },
             properties: {
               shipment: shipment,
+            }
           }
-        }
-      ]
-    };
+        ]
+      };
 
       // Create GeoJSON for markers (warehouse and community)
       const markersGeoJSON = {
@@ -1073,13 +1073,13 @@ function DashboardContent() {
       // 2. Add or update primary route line source
       if (!map.getSource("shipment-line")) {
         map.addSource("shipment-line", {
-        type: "geojson",
-        data: lineGeoJSON as GeoJSON.FeatureCollection
-      });
-    } else {
+          type: "geojson",
+          data: lineGeoJSON as GeoJSON.FeatureCollection
+        });
+      } else {
         const src = map.getSource("shipment-line") as maplibregl.GeoJSONSource;
-      src.setData(lineGeoJSON as GeoJSON.FeatureCollection);
-    }
+        src.setData(lineGeoJSON as GeoJSON.FeatureCollection);
+      }
 
       // 2b. Add alternative routes if available
       if (usingMapboxRoute && fetchedRoutes.length > 1) {
@@ -1098,7 +1098,7 @@ function DashboardContent() {
             },
           })),
         };
-        
+
         // Add or update alternative routes source
         if (!map.getSource("alternative-routes")) {
           map.addSource("alternative-routes", {
@@ -1109,24 +1109,24 @@ function DashboardContent() {
           const altSrc = map.getSource("alternative-routes") as maplibregl.GeoJSONSource;
           altSrc.setData(alternativeRoutesGeoJSON as GeoJSON.FeatureCollection);
         }
-        
+
         // Add alternative routes layers (one for each alternative route)
         fetchedRoutes.slice(1).forEach((route, idx) => {
           const layerId = `alternative-route-${route.index}`;
           const outlineLayerId = `alternative-route-outline-${route.index}`;
-          
+
           // Color scheme: Yellow/Orange for first alternative, Green for second, etc.
           const colors = ["#F59E0B", "#10B981", "#8B5CF6", "#EC4899"];
           const routeColor = colors[idx % colors.length];
-          
+
           // Add outline layer
           if (!map.getLayer(outlineLayerId)) {
-      map.addLayer({
+            map.addLayer({
               id: outlineLayerId,
-        type: "line",
+              type: "line",
               source: "alternative-routes",
               filter: ["==", ["get", "routeIndex"], route.index],
-        paint: {
+              paint: {
                 "line-color": "#FFFFFF",
                 "line-width": 10,
                 "line-opacity": 0.6,
@@ -1138,7 +1138,7 @@ function DashboardContent() {
               },
             });
           }
-          
+
           // Add main alternative route layer
           if (!map.getLayer(layerId)) {
             map.addLayer({
@@ -1158,7 +1158,7 @@ function DashboardContent() {
               },
             });
           }
-          
+
           // Always attach handlers (even if layer already exists)
           // Remove existing handlers first to avoid duplicates
           const handlerKey = `_altRouteHandler_${layerId}`;
@@ -1172,64 +1172,64 @@ function DashboardContent() {
               console.debug('Removing existing handlers:', err);
             }
           }
-          
+
           // Add hover and click handlers for alternative routes
           const altPopup = new maplibregl.Popup({ closeOnClick: false, closeButton: false });
-          
+
           // Calculate route array index once
           const routeArrayIndex = idx + 1; // +1 because we sliced fetchedRoutes.slice(1)
-          
+
           // Hover handler for alternative route
           const mouseenterHandler = (e: maplibregl.MapLayerMouseEvent) => {
-              if (!e.features || e.features.length === 0) return;
-              
-              map.getCanvas().style.cursor = 'pointer';
-              
-              // Use the route from fetchedRoutes array (already calculated above)
-              const altRouteMeta = fetchedRoutes[routeArrayIndex];
-              if (!altRouteMeta) return;
-              
-              const hoverPoint = e.lngLat;
-              const coords = altRouteMeta.coordinates;
-              
-              // Find closest point using Haversine distance for better accuracy
-              let closestIdx = 0;
-              let minDist = Infinity;
-              const R = 6371000; // Earth radius in meters
-              
-              for (let i = 0; i < coords.length; i++) {
-                const dLat = (coords[i][1] - hoverPoint.lat) * Math.PI / 180;
-                const dLon = (coords[i][0] - hoverPoint.lng) * Math.PI / 180;
-                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(hoverPoint.lat * Math.PI / 180) * Math.cos(coords[i][1] * Math.PI / 180) *
-                  Math.sin(dLon/2) * Math.sin(dLon/2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                const dist = R * c;
-                
-                if (dist < minDist) {
-                  minDist = dist;
-                  closestIdx = i;
-                }
+            if (!e.features || e.features.length === 0) return;
+
+            map.getCanvas().style.cursor = 'pointer';
+
+            // Use the route from fetchedRoutes array (already calculated above)
+            const altRouteMeta = fetchedRoutes[routeArrayIndex];
+            if (!altRouteMeta) return;
+
+            const hoverPoint = e.lngLat;
+            const coords = altRouteMeta.coordinates;
+
+            // Find closest point using Haversine distance for better accuracy
+            let closestIdx = 0;
+            let minDist = Infinity;
+            const R = 6371000; // Earth radius in meters
+
+            for (let i = 0; i < coords.length; i++) {
+              const dLat = (coords[i][1] - hoverPoint.lat) * Math.PI / 180;
+              const dLon = (coords[i][0] - hoverPoint.lng) * Math.PI / 180;
+              const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(hoverPoint.lat * Math.PI / 180) * Math.cos(coords[i][1] * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              const dist = R * c;
+
+              if (dist < minDist) {
+                minDist = dist;
+                closestIdx = i;
               }
-              
-              // Calculate cumulative distance up to closest point
-              let cumulativeDistance = 0;
-              for (let i = 1; i <= closestIdx; i++) {
-                const dLat = (coords[i][1] - coords[i-1][1]) * Math.PI / 180;
-                const dLon = (coords[i][0] - coords[i-1][0]) * Math.PI / 180;
-                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(coords[i-1][1] * Math.PI / 180) * Math.cos(coords[i][1] * Math.PI / 180) *
-                  Math.sin(dLon/2) * Math.sin(dLon/2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                cumulativeDistance += R * c;
-              }
-              
-              // Estimate duration based on distance (assuming average speed)
-              const avgSpeedMps = 13.89; // ~50 km/h in m/s
-              const cumulativeDuration = cumulativeDistance / avgSpeedMps;
-              
-              const tooltipContent = document.createElement('div');
-              tooltipContent.innerHTML = `
+            }
+
+            // Calculate cumulative distance up to closest point
+            let cumulativeDistance = 0;
+            for (let i = 1; i <= closestIdx; i++) {
+              const dLat = (coords[i][1] - coords[i - 1][1]) * Math.PI / 180;
+              const dLon = (coords[i][0] - coords[i - 1][0]) * Math.PI / 180;
+              const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(coords[i - 1][1] * Math.PI / 180) * Math.cos(coords[i][1] * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              cumulativeDistance += R * c;
+            }
+
+            // Estimate duration based on distance (assuming average speed)
+            const avgSpeedMps = 13.89; // ~50 km/h in m/s
+            const cumulativeDuration = cumulativeDistance / avgSpeedMps;
+
+            const tooltipContent = document.createElement('div');
+            tooltipContent.innerHTML = `
                 <div style="padding: 8px; background: white; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.15); font-size: 12px; min-width: 140px;">
                   <div style="margin-bottom: 4px; color: ${routeColor}; font-weight: 600;">Alternative Route ${idx + 1}</div>
                   <div style="margin-bottom: 4px;"><strong>Total:</strong> ${(altRouteMeta.distance / 1000).toFixed(2)} km, ${Math.floor(altRouteMeta.duration / 60)}m</div>
@@ -1237,51 +1237,51 @@ function DashboardContent() {
                   <div><strong>Time:</strong> ${Math.floor(cumulativeDuration / 60)}m ${Math.floor(cumulativeDuration % 60)}s</div>
                 </div>
               `;
-              
-              altPopup.setLngLat(hoverPoint)
-                .setDOMContent(tooltipContent)
-                .addTo(map);
+
+            altPopup.setLngLat(hoverPoint)
+              .setDOMContent(tooltipContent)
+              .addTo(map);
           };
-          
+
           // Mouse leave handler
           const mouseleaveHandler = () => {
             map.getCanvas().style.cursor = '';
             altPopup.remove();
           };
-          
+
           // Click handler for alternative route - swap routes
           const clickHandler = (e: maplibregl.MapLayerMouseEvent) => {
             console.log('Alternative route clicked!', { layerId, routeArrayIndex, features: e.features });
-            
+
             if (!e.features || e.features.length === 0) {
               console.warn('No features in click event');
               return;
             }
-            
+
             const selectedAltRoute = fetchedRoutes[routeArrayIndex];
             if (!selectedAltRoute) {
               console.warn('Selected alternative route not found at index:', routeArrayIndex);
               return;
             }
-            
+
             console.log('Swapping routes - making alternative route primary:', routeArrayIndex);
-            
+
             // Swap routes: move clicked alternative to index 0, move current primary to alternative position
             const swappedRoutes = [...fetchedRoutes];
             const oldPrimaryRoute = swappedRoutes[0];
             swappedRoutes[0] = selectedAltRoute;
             swappedRoutes[routeArrayIndex] = oldPrimaryRoute;
-            
+
             // Update indices
             swappedRoutes.forEach((route, i) => {
               route.index = i;
               route.isPrimary = i === 0;
             });
-            
+
             // Update state with swapped routes
             setSelectedRouteIndex(0); // New primary is at index 0
             setAllRoutes(swappedRoutes);
-            
+
             const newRouteMeta = {
               distance: selectedAltRoute.distance,
               duration: selectedAltRoute.duration,
@@ -1290,7 +1290,7 @@ function DashboardContent() {
             setRouteMetadata(newRouteMeta);
             routeMetadataRef.current = newRouteMeta;
             setCurrentRouteCoords(selectedAltRoute.coordinates);
-            
+
             // Update primary route source (shipment-line) with new primary route
             if (map.getSource("shipment-line")) {
               const lineGeoJSON = {
@@ -1312,7 +1312,7 @@ function DashboardContent() {
               const src = map.getSource("shipment-line") as maplibregl.GeoJSONSource;
               src.setData(lineGeoJSON as GeoJSON.FeatureCollection);
             }
-            
+
             // Update alternative routes source with swapped routes (excluding new primary)
             if (map.getSource("alternative-routes") && swappedRoutes.length > 1) {
               const alternativeRoutesGeoJSON = {
@@ -1331,14 +1331,14 @@ function DashboardContent() {
               };
               const altSrc = map.getSource("alternative-routes") as maplibregl.GeoJSONSource;
               altSrc.setData(alternativeRoutesGeoJSON as GeoJSON.FeatureCollection);
-              
+
               // Update alternative route layer colors and filters to match new positions
               swappedRoutes.slice(1).forEach((route, altIdx) => {
                 const altLayerId = `alternative-route-${route.index}`;
                 const altOutlineId = `alternative-route-outline-${route.index}`;
                 const colors = ["#F59E0B", "#10B981", "#8B5CF6", "#EC4899"];
                 const routeColor = colors[altIdx % colors.length];
-                
+
                 // Update filter to match new route index
                 if (map.getLayer(altOutlineId)) {
                   map.setFilter(altOutlineId, ["==", ["get", "routeIndex"], route.index]);
@@ -1349,32 +1349,32 @@ function DashboardContent() {
                 }
               });
             }
-            
+
             // Store swapped routes for future reference
             fetchedRoutes.length = 0;
             fetchedRoutes.push(...swappedRoutes);
-            
+
             // Update distance markers if they exist
             if (map.getSource("route-distance-markers") && selectedAltRoute.coordinates.length > 10) {
               const markerInterval = 5000; // 5km in meters
               const distanceMarkers: GeoJSON.Feature[] = [];
               let cumulativeDistance = 0;
-              
+
               const haversineDistance = (coord1: number[], coord2: number[]): number => {
                 const R = 6371000;
                 const dLat = (coord2[1] - coord1[1]) * Math.PI / 180;
                 const dLon = (coord2[0] - coord1[0]) * Math.PI / 180;
-                const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
                   Math.cos(coord1[1] * Math.PI / 180) * Math.cos(coord2[1] * Math.PI / 180) *
-                  Math.sin(dLon/2) * Math.sin(dLon/2);
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                  Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                 return R * c;
               };
-              
+
               for (let i = 1; i < selectedAltRoute.coordinates.length; i++) {
-                const segmentDist = haversineDistance(selectedAltRoute.coordinates[i-1], selectedAltRoute.coordinates[i]);
+                const segmentDist = haversineDistance(selectedAltRoute.coordinates[i - 1], selectedAltRoute.coordinates[i]);
                 cumulativeDistance += segmentDist;
-                
+
                 if (cumulativeDistance >= markerInterval * (distanceMarkers.length + 1)) {
                   distanceMarkers.push({
                     type: "Feature",
@@ -1389,7 +1389,7 @@ function DashboardContent() {
                   });
                 }
               }
-              
+
               if (distanceMarkers.length > 0) {
                 const markersGeoJSON = {
                   type: "FeatureCollection",
@@ -1399,15 +1399,15 @@ function DashboardContent() {
                 markersSrc.setData(markersGeoJSON as GeoJSON.FeatureCollection);
               }
             }
-            
+
             // Don't open modal automatically - user can click the primary route if they want details
           };
-          
+
           // Attach handlers immediately - layers should be ready
           try {
             if (map.getLayer(layerId)) {
               console.log('Attaching handlers for alternative route layer:', layerId, 'routeArrayIndex:', routeArrayIndex);
-              
+
               // Remove any existing handlers first (if stored)
               if ((map as any)[handlerKey]) {
                 try {
@@ -1418,19 +1418,19 @@ function DashboardContent() {
                   // Handlers might not exist, ignore
                 }
               }
-              
+
               // Attach new handlers
               map.on('mouseenter', layerId, mouseenterHandler);
               map.on('mouseleave', layerId, mouseleaveHandler);
               map.on('click', layerId, clickHandler);
-              
+
               // Store handlers for cleanup
               (map as any)[handlerKey] = {
                 mouseenter: mouseenterHandler,
                 mouseleave: mouseleaveHandler,
                 click: clickHandler,
               };
-              
+
               console.log('✅ Handlers attached successfully for:', layerId);
             } else {
               console.warn('⚠️ Layer not found when trying to attach handlers:', layerId);
@@ -1459,11 +1459,11 @@ function DashboardContent() {
 
       // 3. Add background/outline layer for route (makes it stand out on roads)
       if (!map.getLayer("shipment-line-outline")) {
-      map.addLayer({
+        map.addLayer({
           id: "shipment-line-outline",
-        type: "line",
+          type: "line",
           source: "shipment-line",
-        paint: {
+          paint: {
             "line-color": "#FFFFFF", // White outline
             "line-width": 12, // Thick outline
             "line-opacity": 0.8,
@@ -1481,7 +1481,7 @@ function DashboardContent() {
 
       // 4. Add or update main route line layer (on top of outline)
       const routeLayerExists = map.getLayer("shipment-line-layer");
-      
+
       if (!routeLayerExists) {
         map.addLayer({
           id: "shipment-line-layer",
@@ -1504,32 +1504,32 @@ function DashboardContent() {
         map.setPaintProperty("shipment-line-layer", "line-width", 8);
         map.setPaintProperty("shipment-line-layer", "line-opacity", 1.0);
       }
-      
+
       // Add hover and click handlers for route (only if not already added)
       // Check if handlers are already attached by checking for a custom property
       if (!(map as any)._routeHandlersAttached) {
         const popup = new maplibregl.Popup({ closeOnClick: false, closeButton: false });
-        
+
         // Hover handler - show tooltip
         map.on('mouseenter', 'shipment-line-layer', (e) => {
           if (!e.features || e.features.length === 0) return;
-          
+
           // Get current route metadata from ref (always has latest value)
           const currentRouteMeta = routeMetadataRef.current;
           if (!currentRouteMeta) return;
-          
+
           map.getCanvas().style.cursor = 'pointer';
-          
+
           // Calculate cumulative distance and time to hover point
           const hoverPoint = e.lngLat;
           const coords = currentRouteMeta.coordinates;
-          
+
           // Find closest point on route to hover location
           let closestIdx = 0;
           let minDist = Infinity;
           for (let i = 0; i < coords.length; i++) {
             const dist = Math.sqrt(
-              Math.pow(coords[i][0] - hoverPoint.lng, 2) + 
+              Math.pow(coords[i][0] - hoverPoint.lng, 2) +
               Math.pow(coords[i][1] - hoverPoint.lat, 2)
             );
             if (dist < minDist) {
@@ -1537,12 +1537,12 @@ function DashboardContent() {
               closestIdx = i;
             }
           }
-          
+
           // Calculate cumulative distance (simplified - using index proportion)
           const progress = closestIdx / coords.length;
           const cumulativeDistance = currentRouteMeta.distance * progress;
           const cumulativeDuration = currentRouteMeta.duration * progress;
-          
+
           // Create tooltip content
           const tooltipContent = document.createElement('div');
           tooltipContent.innerHTML = `
@@ -1551,11 +1551,11 @@ function DashboardContent() {
               <div><strong>Time:</strong> ${Math.floor(cumulativeDuration / 60)}m ${Math.floor(cumulativeDuration % 60)}s</div>
             </div>
           `;
-          
+
           popup.setLngLat(hoverPoint)
             .setDOMContent(tooltipContent)
             .addTo(map);
-          
+
           // Store tooltip data for React component (if needed)
           setRouteTooltip({
             distance: cumulativeDistance,
@@ -1564,20 +1564,20 @@ function DashboardContent() {
             y: e.point.y,
           });
         });
-        
+
         // Mouse leave handler - hide tooltip
         map.on('mouseleave', 'shipment-line-layer', () => {
           map.getCanvas().style.cursor = '';
           popup.remove();
           setRouteTooltip(null);
         });
-        
+
         // Click handler - show details modal
         map.on('click', 'shipment-line-layer', (e) => {
           if (!e.features || e.features.length === 0) return;
           setRouteDetailsModalOpened(true);
         });
-        
+
         // Mark handlers as attached
         (map as any)._routeHandlersAttached = true;
       }
@@ -1634,7 +1634,7 @@ function DashboardContent() {
         map.setPaintProperty("shipment-community-layer", "circle-radius", 12);
         map.setPaintProperty("shipment-community-layer", "circle-stroke-width", 3);
       }
-      
+
       // 6.5. Add or update waypoint markers (Phase 5)
       const waypointMarkersGeoJSON: GeoJSON.FeatureCollection = {
         type: "FeatureCollection",
@@ -1652,7 +1652,7 @@ function DashboardContent() {
           },
         })),
       };
-      
+
       if (!map.getSource("waypoint-markers")) {
         map.addSource("waypoint-markers", {
           type: "geojson",
@@ -1662,7 +1662,7 @@ function DashboardContent() {
         const waypointSrc = map.getSource("waypoint-markers") as maplibregl.GeoJSONSource;
         waypointSrc.setData(waypointMarkersGeoJSON);
       }
-      
+
       // Add waypoint marker layer (numbered circles)
       if (!map.getLayer("waypoint-markers-layer")) {
         map.addLayer({
@@ -1678,7 +1678,7 @@ function DashboardContent() {
           },
         });
       }
-      
+
       // Add waypoint labels (numbers)
       if (!map.getLayer("waypoint-labels-layer")) {
         map.addLayer({
@@ -1703,19 +1703,19 @@ function DashboardContent() {
         const markerInterval = 5000; // 5km in meters
         const distanceMarkers: GeoJSON.Feature[] = [];
         let cumulativeDistance = 0;
-        
+
         // Helper function to calculate distance between two coordinates (Haversine)
         const haversineDistance = (coord1: number[], coord2: number[]): number => {
           const R = 6371000; // Earth radius in meters
           const dLat = (coord2[1] - coord1[1]) * Math.PI / 180;
           const dLon = (coord2[0] - coord1[0]) * Math.PI / 180;
-          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                    Math.cos(coord1[1] * Math.PI / 180) * Math.cos(coord2[1] * Math.PI / 180) *
-                    Math.sin(dLon/2) * Math.sin(dLon/2);
-          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(coord1[1] * Math.PI / 180) * Math.cos(coord2[1] * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
           return R * c;
         };
-        
+
         let lastMarkerDistance = 0;
         for (let i = 1; i < routeMeta.coordinates.length; i++) {
           const segmentDistance = haversineDistance(
@@ -1723,7 +1723,7 @@ function DashboardContent() {
             routeMeta.coordinates[i]
           );
           cumulativeDistance += segmentDistance;
-          
+
           // Place marker every 5km
           if (cumulativeDistance - lastMarkerDistance >= markerInterval) {
             const kmMark = Math.floor(cumulativeDistance / 1000);
@@ -1741,14 +1741,14 @@ function DashboardContent() {
             lastMarkerDistance = cumulativeDistance;
           }
         }
-        
+
         // Add distance markers source and layer if markers exist
         if (distanceMarkers.length > 0) {
           const markersGeoJSON = {
             type: "FeatureCollection",
             features: distanceMarkers,
           };
-          
+
           if (!map.getSource("route-distance-markers")) {
             map.addSource("route-distance-markers", {
               type: "geojson",
@@ -1758,7 +1758,7 @@ function DashboardContent() {
             const src = map.getSource("route-distance-markers") as maplibregl.GeoJSONSource;
             src.setData(markersGeoJSON as GeoJSON.FeatureCollection);
           }
-          
+
           // Add layer for distance markers if it doesn't exist
           if (!map.getLayer("route-distance-markers-layer")) {
             map.addLayer({
@@ -1773,7 +1773,7 @@ function DashboardContent() {
                 "circle-opacity": 0.8,
               },
             });
-            
+
             // Add labels for distance markers
             if (!map.getLayer("route-distance-markers-labels")) {
               map.addLayer({
@@ -1819,7 +1819,7 @@ function DashboardContent() {
         if (map.getLayer("shipment-line-layer")) {
           map.moveLayer("shipment-line-layer");
         }
-        
+
         // Move alternative routes ABOVE primary route so they're clickable
         if (usingMapboxRoute && fetchedRoutes.length > 1) {
           fetchedRoutes.slice(1).forEach((route) => {
@@ -1833,7 +1833,7 @@ function DashboardContent() {
             }
           });
         }
-        
+
         // Move distance markers above route
         if (map.getLayer("route-distance-markers-layer")) {
           map.moveLayer("route-distance-markers-layer");
@@ -1860,11 +1860,11 @@ function DashboardContent() {
       }
 
       // 9. Zoom to fit (use route coordinates for bounds) with animation
-    const bounds = new maplibregl.LngLatBounds();
+      const bounds = new maplibregl.LngLatBounds();
       routeCoords.forEach(c => bounds.extend(c as maplibregl.LngLatLike));
-      
+
       // Add padding to ensure route is fully visible
-      map.fitBounds(bounds, { 
+      map.fitBounds(bounds, {
         padding: { top: 80, bottom: 80, left: 80, right: 80 },
         duration: 800, // Smooth animation
         maxZoom: 14 // Don't zoom in too close
@@ -2173,7 +2173,7 @@ function DashboardContent() {
                 )}
               </div> */}
 
-              <AIMatchingPanel 
+              <AIMatchingPanel
                 onMatchClick={(chain: any) => handleMatchSelect(chain)}
                 filters={filters}
                 visibleLayers={visibleLayers}
@@ -2207,54 +2207,54 @@ function DashboardContent() {
         </Drawer>
 
         {/* Route Details Modal */}
-          <RouteDetailsModal
-            opened={routeDetailsModalOpened}
-            onClose={() => {
-              setRouteDetailsModalOpened(false);
-              setIsAddingWaypoint(false);
-              isAddingWaypointRef.current = false;
-              if (mapRef.current) {
-                mapRef.current.getCanvas().style.cursor = '';
-              }
-            }}
-            shipment={selectedShipment}
-            routeMetadata={routeMetadata}
-            allRoutes={allRoutes}
-            selectedRouteIndex={selectedRouteIndex}
-            routePreferences={routePreferences}
-            onPreferencesChange={(prefs) => {
-              setRoutePreferences(prefs);
-            }}
-            waypoints={waypoints}
-            onWaypointsChange={(newWaypoints) => {
-              setWaypoints(newWaypoints);
-              waypointsRef.current = newWaypoints;
-              // Auto-regenerate route when waypoints change
-              if (currentRouteEndpointsRef.current && selectedShipmentRef.current && mapRef.current) {
-                setTimeout(() => {
-                  const { fromLng, fromLat, toLng, toLat } = currentRouteEndpointsRef.current!;
-                  regenerateRouteWithWaypoints(fromLng, fromLat, toLng, toLat, newWaypoints);
-                }, 100);
-              }
-            }}
-            onAddWaypointClick={() => {
-              setIsAddingWaypoint(true);
-              isAddingWaypointRef.current = true;
-              if (mapRef.current) {
-                mapRef.current.getCanvas().style.cursor = 'crosshair';
-              }
-            }}
-            isAddingWaypoint={isAddingWaypoint}
-            onRegenerateRoute={async () => {
+        <RouteDetailsModal
+          opened={routeDetailsModalOpened}
+          onClose={() => {
+            setRouteDetailsModalOpened(false);
+            setIsAddingWaypoint(false);
+            isAddingWaypointRef.current = false;
+            if (mapRef.current) {
+              mapRef.current.getCanvas().style.cursor = '';
+            }
+          }}
+          shipment={selectedShipment}
+          routeMetadata={routeMetadata}
+          allRoutes={allRoutes}
+          selectedRouteIndex={selectedRouteIndex}
+          routePreferences={routePreferences}
+          onPreferencesChange={(prefs) => {
+            setRoutePreferences(prefs);
+          }}
+          waypoints={waypoints}
+          onWaypointsChange={(newWaypoints) => {
+            setWaypoints(newWaypoints);
+            waypointsRef.current = newWaypoints;
+            // Auto-regenerate route when waypoints change
+            if (currentRouteEndpointsRef.current && selectedShipmentRef.current && mapRef.current) {
+              setTimeout(() => {
+                const { fromLng, fromLat, toLng, toLat } = currentRouteEndpointsRef.current!;
+                regenerateRouteWithWaypoints(fromLng, fromLat, toLng, toLat, newWaypoints);
+              }, 100);
+            }
+          }}
+          onAddWaypointClick={() => {
+            setIsAddingWaypoint(true);
+            isAddingWaypointRef.current = true;
+            if (mapRef.current) {
+              mapRef.current.getCanvas().style.cursor = 'crosshair';
+            }
+          }}
+          isAddingWaypoint={isAddingWaypoint}
+          onRegenerateRoute={async () => {
             // Regenerate route with current preferences
             if (!currentRouteEndpointsRef.current || !selectedShipment || !mapRef.current) {
               console.warn('Cannot regenerate route: missing endpoints or shipment');
               return;
             }
-            
+
             const { fromLng, fromLat, toLng, toLat } = currentRouteEndpointsRef.current;
             const map = mapRef.current;
-            
+
             // Build routing URL with current preferences and waypoints
             const routingParams = new URLSearchParams({
               fromLng: fromLng.toString(),
@@ -2263,33 +2263,33 @@ function DashboardContent() {
               toLat: toLat.toString(),
               alternatives: 'true',
             });
-            
+
             // Add waypoints if any
             if (waypoints.length > 0) {
               const waypointsStr = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
               routingParams.append('waypoints', waypointsStr);
             }
-            
-              // Add avoid options
-              if (routePreferences.avoidTolls) routingParams.append('avoidTolls', 'true');
-              if (routePreferences.avoidHighways) routingParams.append('avoidHighways', 'true');
-              if (routePreferences.avoidBridges) routingParams.append('avoidBridges', 'true');
-              if (routePreferences.avoidResidential) routingParams.append('avoidResidential', 'true');
-            
+
+            // Add avoid options
+            if (routePreferences.avoidTolls) routingParams.append('avoidTolls', 'true');
+            if (routePreferences.avoidHighways) routingParams.append('avoidHighways', 'true');
+            if (routePreferences.avoidBridges) routingParams.append('avoidBridges', 'true');
+            if (routePreferences.avoidResidential) routingParams.append('avoidResidential', 'true');
+
             const routingUrl = `/api/routing?${routingParams.toString()}`;
             console.log('Regenerating route with preferences:', routingUrl);
-            
+
             try {
               const routeResponse = await fetch(routingUrl);
-              
+
               if (routeResponse.ok) {
                 const routeData = await routeResponse.json();
-                
+
                 if (routeData.routes && Array.isArray(routeData.routes) && routeData.routes.length > 0) {
                   // Update routes
                   setAllRoutes(routeData.routes);
                   setSelectedRouteIndex(0);
-                  
+
                   // Use primary route
                   const primaryRoute = routeData.routes[0];
                   const newRouteMeta = {
@@ -2300,7 +2300,7 @@ function DashboardContent() {
                   setRouteMetadata(newRouteMeta);
                   routeMetadataRef.current = newRouteMeta;
                   setCurrentRouteCoords(primaryRoute.coordinates);
-                  
+
                   // Update primary route display
                   if (map.getSource("shipment-line")) {
                     const lineGeoJSON = {
@@ -2322,7 +2322,7 @@ function DashboardContent() {
                     const src = map.getSource("shipment-line") as maplibregl.GeoJSONSource;
                     src.setData(lineGeoJSON as GeoJSON.FeatureCollection);
                   }
-                  
+
                   // Update alternative routes if available
                   if (routeData.routes.length > 1) {
                     const alternativeRoutesGeoJSON = {
@@ -2339,7 +2339,7 @@ function DashboardContent() {
                         },
                       })),
                     };
-                    
+
                     if (map.getSource("alternative-routes")) {
                       const altSrc = map.getSource("alternative-routes") as maplibregl.GeoJSONSource;
                       altSrc.setData(alternativeRoutesGeoJSON as GeoJSON.FeatureCollection);
@@ -2350,14 +2350,14 @@ function DashboardContent() {
                         data: alternativeRoutesGeoJSON as GeoJSON.FeatureCollection,
                       });
                     }
-                    
+
                     // Update alternative route layers
                     routeData.routes.slice(1).forEach((route: any, altIdx: number) => {
                       const altLayerId = `alternative-route-${route.index}`;
                       const altOutlineId = `alternative-route-outline-${route.index}`;
                       const colors = ["#F59E0B", "#10B981", "#8B5CF6", "#EC4899"];
                       const routeColor = colors[altIdx % colors.length];
-                      
+
                       // Update or create outline layer
                       if (!map.getLayer(altOutlineId)) {
                         map.addLayer({
@@ -2377,7 +2377,7 @@ function DashboardContent() {
                           },
                         });
                       }
-                      
+
                       // Update or create main alternative route layer
                       if (!map.getLayer(altLayerId)) {
                         map.addLayer({
@@ -2415,28 +2415,28 @@ function DashboardContent() {
                       map.removeSource("alternative-routes");
                     }
                   }
-                  
+
                   // Update distance markers
                   if (map.getSource("route-distance-markers") && primaryRoute.coordinates.length > 10) {
                     const markerInterval = 5000;
                     const distanceMarkers: GeoJSON.Feature[] = [];
                     let cumulativeDistance = 0;
-                    
+
                     const haversineDistance = (coord1: number[], coord2: number[]): number => {
                       const R = 6371000;
                       const dLat = (coord2[1] - coord1[1]) * Math.PI / 180;
                       const dLon = (coord2[0] - coord1[0]) * Math.PI / 180;
-                      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
                         Math.cos(coord1[1] * Math.PI / 180) * Math.cos(coord2[1] * Math.PI / 180) *
-                        Math.sin(dLon/2) * Math.sin(dLon/2);
-                      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                       return R * c;
                     };
-                    
+
                     for (let i = 1; i < primaryRoute.coordinates.length; i++) {
-                      const segmentDist = haversineDistance(primaryRoute.coordinates[i-1], primaryRoute.coordinates[i]);
+                      const segmentDist = haversineDistance(primaryRoute.coordinates[i - 1], primaryRoute.coordinates[i]);
                       cumulativeDistance += segmentDist;
-                      
+
                       if (cumulativeDistance >= markerInterval * (distanceMarkers.length + 1)) {
                         distanceMarkers.push({
                           type: "Feature",
@@ -2451,7 +2451,7 @@ function DashboardContent() {
                         });
                       }
                     }
-                    
+
                     if (distanceMarkers.length > 0) {
                       const markersGeoJSON = {
                         type: "FeatureCollection",
@@ -2461,7 +2461,7 @@ function DashboardContent() {
                       markersSrc.setData(markersGeoJSON as GeoJSON.FeatureCollection);
                     }
                   }
-                  
+
                   console.log('✅ Route regenerated successfully with', routeData.routes.length, 'route(s)');
                 }
               } else {
@@ -2483,7 +2483,7 @@ function DashboardContent() {
               setRouteMetadata(newRouteMeta);
               routeMetadataRef.current = newRouteMeta;
               setCurrentRouteCoords(selectedRoute.coordinates);
-              
+
               // Update map display - update primary route line
               const map = mapRef.current;
               if (map.getSource("shipment-line")) {
@@ -2506,28 +2506,28 @@ function DashboardContent() {
                 const src = map.getSource("shipment-line") as maplibregl.GeoJSONSource;
                 src.setData(lineGeoJSON as GeoJSON.FeatureCollection);
               }
-              
+
               // Update distance markers if they exist
               if (map.getSource("route-distance-markers") && selectedRoute.coordinates.length > 10) {
                 const markerInterval = 5000; // 5km in meters
                 const distanceMarkers: GeoJSON.Feature[] = [];
                 let cumulativeDistance = 0;
-                
+
                 const haversineDistance = (coord1: number[], coord2: number[]): number => {
                   const R = 6371000;
                   const dLat = (coord2[1] - coord1[1]) * Math.PI / 180;
                   const dLon = (coord2[0] - coord1[0]) * Math.PI / 180;
-                  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
                     Math.cos(coord1[1] * Math.PI / 180) * Math.cos(coord2[1] * Math.PI / 180) *
-                    Math.sin(dLon/2) * Math.sin(dLon/2);
-                  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+                    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+                  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
                   return R * c;
                 };
-                
+
                 for (let i = 1; i < selectedRoute.coordinates.length; i++) {
-                  const segmentDist = haversineDistance(selectedRoute.coordinates[i-1], selectedRoute.coordinates[i]);
+                  const segmentDist = haversineDistance(selectedRoute.coordinates[i - 1], selectedRoute.coordinates[i]);
                   cumulativeDistance += segmentDist;
-                  
+
                   if (cumulativeDistance >= markerInterval * (distanceMarkers.length + 1)) {
                     distanceMarkers.push({
                       type: "Feature",
@@ -2542,7 +2542,7 @@ function DashboardContent() {
                     });
                   }
                 }
-                
+
                 if (distanceMarkers.length > 0) {
                   const markersGeoJSON = {
                     type: "FeatureCollection",

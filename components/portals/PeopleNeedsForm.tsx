@@ -178,11 +178,11 @@ export default function PeopleNeedsForm({
         if (result.needs) {
           const { immediate = [], secondary = [] } = result.needs;
           console.log(immediate, "im")
-          form.setFieldValue("needs", [...[...form.values.needs, ...immediate, ...secondary]]);
+          form.setFieldValue("needs", [...form.values.needs, ...immediate, ...secondary]);
         }
 
         if (result.skills) {
-          form.setFieldValue("skills", [...[...form.values.skills, ...result.skills]]);
+          form.setFieldValue("skills", [...form.values.skills, ...result.skills]);
         }
       }
 

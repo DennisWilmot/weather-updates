@@ -28,7 +28,7 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
 
   // Get redirect URL from query params
-  const redirectTo = searchParams.get('redirect') || '/maps';
+  const redirectTo = searchParams.get('redirect') || '/';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,15 +62,16 @@ function LoginForm() {
       // the cookie is persisted and the session can be fetched before redirecting
 
       // Refresh router to ensure server components pick up the new session state
-      router.refresh();
+      // router.refresh();
 
       // Wait longer to ensure cookie is set and session can be fetched
       // The cookie is set via HTTP-only Set-Cookie header, so we need to give the browser
       // time to persist it before redirecting
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // await new Promise(resolve => setTimeout(resolve, 500));
 
       // Update last active timestamp after successful login
       await updateLastActive();
+      console.log('redirectTo', redirectTo);
 
       // Now redirect - the cookie should be set and available
       // Using window.location.href ensures a full page reload that picks up the session cookie

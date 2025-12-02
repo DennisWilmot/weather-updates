@@ -63,16 +63,20 @@ export const peopleNeedsSchema = z.object({
     .max(-76.2, 'Longitude must be within Jamaica bounds')
     .optional(),
   
-  // Needs
-  needs: z.array(z.enum(NEEDS_OPTIONS as unknown as [string, ...string[]]))
+  // Needs - allow any string values (form supports custom needs via creatable MultiSelect)
+  needs: z.array(z.string())
     .min(1, 'At least one need must be selected'),
+  
+  // Skills - array of strings (form supports custom skills, always provided)
+  skills: z.array(z.string()),
   
   // Contact Information
   contactName: z.string().min(1, 'Contact name is required'),
-  contactPhone: z.string()
-    .regex(/^(\+?1[-.\s]?)?\(?876\)?[-.\s]?\d{3}[-.\s]?\d{4}$/, 'Invalid phone number format')
-    .optional(),
-  contactEmail: z.string().email('Invalid email format').optional(),
+  contactPhone: z.string().optional(),
+  contactEmail: z.union([
+    z.string().email('Invalid email format'),
+    z.literal(''),
+  ]).optional(),
   
   // Additional Details
   numberOfPeople: z.number().int().positive().optional(),
@@ -80,7 +84,7 @@ export const peopleNeedsSchema = z.object({
   description: z.string().optional(),
   
   // Status
-  status: z.enum(NEEDS_STATUS).default('pending'),
+  status: z.enum(NEEDS_STATUS),
   
   // Metadata
   reportedBy: z.string().min(1, 'Reported by is required'),

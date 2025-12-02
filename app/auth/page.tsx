@@ -48,6 +48,7 @@ export default function LoginPage() {
 
             if (data) {
                 toast.dismiss(toastId);
+                console.log('data', data);
                 toast.success('Logged in successfully!');
                 // The client will handle the redirect based on callbackURL
                 router.push('/');
