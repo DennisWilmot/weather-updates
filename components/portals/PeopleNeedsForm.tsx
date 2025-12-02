@@ -34,6 +34,7 @@ import FormSection from '@/components/forms/FormSection';
 import FormField from '@/components/forms/FormField';
 import LocationMapPicker from '@/components/forms/LocationMapPicker';
 import { useSession } from '@/lib/auth-client';
+import { upload } from '@vercel/blob/client';
 
 interface PeopleNeedsFormProps {
   onSuccess?: () => void;
@@ -112,13 +113,46 @@ export default function PeopleNeedsForm({
   });
 
   async function transcribe(file: File) {
-    const data = new FormData();
-    data.append("file", file);
-    const res = await fetch("/api/transcribe", {
-      method: "POST",
-      body: data,
-    });
-    return res.json();
+    // Upload to Vercel Blob first to bypass Vercel's 4.5 MB body size limit
+    // This allows files up to 500 MB to be uploaded directly from client
+    setUploadProgress(10);
+
+    try {
+      // Upload directly to Vercel Blob from client
+      // Use multipart upload for files > 100 MB for better reliability
+      const useMultipart = file.size > 100 * 1024 * 1024; // 100 MB
+
+      const blob = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/upload',
+        multipart: useMultipart, // Enable multipart for large files (supports up to 5 TB)
+        onUploadProgress: (progressEvent) => {
+          // Update progress: 10% to 30% for upload (assuming upload is 20% of total time)
+          const uploadProgress = 10 + (progressEvent.loaded / progressEvent.total) * 20;
+          setUploadProgress(Math.min(uploadProgress, 30));
+        },
+      });
+
+      setUploadProgress(30);
+
+      // Call transcribe API with Vercel Blob URL (small JSON payload, no size limit issues)
+      const res = await fetch("/api/transcribe", {
+        method: "POST",
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ videoUrl: blob.url, blobId: blob.pathname }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Transcription failed');
+      }
+
+      return res.json();
+    } catch (error: any) {
+      throw new Error(error?.message || 'Failed to upload video');
+    }
   }
 
 

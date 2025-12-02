@@ -31,23 +31,67 @@ export const maxDuration = 300; // 5 minutes max duration
 export async function POST(req: Request) {
   let inputPath = "";
   let outputPath = "";
+  let videoUrl: string | null = null;
+  let blobId: string | null = null;
 
   try {
-    const form = await req.formData();
-    const file = form.get("file") as File;
+    // Check if request is JSON (Vercel Blob URL) or FormData (direct upload - legacy)
+    const contentType = req.headers.get("content-type") || "";
 
-    if (!file) {
-      return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    if (contentType.includes("application/json")) {
+      // Handle Vercel Blob URL upload (bypasses 4.5 MB limit)
+      const body = await req.json();
+      videoUrl = body.videoUrl;
+      blobId = body.blobId;
+
+      if (!videoUrl) {
+        return NextResponse.json(
+          {
+            error:
+              "Video URL is required. Files must be uploaded to Vercel Blob first.",
+          },
+          { status: 400 }
+        );
+      }
+
+      // Download video from Vercel Blob URL
+      const tempDir = os.tmpdir();
+      inputPath = path.join(tempDir, `upload-${Date.now()}`);
+      outputPath = path.join(tempDir, `audio-${Date.now()}.opus`);
+
+      const videoResponse = await fetch(videoUrl);
+      if (!videoResponse.ok) {
+        return NextResponse.json(
+          {
+            error: `Failed to download video from URL: ${videoResponse.statusText}`,
+          },
+          { status: 400 }
+        );
+      }
+
+      const buffer = Buffer.from(await videoResponse.arrayBuffer());
+      await fs.writeFile(inputPath, buffer);
+    } else {
+      // Handle direct file upload (legacy - for small files < 4.5 MB)
+      const form = await req.formData();
+      const file = form.get("file") as File;
+
+      if (!file) {
+        return NextResponse.json(
+          { error: "No file uploaded" },
+          { status: 400 }
+        );
+      }
+
+      // TEMP FILE PATHS
+      const tempDir = os.tmpdir();
+      inputPath = path.join(tempDir, `upload-${Date.now()}`);
+      outputPath = path.join(tempDir, `audio-${Date.now()}.opus`);
+
+      // Save uploaded file → disk
+      const buffer = Buffer.from(await file.arrayBuffer());
+      await fs.writeFile(inputPath, buffer);
     }
-
-    // TEMP FILE PATHS
-    const tempDir = os.tmpdir();
-    inputPath = path.join(tempDir, `upload-${Date.now()}`);
-    outputPath = path.join(tempDir, `audio-${Date.now()}.opus`);
-
-    // Save uploaded file → disk
-    const buffer = Buffer.from(await file.arrayBuffer());
-    await fs.writeFile(inputPath, buffer);
 
     // Convert to audio
     await compressVideoToAudio(inputPath, outputPath);
@@ -151,5 +195,16 @@ ${(transcription as any).text}
     try {
       if (outputPath) await fs.unlink(outputPath);
     } catch {}
+
+    // Clean up Vercel Blob file if it was uploaded
+    if (blobId && videoUrl) {
+      try {
+        const { del } = await import("@vercel/blob");
+        await del(videoUrl);
+      } catch (cleanupError) {
+        // Log but don't fail if cleanup fails
+        console.error("Failed to cleanup Vercel Blob file:", cleanupError);
+      }
+    }
   }
 }
