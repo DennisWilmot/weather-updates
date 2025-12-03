@@ -68,30 +68,34 @@ const ManageFormsPage = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState<string>('all');
 
-    // Fetch forms
+    // Fetch forms function (extracted for reuse)
+    const fetchForms = async () => {
+        if (!canViewForms && !permissionsLoading) {
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            // Add cache-busting parameter to ensure fresh data
+            const response = await fetch(`/api/forms?t=${Date.now()}`, {
+                cache: 'no-store',
+            });
+            if (!response.ok) {
+                throw new Error('Failed to fetch forms');
+            }
+
+            const data = await response.json();
+            setForms(data.forms || []);
+        } catch (error) {
+            console.error('Error fetching forms:', error);
+            toast.error('Failed to load forms');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    // Fetch forms on mount and when permissions change
     useEffect(() => {
-        const fetchForms = async () => {
-            if (!canViewForms && !permissionsLoading) {
-                setIsLoading(false);
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/forms');
-                if (!response.ok) {
-                    throw new Error('Failed to fetch forms');
-                }
-
-                const data = await response.json();
-                setForms(data.forms || []);
-            } catch (error) {
-                console.error('Error fetching forms:', error);
-                toast.error('Failed to load forms');
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
         if (!permissionsLoading) {
             fetchForms();
         }
@@ -119,9 +123,11 @@ const ManageFormsPage = () => {
                 throw new Error(error.error || 'Failed to delete form');
             }
 
-            setForms(prev => prev.filter(form => form.id !== formId));
             toast.dismiss(toastId);
             toast.success('Form deleted successfully');
+            
+            // Refetch forms to get fresh data from server
+            await fetchForms();
         } catch (error) {
             console.error('Error deleting form:', error);
             toast.dismiss(toastId);
@@ -150,11 +156,11 @@ const ManageFormsPage = () => {
             }
 
             const data = await response.json();
-            setForms(prev => prev.map(form =>
-                form.id === formId ? { ...form, ...data.form } : form
-            ));
-
+            
             toast.success(`Form ${newStatus === 'published' ? 'published' : newStatus === 'archived' ? 'archived' : 'saved as draft'} successfully`);
+            
+            // Refetch forms to get fresh data from server
+            await fetchForms();
         } catch (error) {
             console.error('Error updating form status:', error);
             toast.error(error instanceof Error ? error.message : 'Failed to update form status');

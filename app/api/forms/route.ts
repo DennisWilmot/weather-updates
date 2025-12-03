@@ -4,41 +4,13 @@ import { forms } from "@/lib/db/schema";
 import { eq, desc, sql } from "drizzle-orm";
 import { assertPermission, getCurrentUser } from "@/lib/actions";
 
-// Simple in-memory cache for forms (they don't change frequently)
-interface CacheEntry {
-  data: any;
-  timestamp: number;
-}
-
-const formsCache = new Map<string, CacheEntry>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-function getCacheKey(userRole: string): string {
-  return `forms:${userRole}`;
-}
-
-function getFromCache(key: string): any | null {
-  const entry = formsCache.get(key);
-  if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
-    return entry.data;
-  }
-  formsCache.delete(key); // Remove expired entry
-  return null;
-}
-
-function setCache(key: string, data: any): void {
-  formsCache.set(key, { data, timestamp: Date.now() });
-
-  // Simple cleanup: remove old entries periodically
-  if (formsCache.size > 50) {
-    const now = Date.now();
-    for (const [k, entry] of formsCache.entries()) {
-      if (now - entry.timestamp > CACHE_TTL) {
-        formsCache.delete(k);
-      }
-    }
-  }
-}
+// Import shared cache functions
+import {
+  getCacheKey,
+  getFromCache,
+  setCache,
+  invalidateCacheForRoles,
+} from "@/lib/cache/forms-cache";
 
 export async function GET(request: NextRequest) {
   try {
@@ -59,11 +31,12 @@ export async function GET(request: NextRequest) {
     const cachedForms = getFromCache(cacheKey);
     if (cachedForms) {
       const response = NextResponse.json({ forms: cachedForms });
+      // Reduced cache time for production
       response.headers.set(
         "Cache-Control",
-        "public, max-age=300, s-maxage=600"
+        "public, max-age=60, s-maxage=120, must-revalidate"
       );
-      response.headers.set("CDN-Cache-Control", "public, max-age=600");
+      response.headers.set("CDN-Cache-Control", "public, max-age=120, must-revalidate");
       response.headers.set("X-Cache", "HIT");
       return response;
     }
@@ -97,9 +70,10 @@ export async function GET(request: NextRequest) {
 
     const response = NextResponse.json({ forms: formsData });
 
-    // Add caching headers (forms don't change frequently)
-    response.headers.set("Cache-Control", "public, max-age=300, s-maxage=600");
-    response.headers.set("CDN-Cache-Control", "public, max-age=600");
+    // Add caching headers - reduced cache time for production
+    // Use shorter cache times to ensure updates are visible quickly
+    response.headers.set("Cache-Control", "public, max-age=60, s-maxage=120, must-revalidate");
+    response.headers.set("CDN-Cache-Control", "public, max-age=120, must-revalidate");
     response.headers.set("X-Cache", "MISS");
 
     return response;
@@ -208,7 +182,13 @@ export async function POST(request: NextRequest) {
       formsCache.delete(rolesCacheKey);
     }
 
-    return NextResponse.json({ form: newForm[0] }, { status: 201 });
+    const response = NextResponse.json({ form: newForm[0] }, { status: 201 });
+    // Prevent caching of this response
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+    
+    return response;
   } catch (error: any) {
     console.error("Error creating form:", error);
 

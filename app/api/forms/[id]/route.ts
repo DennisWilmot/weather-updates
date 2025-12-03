@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { forms } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { assertPermission, getCurrentUser } from "@/lib/actions";
+import { invalidateCacheForRoles, invalidateAllCache } from "@/lib/cache/forms-cache";
 
 export async function GET(
   request: NextRequest,
@@ -164,7 +165,17 @@ export async function PUT(
       .where(eq(forms.id, formId))
       .returning();
 
-    return NextResponse.json({ form: updatedForm[0] });
+    // Invalidate cache for all roles that can access this form
+    const allowedRoles = (updatedForm[0].allowedRoles as string[]) || ["admin"];
+    invalidateCacheForRoles(allowedRoles);
+
+    const response = NextResponse.json({ form: updatedForm[0] });
+    // Prevent caching of this response
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+    
+    return response;
   } catch (error: any) {
     console.error("Error updating form:", error);
 
@@ -210,10 +221,22 @@ export async function DELETE(
       return NextResponse.json({ error: "Form not found" }, { status: 404 });
     }
 
+    // Get allowed roles before deleting (for cache invalidation)
+    const allowedRoles = (existingForm[0].allowedRoles as string[]) || ["admin"];
+
     // Delete the form (this will also delete related submissions due to cascade)
     await db.delete(forms).where(eq(forms.id, formId));
 
-    return NextResponse.json({ success: true });
+    // Invalidate cache for all roles that could access this form
+    invalidateCacheForRoles(allowedRoles);
+
+    const response = NextResponse.json({ success: true });
+    // Prevent caching of this response
+    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    response.headers.set("Pragma", "no-cache");
+    response.headers.set("Expires", "0");
+    
+    return response;
   } catch (error: any) {
     console.error("Error deleting form:", error);
 
