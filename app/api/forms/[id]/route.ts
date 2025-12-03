@@ -168,9 +168,15 @@ export async function PUT(
       .where(eq(forms.id, formId))
       .returning();
 
-    // Invalidate cache for all roles that can access this form
-    const roles = (updatedForm[0].allowedRoles as string[]) || ["admin"];
-    invalidateCacheForRoles(roles);
+    // Invalidate cache - if status changed to/from published, invalidate all caches
+    // because published forms visibility can change
+    if (status !== undefined && status !== existingForm[0].status) {
+      invalidateAllCache();
+    } else {
+      // Otherwise just invalidate for roles that can access this form
+      const roles = (updatedForm[0].allowedRoles as string[]) || ["admin"];
+      invalidateCacheForRoles(roles);
+    }
 
     const response = NextResponse.json({ form: updatedForm[0] });
     // Prevent caching of this response

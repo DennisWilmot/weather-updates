@@ -203,7 +203,10 @@ export default function PortalPage() {
       }
 
       try {
-        const response = await fetch('/api/forms');
+        // Add cache-busting parameter to ensure fresh data
+        const response = await fetch(`/api/forms?t=${Date.now()}`, {
+          cache: 'no-store',
+        });
         if (!response.ok) {
           throw new Error('Failed to fetch forms');
         }
@@ -220,6 +223,27 @@ export default function PortalPage() {
     };
 
     fetchCustomForms();
+
+    // Refetch forms when window regains focus (e.g., after publishing a form in another tab)
+    const handleFocus = () => {
+      if (canViewForms) {
+        fetchCustomForms();
+      }
+    };
+
+    // Also poll every 30 seconds to catch updates
+    const pollInterval = setInterval(() => {
+      if (canViewForms && document.hasFocus()) {
+        fetchCustomForms();
+      }
+    }, 30000); // 30 seconds
+
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(pollInterval);
+    };
   }, [canViewForms]);
 
   // Filter predefined forms based on user role
