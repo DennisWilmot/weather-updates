@@ -7,7 +7,7 @@ import { useMediaQuery } from '@mantine/hooks';
 import { IconUsers, IconCheck, IconAlertCircle } from '@tabler/icons-react';
 import PortalLayout from '@/components/portals/PortalLayout';
 
-// Dynamic import to prevent SSR issues with FFmpeg
+// Dynamic import for client-side only component
 const PeopleNeedsForm = dynamic(() => import('@/components/portals/PeopleNeedsForm'), {
   ssr: false,
   loading: () => <Center py="xl"><Loader /></Center>,

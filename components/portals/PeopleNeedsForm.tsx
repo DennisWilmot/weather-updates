@@ -2,7 +2,7 @@
  * PeopleNeedsForm - Form for reporting people needs
  */
 'use client';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback } from 'react';
 import { useForm } from '@mantine/form';
 import { zodResolver } from 'mantine-form-zod-resolver';
 import {
@@ -112,141 +112,77 @@ export default function PeopleNeedsForm({
     validate: zodResolver(peopleNeedsSchema),
   });
 
-  // Lazy-load FFmpeg instance (only in browser, not during SSR)
-  const ffmpegRef = useRef<any>(null);
-
-  async function getFFmpeg() {
-    // Only initialize in browser
-    if (typeof window === 'undefined') {
-      throw new Error('FFmpeg can only be used in the browser');
-    }
-
-    if (!ffmpegRef.current) {
-      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-      ffmpegRef.current = new FFmpeg();
-    }
-
-    const ffmpeg = ffmpegRef.current;
-
-    // Load FFmpeg if not already loaded
-    if (!ffmpeg.loaded) {
-      await ffmpeg.load();
-    }
-
-    return ffmpeg;
-  }
-
-  async function extractAudioFromVideo(videoFile: File): Promise<File> {
-    const { fetchFile } = await import('@ffmpeg/util');
-    const ffmpeg = await getFFmpeg();
-
-    const inputFileName = "input.mp4";
-    const outputFileName = "output.mp3";
-
-    try {
-      // Write video file to FFmpeg's virtual filesystem
-      await ffmpeg.writeFile(inputFileName, await fetchFile(videoFile));
-
-      // Extract audio: -i input, -vn (no video), -acodec mp3, -ab 128k (bitrate)
-      await ffmpeg.exec([
-        "-i", inputFileName,
-        "-vn",
-        "-acodec", "mp3",
-        "-ab", "128k",
-        outputFileName
-      ]);
-
-      // Read the output audio file
-      const data = await ffmpeg.readFile(outputFileName);
-
-      // Convert to standard Uint8Array (copy to new ArrayBuffer to avoid SharedArrayBuffer issues)
-      const uint8Array = data instanceof Uint8Array
-        ? new Uint8Array(data)
-        : new Uint8Array(data as any);
-
-      const audioFile = new File(
-        [uint8Array],
-        videoFile.name.replace(/\.[^/.]+$/, "") + ".mp3",
-        { type: "audio/mpeg" }
-      );
-
-      // Cleanup
-      await ffmpeg.deleteFile(inputFileName);
-      await ffmpeg.deleteFile(outputFileName);
-
-      const originalSizeMB = (videoFile.size / 1024 / 1024).toFixed(2);
-      const audioSizeMB = (audioFile.size / 1024 / 1024).toFixed(2);
-      const reduction = ((1 - audioFile.size / videoFile.size) * 100).toFixed(1);
-
-      console.log(`✅ Audio extracted: ${audioSizeMB} MB (was ${originalSizeMB} MB, ${reduction}% reduction)`);
-
-      return audioFile;
-    } catch (error: any) {
-      console.error("FFmpeg error:", error);
-      throw new Error(`Failed to extract audio: ${error?.message || "Unknown error"}`);
-    }
-  }
 
   async function transcribe(file: File) {
-    setUploadProgress(5);
+    setUploadProgress(0);
 
     try {
-      // Step 1: Extract audio from video (5% -> 15%)
-      console.log("🎵 Extracting audio from video...");
+      // Step 1: Send video file to backend for transcription (0% -> 70%)
+      // Backend will handle video-to-audio conversion
+      console.log("📤 Sending video for transcription...");
       setUploadProgress(5);
-      const audioFile = await extractAudioFromVideo(file);
-      setUploadProgress(15);
-      const sizeReduction = ((1 - audioFile.size / file.size) * 100).toFixed(1);
-      console.log(`✅ Audio extracted! ${sizeReduction}% smaller (${(audioFile.size / 1024 / 1024).toFixed(2)} MB)`);
+      const formData = new FormData();
+      formData.append("video", file, file.name);
+      setUploadProgress(10);
 
-      // Step 2: Upload audio to Vercel Blob (15% -> 30%)
-      // Use multipart upload for files > 50 MB for better reliability
-      const useMultipart = audioFile.size > 50 * 1024 * 1024; // 50 MB
-
-      console.log("Starting Vercel Blob upload, audio size:", audioFile.size, "bytes, multipart:", useMultipart);
-      const blob = await upload(audioFile.name, audioFile, {
-        access: 'public',
-        handleUploadUrl: '/api/upload',
-        multipart: useMultipart,
-        onUploadProgress: (progressEvent) => {
-          // Update progress: 15% to 30% for upload
-          const uploadProgress = 15 + (progressEvent.loaded / progressEvent.total) * 15;
-          setUploadProgress(Math.min(uploadProgress, 30));
-        },
-      });
-
-      console.log("✅ Vercel Blob upload completed successfully!");
-      setUploadProgress(30);
-
-      // Call transcribe API with Vercel Blob URL (small JSON payload, no size limit issues)
-      const res = await fetch("/api/transcribe", {
+      // Step 2: Transcribe with Whisper (backend handles audio extraction)
+      console.log("🎤 Transcribing video with Whisper...");
+      setUploadProgress(10);
+      const whisperRes = await fetch("/api/transcribe/whisper", {
         method: "POST",
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ videoUrl: blob.url, blobId: blob.pathname, isAudio: true }),
+        body: formData, // FormData automatically sets Content-Type with boundary
       });
 
-      console.log("Transcribe response status:", res.status);
-
-      if (!res.ok) {
-        const error = await res.json().catch(() => ({ error: 'Unknown error' }));
-        console.error("Transcribe error:", error);
+      if (!whisperRes.ok) {
+        const error = await whisperRes.json().catch(() => ({ error: 'Unknown error' }));
+        console.error("Whisper error:", error);
         throw new Error(error.error || 'Transcription failed');
       }
 
-      const result = await res.json();
-      console.log("Transcription successful, result:", result);
+      const whisperResult = await whisperRes.json();
+      const transcriptionText = whisperResult.text || "";
+      console.log("✅ Transcription complete:", transcriptionText.substring(0, 100) + "...");
+      setUploadProgress(70);
+
+      if (!transcriptionText.trim()) {
+        throw new Error("Transcription returned empty text");
+      }
+
+      // Step 3: Process transcription with DeepSeek (70% -> 95%)
+      console.log("🤖 Processing transcription with AI...");
+      setUploadProgress(70);
+      const processRes = await fetch("/api/transcribe/process", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          transcription: transcriptionText,
+        }),
+      });
+
+      if (!processRes.ok) {
+        const error = await processRes.json().catch(() => ({ error: 'Unknown error' }));
+        console.error("Processing error:", error);
+        throw new Error(error.error || 'Processing failed');
+      }
+
+      const result = await processRes.json();
+      console.log("✅ Processing complete, result:", result);
+      setUploadProgress(95);
+
+      // Store transcription text for display
+      setTranscription(transcriptionText);
+
       return result;
     } catch (error: any) {
       console.error("Transcribe function error:", error);
-      throw new Error(error?.message || 'Failed to upload video');
+      throw new Error(error?.message || 'Failed to transcribe and process video');
     }
   }
 
 
   const handleVideoDrop = async (files: File[]) => {
-    console.log("TRANSCRIPTT")
     const file = files[0];
     if (!file) return;
 
@@ -255,28 +191,12 @@ export default function PeopleNeedsForm({
     setUploadProgress(0);
 
     try {
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
-          }
-          return prev + 10;
-        });
-      }, 200);
-
       const result = await transcribe(file);
-      clearInterval(progressInterval);
       setUploadProgress(100);
 
       console.log("Transcription result received:", result);
 
-
       if (result) {
-        // setTranscription(result);
-
-
-
         // If your analysis exists, override description with summary
         if (result.summary) {
           form.setFieldValue("description", result.summary);
@@ -284,23 +204,20 @@ export default function PeopleNeedsForm({
 
         if (result.contact && result.contact.name) {
           form.setFieldValue("contactName", result.contact.name);
-
         }
 
         if (result.contact && result.contact.phone) {
           form.setFieldValue("contactPhone", result.contact.phone);
-
         }
 
         if (result.contact && result.contact.email) {
-          form.setFieldValue("contactEmail", result.contact.name);
-
+          form.setFieldValue("contactEmail", result.contact.email);
         }
 
         // Optionally auto-fill needs & skills
         if (result.needs) {
           const { immediate = [], secondary = [] } = result.needs;
-          console.log(immediate, "im")
+          console.log(immediate, "immediate needs");
           form.setFieldValue("needs", [...form.values.needs, ...immediate, ...secondary]);
         }
 
@@ -309,6 +226,7 @@ export default function PeopleNeedsForm({
         }
       }
 
+      toast.success("Video transcribed and processed successfully!");
     } catch (err) {
       console.error("handleVideoDrop error:", err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to transcribe video';
@@ -318,7 +236,10 @@ export default function PeopleNeedsForm({
       setUploadedVideo(null);
     } finally {
       setIsTranscribing(false);
-      setUploadProgress(0);
+      // Keep progress at 100 if successful, reset if error
+      if (uploadProgress < 100) {
+        setUploadProgress(0);
+      }
     }
   };
 
@@ -539,21 +460,7 @@ export default function PeopleNeedsForm({
                         <Progress value={uploadProgress} size="sm" radius="xl" animated />
                       </Box>
                     )}
-                    {transcription && !isTranscribing && (
-                      <Box
-                        p="sm"
-                        style={{
-                          backgroundColor: 'white',
-                          borderRadius: rem(8),
-                          border: '1px solid var(--mantine-color-gray-3)',
-                        }}
-                      >
-                        <Text size="xs" c="dimmed" mb={4}>
-                          Transcription:
-                        </Text>
-                        <Text size="sm">{transcription}</Text>
-                      </Box>
-                    )}
+
                   </Stack>
                 </Paper>
               )}
