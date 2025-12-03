@@ -3,7 +3,10 @@ import { db } from "@/lib/db";
 import { forms } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { assertPermission, getCurrentUser } from "@/lib/actions";
-import { invalidateCacheForRoles, invalidateAllCache } from "@/lib/cache/forms-cache";
+import {
+  invalidateCacheForRoles,
+  invalidateAllCache,
+} from "@/lib/cache/forms-cache";
 
 export async function GET(
   request: NextRequest,
@@ -166,15 +169,18 @@ export async function PUT(
       .returning();
 
     // Invalidate cache for all roles that can access this form
-    const allowedRoles = (updatedForm[0].allowedRoles as string[]) || ["admin"];
-    invalidateCacheForRoles(allowedRoles);
+    const roles = (updatedForm[0].allowedRoles as string[]) || ["admin"];
+    invalidateCacheForRoles(roles);
 
     const response = NextResponse.json({ form: updatedForm[0] });
     // Prevent caching of this response
-    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    response.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate"
+    );
     response.headers.set("Pragma", "no-cache");
     response.headers.set("Expires", "0");
-    
+
     return response;
   } catch (error: any) {
     console.error("Error updating form:", error);
@@ -222,7 +228,9 @@ export async function DELETE(
     }
 
     // Get allowed roles before deleting (for cache invalidation)
-    const allowedRoles = (existingForm[0].allowedRoles as string[]) || ["admin"];
+    const allowedRoles = (existingForm[0].allowedRoles as string[]) || [
+      "admin",
+    ];
 
     // Delete the form (this will also delete related submissions due to cascade)
     await db.delete(forms).where(eq(forms.id, formId));
@@ -232,10 +240,13 @@ export async function DELETE(
 
     const response = NextResponse.json({ success: true });
     // Prevent caching of this response
-    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    response.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate"
+    );
     response.headers.set("Pragma", "no-cache");
     response.headers.set("Expires", "0");
-    
+
     return response;
   } catch (error: any) {
     console.error("Error deleting form:", error);

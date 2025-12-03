@@ -36,7 +36,10 @@ export async function GET(request: NextRequest) {
         "Cache-Control",
         "public, max-age=60, s-maxage=120, must-revalidate"
       );
-      response.headers.set("CDN-Cache-Control", "public, max-age=120, must-revalidate");
+      response.headers.set(
+        "CDN-Cache-Control",
+        "public, max-age=120, must-revalidate"
+      );
       response.headers.set("X-Cache", "HIT");
       return response;
     }
@@ -72,8 +75,14 @@ export async function GET(request: NextRequest) {
 
     // Add caching headers - reduced cache time for production
     // Use shorter cache times to ensure updates are visible quickly
-    response.headers.set("Cache-Control", "public, max-age=60, s-maxage=120, must-revalidate");
-    response.headers.set("CDN-Cache-Control", "public, max-age=120, must-revalidate");
+    response.headers.set(
+      "Cache-Control",
+      "public, max-age=60, s-maxage=120, must-revalidate"
+    );
+    response.headers.set(
+      "CDN-Cache-Control",
+      "public, max-age=120, must-revalidate"
+    );
     response.headers.set("X-Cache", "MISS");
 
     return response;
@@ -177,17 +186,17 @@ export async function POST(request: NextRequest) {
       .returning();
 
     // Invalidate cache for all roles that can access this form
-    for (const role of rolesWithAdmin) {
-      const rolesCacheKey = getCacheKey(role);
-      formsCache.delete(rolesCacheKey);
-    }
+    invalidateCacheForRoles(rolesWithAdmin);
 
     const response = NextResponse.json({ form: newForm[0] }, { status: 201 });
     // Prevent caching of this response
-    response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    response.headers.set(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate"
+    );
     response.headers.set("Pragma", "no-cache");
     response.headers.set("Expires", "0");
-    
+
     return response;
   } catch (error: any) {
     console.error("Error creating form:", error);
