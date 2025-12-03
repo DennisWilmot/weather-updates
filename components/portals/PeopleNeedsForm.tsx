@@ -27,7 +27,7 @@ import {
 } from '@mantine/core';
 import { Dropzone } from '@mantine/dropzone';
 import { useMediaQuery } from '@mantine/hooks';
-import { IconUpload, IconVideo, IconX, IconCheck, IconPlus, IconSparkles } from '@tabler/icons-react';
+import { IconUpload, IconX, IconCheck, IconPlus, IconSparkles } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { peopleNeedsSchema, URGENCY_LEVELS } from '@/lib/schemas/people-needs-schema';
 import FormSection from '@/components/forms/FormSection';
@@ -82,7 +82,7 @@ export default function PeopleNeedsForm({
 }: PeopleNeedsFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const [uploadedVideo, setUploadedVideo] = useState<File | null>(null);
+  const [uploadedAudio, setUploadedAudio] = useState<File | null>(null);
   const [transcription, setTranscription] = useState<string>('');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [needsSuggestions, setNeedsSuggestions] = useState<string[]>(COMMON_NEEDS);
@@ -113,80 +113,109 @@ export default function PeopleNeedsForm({
   });
 
 
-  async function transcribe(file: File) {
+  async function transcribe(audioFile: File) {
     setUploadProgress(0);
+    const VERCEL_SIZE_LIMIT = 4.5 * 1024 * 1024; // 4.5 MB in bytes
+    let blobUrl: string | null = null;
+    let blobId: string | null = null;
 
     try {
-      // Step 1: Send video file to backend for transcription (0% -> 70%)
-      // Backend will handle video-to-audio conversion
-      console.log("📤 Sending video for transcription...");
-      setUploadProgress(5);
-      const formData = new FormData();
-      formData.append("video", file, file.name);
-      setUploadProgress(10);
+      // Check if file is larger than Vercel limit
+      if (audioFile.size > VERCEL_SIZE_LIMIT) {
+        // Step 1: Upload to Vercel Blob storage (0% -> 30%)
+        console.log("📤 File too large, uploading to Vercel Blob...");
+        setUploadProgress(5);
+        const useMultipart = audioFile.size > 50 * 1024 * 1024; // 50 MB
 
-      // Step 2: Transcribe with Whisper (backend handles audio extraction)
-      console.log("🎤 Transcribing video with Whisper...");
-      setUploadProgress(10);
-      const whisperRes = await fetch("/api/transcribe/whisper", {
-        method: "POST",
-        body: formData, // FormData automatically sets Content-Type with boundary
-      });
+        const blob = await upload(audioFile.name, audioFile, {
+          access: 'public',
+          handleUploadUrl: '/api/upload',
+          multipart: useMultipart,
+          onUploadProgress: (progressEvent) => {
+            // Update progress: 5% to 30% for upload
+            const uploadProgress = 5 + (progressEvent.loaded / progressEvent.total) * 25;
+            setUploadProgress(Math.min(uploadProgress, 30));
+          },
+        });
 
-      if (!whisperRes.ok) {
-        const error = await whisperRes.json().catch(() => ({ error: 'Unknown error' }));
-        console.error("Whisper error:", error);
-        throw new Error(error.error || 'Transcription failed');
+        console.log("✅ Vercel Blob upload completed successfully!");
+        blobUrl = blob.url;
+        blobId = blob.pathname;
+        setUploadProgress(30);
+
+        // Step 2: Send blob URL to backend for transcription (30% -> 95%)
+        console.log("📤 Sending blob URL for transcription...");
+        setUploadProgress(30);
+        const transcribeRes = await fetch("/api/transcribe", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            videoUrl: blobUrl,
+            blobId: blobId,
+            isAudio: true,
+          }),
+        });
+
+        if (!transcribeRes.ok) {
+          const error = await transcribeRes.json().catch(() => ({ error: 'Unknown error' }));
+          console.error("Transcribe error:", error);
+          throw new Error(error.error || 'Transcription failed');
+        }
+
+        const result = await transcribeRes.json();
+        console.log("✅ Transcription and processing complete, result:", result);
+        setUploadProgress(95);
+
+        // Extract transcription text from result if available
+        if (result.summary) {
+          setTranscription(result.summary);
+        }
+
+        return result;
+      } else {
+        // File is small enough, send directly
+        console.log("📤 Sending audio directly for transcription...");
+        setUploadProgress(10);
+        const formData = new FormData();
+        formData.append("file", audioFile, audioFile.name);
+        setUploadProgress(20);
+
+        const transcribeRes = await fetch("/api/transcribe", {
+          method: "POST",
+          body: formData, // FormData automatically sets Content-Type with boundary
+        });
+
+        if (!transcribeRes.ok) {
+          const error = await transcribeRes.json().catch(() => ({ error: 'Unknown error' }));
+          console.error("Transcribe error:", error);
+          throw new Error(error.error || 'Transcription failed');
+        }
+
+        const result = await transcribeRes.json();
+        console.log("✅ Transcription and processing complete, result:", result);
+        setUploadProgress(95);
+
+        // Extract transcription text from result if available
+        if (result.summary) {
+          setTranscription(result.summary);
+        }
+
+        return result;
       }
-
-      const whisperResult = await whisperRes.json();
-      const transcriptionText = whisperResult.text || "";
-      console.log("✅ Transcription complete:", transcriptionText.substring(0, 100) + "...");
-      setUploadProgress(70);
-
-      if (!transcriptionText.trim()) {
-        throw new Error("Transcription returned empty text");
-      }
-
-      // Step 3: Process transcription with DeepSeek (70% -> 95%)
-      console.log("🤖 Processing transcription with AI...");
-      setUploadProgress(70);
-      const processRes = await fetch("/api/transcribe/process", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          transcription: transcriptionText,
-        }),
-      });
-
-      if (!processRes.ok) {
-        const error = await processRes.json().catch(() => ({ error: 'Unknown error' }));
-        console.error("Processing error:", error);
-        throw new Error(error.error || 'Processing failed');
-      }
-
-      const result = await processRes.json();
-      console.log("✅ Processing complete, result:", result);
-      setUploadProgress(95);
-
-      // Store transcription text for display
-      setTranscription(transcriptionText);
-
-      return result;
     } catch (error: any) {
       console.error("Transcribe function error:", error);
-      throw new Error(error?.message || 'Failed to transcribe and process video');
+      throw new Error(error?.message || 'Failed to transcribe and process audio');
     }
   }
 
 
-  const handleVideoDrop = async (files: File[]) => {
+  const handleAudioDrop = async (files: File[]) => {
     const file = files[0];
     if (!file) return;
 
-    setUploadedVideo(file);
+    setUploadedAudio(file);
     setIsTranscribing(true);
     setUploadProgress(0);
 
@@ -226,14 +255,14 @@ export default function PeopleNeedsForm({
         }
       }
 
-      toast.success("Video transcribed and processed successfully!");
+      toast.success("Audio transcribed and processed successfully!");
     } catch (err) {
-      console.error("handleVideoDrop error:", err);
-      const errorMessage = err instanceof Error ? err.message : 'Failed to transcribe video';
+      console.error("handleAudioDrop error:", err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to transcribe audio';
       console.error("Error message:", errorMessage);
       onError?.(errorMessage);
       toast.error(errorMessage);
-      setUploadedVideo(null);
+      setUploadedAudio(null);
     } finally {
       setIsTranscribing(false);
       // Keep progress at 100 if successful, reset if error
@@ -243,8 +272,8 @@ export default function PeopleNeedsForm({
     }
   };
 
-  const handleRemoveVideo = () => {
-    setUploadedVideo(null);
+  const handleRemoveAudio = () => {
+    setUploadedAudio(null);
     setTranscription('');
     setUploadProgress(0);
   };
@@ -290,7 +319,7 @@ export default function PeopleNeedsForm({
       toast.dismiss(toastId);
       toast.success('Needs report submitted successfully!');
       form.reset();
-      setUploadedVideo(null);
+      setUploadedAudio(null);
       setTranscription('');
       setNeedsSuggestions(COMMON_NEEDS);
       setSkillsSuggestions(COMMON_SKILLS);
@@ -309,15 +338,15 @@ export default function PeopleNeedsForm({
     <Paper p={isMobile ? "md" : "lg"} withBorder radius="md" style={{ backgroundColor: 'white' }}>
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack gap="lg">
-          {/* Section 1: Video Upload */}
-          <FormSection title="Video Report (Optional)" defaultExpanded={true}>
+          {/* Section 1: Audio Upload */}
+          <FormSection title="Audio Report (Optional)" defaultExpanded={true}>
             <Stack gap="md">
-              {!uploadedVideo ? (
+              {!uploadedAudio ? (
                 <Dropzone
-                  onDrop={handleVideoDrop}
-                  maxSize={100 * 1024 * 1024 * 1024}
+                  onDrop={handleAudioDrop}
+                  maxSize={100 * 1024 * 1024}
                   loading={isTranscribing}
-                  accept={['video/*']}
+                  accept={['audio/*']}
                   styles={{
                     root: {
                       borderWidth: 2,
@@ -342,7 +371,7 @@ export default function PeopleNeedsForm({
                             stroke={1.5}
                           />
                           <Text size="lg" fw={500} c="blue">
-                            Drop video here
+                            Drop audio here
                           </Text>
                         </Stack>
                       </Center>
@@ -374,20 +403,20 @@ export default function PeopleNeedsForm({
                               justifyContent: 'center',
                             }}
                           >
-                            <IconVideo
+                            <IconUpload
                               style={{ width: rem(32), height: rem(32), color: 'var(--mantine-color-blue-6)' }}
                               stroke={1.5}
                             />
                           </Box>
                           <Stack align="center" gap={4}>
                             <Text size="lg" fw={500}>
-                              Upload video report
+                              Upload audio report
                             </Text>
                             <Text size="sm" c="dimmed" ta="center">
-                              Drag and drop or click to select a video
+                              Drag and drop or click to select an audio file
                             </Text>
                             <Text size="xs" c="dimmed" ta="center">
-                              We'll automatically transcribe the audio
+                              We'll automatically transcribe and process the audio
                             </Text>
                           </Stack>
 
@@ -431,17 +460,17 @@ export default function PeopleNeedsForm({
                         </Box>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <Text size="sm" fw={500} truncate>
-                            {uploadedVideo.name}
+                            {uploadedAudio.name}
                           </Text>
                           <Text size="xs" c="dimmed">
-                            {(uploadedVideo.size / (1024 * 1024)).toFixed(2)} MB
+                            {(uploadedAudio.size / (1024 * 1024)).toFixed(2)} MB
                           </Text>
                         </div>
                       </Group>
                       <ActionIcon
                         variant="subtle"
                         color="red"
-                        onClick={handleRemoveVideo}
+                        onClick={handleRemoveAudio}
                         disabled={isTranscribing}
                       >
                         <IconX style={{ width: rem(18), height: rem(18) }} />
