@@ -73,6 +73,22 @@ export default function LocationMapPicker({
   const map = useRef<maplibregl.Map | null>(null);
   const marker = useRef<maplibregl.Marker | null>(null);
 
+  // Sync props to internal state when they change
+  useEffect(() => {
+    if (initialParishId !== undefined) {
+      setParishId(initialParishId || null);
+    }
+    if (initialCommunityId !== undefined) {
+      setCommunityId(initialCommunityId || null);
+    }
+    if (initialLatitude !== undefined) {
+      setLatitude(initialLatitude || null);
+    }
+    if (initialLongitude !== undefined) {
+      setLongitude(initialLongitude || null);
+    }
+  }, [initialParishId, initialCommunityId, initialLatitude, initialLongitude]);
+
   // Initialize map (only when modal is open on mobile, or always on desktop)
   useEffect(() => {
     if (!showMap || !mapContainer.current || map.current) return;

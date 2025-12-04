@@ -2,7 +2,7 @@
  * PeopleNeedsForm - Form for reporting people needs
  */
 'use client';
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useForm } from '@mantine/form';
 import { zodResolver } from 'mantine-form-zod-resolver';
 import {
@@ -88,6 +88,9 @@ export default function PeopleNeedsForm({
   const [needsSuggestions, setNeedsSuggestions] = useState<string[]>(COMMON_NEEDS);
   const [skillsSuggestions, setSkillsSuggestions] = useState<string[]>(COMMON_SKILLS);
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
+  const [uploadedImage, setUploadedImage] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [isExtractingGPS, setIsExtractingGPS] = useState(false);
   const isMobile = useMediaQuery('(max-width: 768px)');
   const { data: session } = useSession();
   const user = session?.user;
@@ -278,6 +281,133 @@ export default function PeopleNeedsForm({
     setUploadProgress(0);
   };
 
+  const handleImageDrop = async (files: File[]) => {
+    const file = files[0];
+    if (!file) return;
+
+    // Create preview URL
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreviewUrl(previewUrl);
+    setUploadedImage(file);
+    setIsExtractingGPS(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const response = await fetch("/api/image-meta", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Failed to extract GPS data' }));
+        throw new Error(error.error || 'Failed to extract GPS data from image');
+      }
+
+      const data = await response.json();
+
+      if (data.latitude && data.longitude) {
+        // Find parish and community from coordinates
+        try {
+          const locationResponse = await fetch(
+            `/api/location/find?latitude=${data.latitude}&longitude=${data.longitude}`
+          );
+
+          let parishId: string | null = null;
+          let communityId: string | null = null;
+
+          if (locationResponse.ok) {
+            const locationData = await locationResponse.json();
+            console.log("Location data from API:", locationData);
+
+            if (locationData.parishId && locationData.communityId) {
+              parishId = locationData.parishId;
+              communityId = locationData.communityId;
+              toast.success(
+                `Found location: ${locationData.communityName}, ${locationData.parishName}`
+              );
+            } else if (locationData.error) {
+              console.warn("Location API returned error:", locationData.error);
+            }
+          } else {
+            const errorData = await locationResponse.json().catch(() => ({}));
+            console.error("Location API error:", errorData);
+          }
+
+          // Update form with GPS coordinates and location
+          form.setFieldValue('latitude', data.latitude);
+          form.setFieldValue('longitude', data.longitude);
+
+          if (parishId) {
+            console.log("Setting parishId:", parishId);
+            form.setFieldValue('parishId', parishId);
+          }
+          if (communityId) {
+            console.log("Setting communityId:", communityId);
+            form.setFieldValue('communityId', communityId);
+          }
+
+          // Also call handleLocationChange to trigger map update
+          handleLocationChange({
+            parishId: parishId,
+            communityId: communityId,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            accuracy: data.altitude ? undefined : undefined,
+          });
+
+          if (!parishId || !communityId) {
+            toast.warning(
+              `GPS coordinates extracted: ${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}. Please select parish and community manually.`
+            );
+          }
+        } catch (locationError) {
+          console.error("Error finding location:", locationError);
+          // Still set the coordinates even if location lookup fails
+          form.setFieldValue('latitude', data.latitude);
+          form.setFieldValue('longitude', data.longitude);
+          handleLocationChange({
+            parishId: null,
+            communityId: null,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            accuracy: data.altitude ? undefined : undefined,
+          });
+          toast.warning(
+            `GPS coordinates extracted: ${data.latitude.toFixed(6)}, ${data.longitude.toFixed(6)}. Could not find parish/community automatically.`
+          );
+        }
+      } else {
+        toast.warning("No GPS data found in image. Please set location manually.");
+      }
+    } catch (err) {
+      console.error("Error extracting GPS from image:", err);
+      const errorMessage = err instanceof Error ? err.message : 'Failed to extract GPS data from image';
+      toast.error(errorMessage);
+      setUploadedImage(null);
+    } finally {
+      setIsExtractingGPS(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
+    setUploadedImage(null);
+    setImagePreviewUrl(null);
+  };
+
+  // Cleanup object URL on unmount
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+    };
+  }, [imagePreviewUrl]);
+
   const handleLocationChange = useCallback((location: {
     parishId: string | null;
     communityId: string | null;
@@ -321,6 +451,11 @@ export default function PeopleNeedsForm({
       form.reset();
       setUploadedAudio(null);
       setTranscription('');
+      if (imagePreviewUrl) {
+        URL.revokeObjectURL(imagePreviewUrl);
+      }
+      setUploadedImage(null);
+      setImagePreviewUrl(null);
       setNeedsSuggestions(COMMON_NEEDS);
       setSkillsSuggestions(COMMON_SKILLS);
       onSuccess?.();
@@ -496,7 +631,174 @@ export default function PeopleNeedsForm({
             </Stack>
           </FormSection>
 
-          {/* Section 2: Location */}
+          {/* Section 2: Image Upload with GPS Extraction */}
+          <FormSection title="Upload Photo with Location (Optional)" defaultExpanded={false}>
+            <Stack gap="md">
+              <Text size="sm" c="dimmed">
+                Upload a photo taken with your phone to automatically extract GPS coordinates. The location will be set on the map below.
+              </Text>
+              {!uploadedImage ? (
+                <Dropzone
+                  onDrop={handleImageDrop}
+                  maxSize={10 * 1024 * 1024} // 10 MB
+                  loading={isExtractingGPS}
+                  accept={['image/*']}
+                  styles={{
+                    root: {
+                      borderWidth: 2,
+                      borderStyle: 'dashed',
+                      borderRadius: rem(12),
+                      padding: 20,
+                      backgroundColor: 'var(--mantine-color-gray-0)',
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        backgroundColor: 'var(--mantine-color-blue-0)',
+                        borderColor: 'var(--mantine-color-blue-6)',
+                      },
+                    },
+                  }}
+                >
+                  <Group justify="center" gap="xl" style={{ minHeight: rem(120), pointerEvents: 'none' }}>
+                    <Dropzone.Accept>
+                      <Center>
+                        <Stack align="center" gap="sm">
+                          <IconUpload
+                            style={{ width: rem(52), height: rem(52), color: 'var(--mantine-color-blue-6)' }}
+                            stroke={1.5}
+                          />
+                          <Text size="lg" fw={500} c="blue">
+                            Drop image here
+                          </Text>
+                        </Stack>
+                      </Center>
+                    </Dropzone.Accept>
+                    <Dropzone.Reject>
+                      <Center>
+                        <Stack align="center" gap="sm">
+                          <IconX
+                            style={{ width: rem(52), height: rem(52), color: 'var(--mantine-color-red-6)' }}
+                            stroke={1.5}
+                          />
+                          <Text size="lg" fw={500} c="red">
+                            Invalid file
+                          </Text>
+                        </Stack>
+                      </Center>
+                    </Dropzone.Reject>
+                    <Dropzone.Idle>
+                      <Center>
+                        <Stack align="center" gap="md">
+                          <Box
+                            style={{
+                              width: rem(64),
+                              height: rem(64),
+                              borderRadius: '50%',
+                              backgroundColor: 'var(--mantine-color-blue-1)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                            }}
+                          >
+                            <IconUpload
+                              style={{ width: rem(32), height: rem(32), color: 'var(--mantine-color-blue-6)' }}
+                              stroke={1.5}
+                            />
+                          </Box>
+                          <Stack align="center" gap={4}>
+                            <Text size="lg" fw={500}>
+                              Upload photo with GPS
+                            </Text>
+                            <Text size="sm" c="dimmed" ta="center">
+                              Drag and drop or click to select an image
+                            </Text>
+                            <Text size="xs" c="dimmed" ta="center">
+                              GPS coordinates will be extracted automatically
+                            </Text>
+                          </Stack>
+                        </Stack>
+                      </Center>
+                    </Dropzone.Idle>
+                  </Group>
+                </Dropzone>
+              ) : (
+                <Paper
+                  withBorder
+                  p="md"
+                  radius="md"
+                  style={{
+                    backgroundColor: 'var(--mantine-color-blue-0)',
+                    borderColor: 'var(--mantine-color-blue-3)',
+                  }}
+                >
+                  <Stack gap="sm">
+                    <Group justify="space-between" wrap="nowrap">
+                      <Group gap="sm">
+                        <Box
+                          style={{
+                            width: rem(40),
+                            height: rem(40),
+                            borderRadius: rem(8),
+                            backgroundColor: 'var(--mantine-color-blue-1)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {isExtractingGPS ? (
+                            <Loader size="sm" color="blue" />
+                          ) : imagePreviewUrl ? (
+                            <img
+                              src={imagePreviewUrl}
+                              alt="Uploaded"
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                              }}
+                            />
+                          ) : null}
+                        </Box>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <Text size="sm" fw={500} truncate>
+                            {uploadedImage.name}
+                          </Text>
+                          <Text size="xs" c="dimmed">
+                            {(uploadedImage.size / (1024 * 1024)).toFixed(2)} MB
+                          </Text>
+                          {form.values.latitude && form.values.longitude && (
+                            <Text size="xs" c="blue" mt={4}>
+                              ✓ GPS: {form.values.latitude.toFixed(6)}, {form.values.longitude.toFixed(6)}
+                            </Text>
+                          )}
+                        </div>
+                      </Group>
+                      <ActionIcon
+                        variant="subtle"
+                        color="red"
+                        onClick={handleRemoveImage}
+                        disabled={isExtractingGPS}
+                      >
+                        <IconX style={{ width: rem(18), height: rem(18) }} />
+                      </ActionIcon>
+                    </Group>
+                    {isExtractingGPS && (
+                      <Box>
+                        <Group justify="space-between" mb={4}>
+                          <Text size="xs" c="dimmed">
+                            Extracting GPS coordinates...
+                          </Text>
+                        </Group>
+                        <Progress value={100} size="sm" radius="xl" animated />
+                      </Box>
+                    )}
+                  </Stack>
+                </Paper>
+              )}
+            </Stack>
+          </FormSection>
+
+          {/* Section 3: Location */}
           <FormSection title="Location" defaultExpanded={true}>
             <LocationMapPicker
               parishId={form.values.parishId}

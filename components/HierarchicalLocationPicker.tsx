@@ -83,7 +83,42 @@ export default function HierarchicalLocationPicker({
     enabled: !!selectedCommunityId
   });
 
+  // Sync initial props to state when they change
+  useEffect(() => {
+    if (initialParish !== undefined && initialParish !== selectedParishId) {
+      setSelectedParishId(initialParish || null);
+    }
+  }, [initialParish, selectedParishId]);
 
+  // Sync community after parish is set and communities are loaded
+  useEffect(() => {
+    if (initialCommunity && initialCommunity !== selectedCommunityId && selectedParishId && !communitiesLoading) {
+      // If we have communities data, try to find the community name
+      if (communitiesData?.communities) {
+        const community = communitiesData.communities.find((c: Community) => c.id === initialCommunity);
+        if (community) {
+          setSelectedCommunityId(initialCommunity);
+          setCommunitySearch(community.name);
+        } else {
+          // Community ID not found in data, just set the ID
+          setSelectedCommunityId(initialCommunity);
+        }
+      } else if (initialCommunity) {
+        // Communities not loaded yet, but we have an ID - set it and wait for data
+        setSelectedCommunityId(initialCommunity);
+      }
+    }
+  }, [initialCommunity, selectedCommunityId, selectedParishId, communitiesData, communitiesLoading]);
+
+  // Update community search text when communities data loads and we have a selected community ID
+  useEffect(() => {
+    if (selectedCommunityId && communitiesData?.communities && !communitiesLoading) {
+      const community = communitiesData.communities.find((c: Community) => c.id === selectedCommunityId);
+      if (community && communitySearch !== community.name) {
+        setCommunitySearch(community.name);
+      }
+    }
+  }, [selectedCommunityId, communitiesData, communitiesLoading, communitySearch]);
 
   // Update parent when selection changes
   useEffect(() => {
