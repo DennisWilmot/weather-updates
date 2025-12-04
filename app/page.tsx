@@ -339,7 +339,6 @@ function DashboardContent() {
 
       const disabledSubTypes = subTypeFilters[layerId];
       const dateRange = filters?.dateRange;
-      console.log("DATE R ", dateRange)
 
       let filteredRows = [...fullRows];
 
@@ -354,12 +353,9 @@ function DashboardContent() {
         const end = new Date(dateRange.end);
 
         filteredRows = filteredRows.filter(row => {
-          console.log(row, "ROWWW")
           const rowDate = new Date(row.createdAt);
           return rowDate >= start && rowDate <= end;
         });
-
-        console.log(filteredRows, "FILTERD")
       }
 
       // Convert → GeoJSON
@@ -579,8 +575,6 @@ function DashboardContent() {
         }
 
         const apiData = await response.json();
-
-        console.log(apiData, "DAATAA")
 
         let rows = apiData[layerId] || apiData.data || apiData || [];
 

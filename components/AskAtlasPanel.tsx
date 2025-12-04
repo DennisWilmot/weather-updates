@@ -9,6 +9,12 @@ import {
     SheetHeader,
     SheetTitle,
 } from "@/components/ui/sheet";
+import { useChat } from '@ai-sdk/react';
+import MessageContent from "./MessageContent";
+import { ObservablePlotTool } from "./chat/ObservablePlotTool";
+import { TableTool } from "./chat/TableTool";
+import { PDFTool } from "./chat/PDFTool";
+import { DatabaseQueryTool } from "./chat/DatabaseQueryTool";
 
 interface Message {
     id: string;
@@ -48,8 +54,21 @@ const getSuggestionsForPage = () => {
     ];
 };
 
+interface MessageWithTools {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    timestamp: Date;
+    toolCalls?: Array<{
+        toolCallId: string;
+        toolName: string;
+        args: any;
+        result?: any;
+    }>;
+}
+
 const Thread = ({ suggestions }: { suggestions: any[] }) => {
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<MessageWithTools[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -69,7 +88,7 @@ const Thread = ({ suggestions }: { suggestions: any[] }) => {
     const handleSendMessage = async () => {
         if (!input.trim() || isLoading) return;
 
-        const userMessage: Message = {
+        const userMessage: MessageWithTools = {
             id: Date.now().toString(),
             role: 'user',
             content: input,
@@ -77,6 +96,7 @@ const Thread = ({ suggestions }: { suggestions: any[] }) => {
         };
 
         setMessages(prev => [...prev, userMessage]);
+        const currentInput = input;
         setInput('');
         setIsLoading(true);
 
@@ -87,10 +107,47 @@ const Thread = ({ suggestions }: { suggestions: any[] }) => {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    messages: [...messages, userMessage].map(msg => ({
-                        role: msg.role,
-                        content: msg.content
-                    }))
+                    messages: [...messages, userMessage].flatMap(msg => {
+                        // Include tool calls and results for assistant messages so AI can remember previous outputs
+                        if (msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0) {
+                            const messages: any[] = [
+                                {
+                                    role: msg.role,
+                                    content: msg.content,
+                                    toolCalls: msg.toolCalls.map(tc => ({
+                                        toolCallId: tc.toolCallId,
+                                        toolName: tc.toolName,
+                                        args: tc.args,
+                                    })),
+                                }
+                            ];
+
+                            // Add tool results as separate messages
+                            // For db_query results, include the full result object so AI can access it
+                            msg.toolCalls.forEach(tc => {
+                                if (tc.result) {
+                                    messages.push({
+                                        role: 'tool' as const,
+                                        content: [
+                                            {
+                                                type: 'tool-result',
+                                                toolCallId: tc.toolCallId,
+                                                toolName: tc.toolName,
+                                                output: tc.result, // ✅ KEEP AS RAW OBJECT
+                                            }
+                                        ]
+                                    });
+                                }
+                            });
+
+
+                            return messages;
+                        }
+                        return {
+                            role: msg.role,
+                            content: msg.content
+                        };
+                    })
                 }),
             });
 
@@ -101,11 +158,12 @@ const Thread = ({ suggestions }: { suggestions: any[] }) => {
             const reader = response.body?.getReader();
             const decoder = new TextDecoder();
 
-            let assistantMessage: Message = {
+            let assistantMessage: MessageWithTools = {
                 id: (Date.now() + 1).toString(),
                 role: 'assistant',
                 content: '',
-                timestamp: new Date()
+                timestamp: new Date(),
+                toolCalls: []
             };
 
             setMessages(prev => [...prev, assistantMessage]);
@@ -115,33 +173,71 @@ const Thread = ({ suggestions }: { suggestions: any[] }) => {
                     const { done, value } = await reader.read();
                     if (done) break;
 
-                    const chunk = decoder.decode(value);
-                    const lines = chunk.split('\n');
+                    const chunk = decoder.decode(value, { stream: true });
+
+                    // Parse stream - could be plain text or data stream format
+                    // Try to parse as data stream first
+                    const lines = chunk.split('\n').filter(line => line.trim());
+                    let hasDataStream = false;
 
                     for (const line of lines) {
-                        if (line.startsWith('0:')) {
-                            try {
-                                const data = JSON.parse(line.slice(2));
-                                if (data.type === 'text-delta' && data.textDelta) {
-                                    assistantMessage.content += data.textDelta;
-                                    setMessages(prev =>
-                                        prev.map(msg =>
-                                            msg.id === assistantMessage.id
-                                                ? { ...msg, content: assistantMessage.content }
-                                                : msg
-                                        )
-                                    );
+                        if (line.startsWith('0:') || line.startsWith('8:') || line.startsWith('a:')) {
+                            hasDataStream = true;
+                            if (line.startsWith('0:')) {
+                                // Text content
+                                const text = line.slice(2);
+                                if (text) {
+                                    assistantMessage.content += text;
                                 }
-                            } catch (e) {
-                                // Ignore parsing errors for incomplete chunks
+                            } else if (line.startsWith('8:')) {
+                                // Tool call
+                                try {
+                                    const toolCallData = JSON.parse(line.slice(2));
+                                    if (toolCallData.toolCallId && !assistantMessage.toolCalls?.find(tc => tc.toolCallId === toolCallData.toolCallId)) {
+                                        assistantMessage.toolCalls = assistantMessage.toolCalls || [];
+                                        assistantMessage.toolCalls.push({
+                                            toolCallId: toolCallData.toolCallId,
+                                            toolName: toolCallData.toolName,
+                                            args: toolCallData.args || {}
+                                        });
+                                    }
+                                } catch (e) {
+                                    console.error('Error parsing tool call:', e);
+                                }
+                            } else if (line.startsWith('a:')) {
+                                // Tool result
+                                try {
+                                    const toolResult = JSON.parse(line.slice(2));
+                                    if (assistantMessage.toolCalls) {
+                                        const toolCall = assistantMessage.toolCalls.find(tc => tc.toolCallId === toolResult.toolCallId);
+                                        if (toolCall) {
+                                            toolCall.result = toolResult.result;
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.error('Error parsing tool result:', e);
+                                }
                             }
                         }
                     }
+
+                    // If not data stream format, treat as plain text
+                    if (!hasDataStream && chunk) {
+                        assistantMessage.content += chunk;
+                    }
+
+                    setMessages(prev =>
+                        prev.map(msg =>
+                            msg.id === assistantMessage.id
+                                ? { ...assistantMessage }
+                                : msg
+                        )
+                    );
                 }
             }
         } catch (error) {
             console.error('Error sending message:', error);
-            const errorMessage: Message = {
+            const errorMessage: MessageWithTools = {
                 id: (Date.now() + 2).toString(),
                 role: 'assistant',
                 content: 'Sorry, I encountered an error. Please try again.',
@@ -222,12 +318,57 @@ const Thread = ({ suggestions }: { suggestions: any[] }) => {
 
                         <div className={`max-w-[80%] ${message.role === 'user' ? "order-first" : ""}`}>
                             <div
-                                className={`p-3 rounded-lg ${message.role === 'user'
+                                className={`p-3 rounded-lg text-sm ${message.role === 'user'
                                     ? "bg-blue-600 text-white ml-auto"
                                     : "bg-gray-100 text-gray-900"
                                     }`}
                             >
-                                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                                {message.content && <MessageContent content={message.content} />}
+
+                                {/* Render tool calls */}
+                                {message.toolCalls?.map((toolCall) => {
+                                    if (toolCall.toolName === 'observable_plot') {
+                                        return (
+                                            <ObservablePlotTool
+                                                key={toolCall.toolCallId}
+                                                toolCallId={toolCall.toolCallId}
+                                                args={toolCall.args}
+                                                result={toolCall.result}
+                                            />
+                                        );
+                                    }
+                                    if (toolCall.toolName === 'table') {
+                                        return (
+                                            <TableTool
+                                                key={toolCall.toolCallId}
+                                                toolCallId={toolCall.toolCallId}
+                                                args={toolCall.args}
+                                                result={toolCall.result}
+                                            />
+                                        );
+                                    }
+                                    if (toolCall.toolName === 'pdf_document') {
+                                        return (
+                                            <PDFTool
+                                                key={toolCall.toolCallId}
+                                                toolCallId={toolCall.toolCallId}
+                                                args={toolCall.args}
+                                                result={toolCall.result}
+                                            />
+                                        );
+                                    }
+                                    if (toolCall.toolName === 'db_query') {
+                                        return (
+                                            <DatabaseQueryTool
+                                                key={toolCall.toolCallId}
+                                                toolCallId={toolCall.toolCallId}
+                                                args={toolCall.args}
+                                                result={toolCall.result}
+                                            />
+                                        );
+                                    }
+                                    return null;
+                                })}
                             </div>
                             <p className="text-xs text-gray-500 mt-1 px-1">
                                 {message.timestamp.toLocaleTimeString([], {
