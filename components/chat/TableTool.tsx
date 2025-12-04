@@ -55,7 +55,7 @@ export function TableTool({ toolCallId, args, result }: TableToolProps) {
     const csvRows: string[] = [];
     
     // Add headers
-    csvRows.push(headers.map(h => `"${String(h).replace(/"/g, '""')}"`).join(','));
+    csvRows.push(headers.map((h: string) => `"${String(h).replace(/"/g, '""')}"`).join(','));
     
     // Add rows
     rows.forEach((row: (string | number)[]) => {
@@ -88,9 +88,9 @@ export function TableTool({ toolCallId, args, result }: TableToolProps) {
       const html2canvas = (await import('html2canvas-pro')).default;
       
       // Get the table's parent container for better capture
-      const container = table.closest('.overflow-x-auto') || table.parentElement;
+      const container = (table.closest('.overflow-x-auto') || table.parentElement) as HTMLElement | null;
       
-      const canvas = await html2canvas(container || table, {
+      const canvas = await html2canvas((container || table) as HTMLElement, {
         backgroundColor: '#ffffff',
         scale: 2, // Higher quality
         logging: false,

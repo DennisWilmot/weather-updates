@@ -125,6 +125,15 @@ export const ObservablePlot = forwardRef<ObservablePlotHandle, ObservablePlotPro
       };
     }
 
+    // Validate that we have the required keys before building the plot
+    if (!xKey || !yKey) {
+      console.error('Missing x or y key:', { xKey, yKey, data: plotData });
+      if (containerRef.current) {
+        containerRef.current.innerHTML = `<div style="padding: 20px; color: red;">Error: Could not determine x or y axis fields from data</div>`;
+      }
+      return;
+    }
+
     // Build marks based on plot type
     const marks: any[] = [];
 
@@ -135,7 +144,7 @@ export const ObservablePlot = forwardRef<ObservablePlotHandle, ObservablePlotPro
       case 'bar':
         // For bar charts, determine if we should use barX (horizontal) or barY (vertical)
         // Check if x values are strings (categorical) - if so, use barY (vertical bars)
-        const firstXValue = plotData[0]?.[xKey];
+        const firstXValue = xKey ? plotData[0]?.[xKey] : undefined;
         const isCategorical = typeof firstXValue === 'string';
         
         if (isCategorical) {
@@ -218,15 +227,6 @@ export const ObservablePlot = forwardRef<ObservablePlotHandle, ObservablePlotPro
       plotConfig.title = title;
     }
 
-    // Validate that we have the required keys
-    if (!xKey || !yKey) {
-      console.error('Missing x or y key:', { xKey, yKey, data: plotData });
-      if (containerRef.current) {
-        containerRef.current.innerHTML = `<div style="padding: 20px; color: red;">Error: Could not determine x or y axis fields from data</div>`;
-      }
-      return;
-    }
-
     // Validate that plotData has the required fields
     const sample = plotData[0];
     if (!sample || !(xKey in sample) || !(yKey in sample)) {
@@ -306,35 +306,40 @@ export const ObservablePlot = forwardRef<ObservablePlotHandle, ObservablePlotPro
            return;
          }
          svg = svgElement;
-       } else if (plotElement instanceof SVGElement) {
-         svg = plotElement;
-       } else {
-         console.error('Unexpected element type:', plotElement.tagName);
-         alert('Unexpected chart format. Please try downloading as SVG instead.');
-         return;
-       }
+      } else if (plotElement instanceof SVGElement) {
+        svg = plotElement;
+      } else {
+        // Type assertion needed because TypeScript narrows to never here
+        const element = plotElement as HTMLElement | SVGElement;
+        console.error('Unexpected element type:', element.tagName);
+        alert('Unexpected chart format. Please try downloading as SVG instead.');
+        return;
+      }
        
        // Get SVG dimensions - try multiple methods
        let svgWidth = width;
        let svgHeight = height;
        
-       // Try to get from SVG attributes first
-       const widthAttr = svg.getAttribute('width');
-       const heightAttr = svg.getAttribute('height');
-       
-       if (widthAttr && !isNaN(parseFloat(widthAttr))) {
-         svgWidth = parseFloat(widthAttr);
-       } else if (svg.viewBox?.baseVal?.width) {
-         svgWidth = svg.viewBox.baseVal.width;
-       } else if (svg.clientWidth) {
-         svgWidth = svg.clientWidth;
-       }
-       
-       if (heightAttr && !isNaN(parseFloat(heightAttr))) {
-         svgHeight = parseFloat(heightAttr);
-       } else if (svg.viewBox?.baseVal?.height) {
-         svgHeight = svg.viewBox.baseVal.height;
-       } else if (svg.clientHeight) {
+      // Try to get from SVG attributes first
+      const widthAttr = svg.getAttribute('width');
+      const heightAttr = svg.getAttribute('height');
+      
+      // Check if svg is an SVGSVGElement (has viewBox property)
+      const svgElement = svg instanceof SVGSVGElement ? svg : null;
+      
+      if (widthAttr && !isNaN(parseFloat(widthAttr))) {
+        svgWidth = parseFloat(widthAttr);
+      } else if (svgElement?.viewBox?.baseVal?.width) {
+        svgWidth = svgElement.viewBox.baseVal.width;
+      } else if (svg.clientWidth) {
+        svgWidth = svg.clientWidth;
+      }
+      
+      if (heightAttr && !isNaN(parseFloat(heightAttr))) {
+        svgHeight = parseFloat(heightAttr);
+      } else if (svgElement?.viewBox?.baseVal?.height) {
+        svgHeight = svgElement.viewBox.baseVal.height;
+      } else if (svg.clientHeight) {
          svgHeight = svg.clientHeight;
        }
        
@@ -466,13 +471,15 @@ export const ObservablePlot = forwardRef<ObservablePlotHandle, ObservablePlotPro
            return;
          }
          svg = svgElement;
-       } else if (plotElement instanceof SVGElement) {
-         svg = plotElement;
-       } else {
-         console.error('Unexpected element type:', plotElement.tagName);
-         alert('Unexpected chart format.');
-         return;
-       }
+      } else if (plotElement instanceof SVGElement) {
+        svg = plotElement;
+      } else {
+        // Type assertion needed because TypeScript narrows to never here
+        const element = plotElement as HTMLElement | SVGElement;
+        console.error('Unexpected element type:', element.tagName);
+        alert('Unexpected chart format.');
+        return;
+      }
        
        const svgData = new XMLSerializer().serializeToString(svg);
        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
