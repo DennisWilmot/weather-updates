@@ -17,7 +17,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Check for BLOB_READ_WRITE_TOKEN
-    const token = process.env.BLOB_READ_WRITE_TOKEN;
+    const token = process.env.BLOBS_READ_WRITE_TOKEN;
     if (!token) {
       return NextResponse.json(
         {

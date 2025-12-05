@@ -243,7 +243,7 @@ ${(transcription as any).text}
     if (blobId && videoUrl) {
       try {
         const { del } = await import("@vercel/blob");
-        const token = process.env.BLOB_READ_WRITE_TOKEN;
+        const token = process.env.BLOBS_READ_WRITE_TOKEN;
         if (token) {
           await del(videoUrl, { token });
         } else {
