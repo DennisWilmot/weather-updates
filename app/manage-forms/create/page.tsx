@@ -41,7 +41,7 @@ import DashboardNavigation from '@/components/DashboardNavigation';
 // Form field types that can be used in custom forms
 interface FormField {
     id: string;
-    type: 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'date' | 'select' | 'checkbox' | 'radio' | 'file';
+    type: 'text' | 'textarea' | 'number' | 'email' | 'phone' | 'date' | 'select' | 'checkbox' | 'radio' | 'file' | 'photo-location';
     label: string;
     placeholder?: string;
     required: boolean;
@@ -68,6 +68,7 @@ const FIELD_TEMPLATES: Omit<FormField, 'id' | 'required'>[] = [
     { type: 'radio', label: 'Status', options: ['Active', 'Inactive', 'Pending'] },
     { type: 'checkbox', label: 'Terms and Conditions', placeholder: 'I agree to the terms and conditions' },
     { type: 'file', label: 'Upload Document', placeholder: 'Choose file' },
+    { type: 'photo-location', label: 'Photo with Location', placeholder: 'Upload photo to extract GPS coordinates' },
     { type: 'textarea', label: 'Additional Notes', placeholder: 'Enter any additional notes' },
     { type: 'text', label: 'Organization', placeholder: 'Enter organization name' },
 ];

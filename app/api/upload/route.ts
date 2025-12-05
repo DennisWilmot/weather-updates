@@ -49,6 +49,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
             "audio/ogg",
             "audio/opus",
             "audio/*", // Allow all audio types
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "image/*", // Allow all image types
           ],
           maximumSizeInBytes: 5 * 1024 * 1024 * 1024, // 5 TB (Vercel Blob maximum with multipart)
         };

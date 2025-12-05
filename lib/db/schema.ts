@@ -1001,3 +1001,85 @@ export const auditLogs = pgTable(
     resourceIdIdx: index("audit_logs_resource_id_idx").on(table.resourceId),
   })
 );
+
+// Merchants table - MSME merchant onboarding
+export const merchants = pgTable(
+  "merchants",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    
+    // Business Information
+    businessName: text("business_name").notNull(),
+    tradingName: text("trading_name"),
+    businessType: text("business_type").notNull(),
+    
+    // Location
+    parishId: uuid("parish_id")
+      .references(() => parishes.id)
+      .notNull(),
+    communityId: uuid("community_id")
+      .references(() => communities.id)
+      .notNull(),
+    streetAddress: text("street_address").notNull(),
+    gpsPin: text("gps_pin"), // GPS pin/plus code
+    latitude: decimal("latitude", { precision: 10, scale: 7 }),
+    longitude: decimal("longitude", { precision: 10, scale: 7 }),
+    
+    // Contact Details
+    ownerName: text("owner_name").notNull(),
+    phone: text("phone").notNull(),
+    alternatePhone: text("alternate_phone"),
+    email: text("email"),
+    
+    // Inventory (Step 2)
+    productCategories: jsonb("product_categories"), // Array of product category strings
+    topItems: jsonb("top_items"), // Array of {itemName, unit, price} objects
+    wantsFullInventoryUpload: boolean("wants_full_inventory_upload").default(false),
+    
+    // Business Capacity & Quotation (Step 3)
+    monthlySalesVolume: decimal("monthly_sales_volume", { precision: 12, scale: 2 }), // Monthly sales volume in JMD
+    numberOfEmployees: integer("number_of_employees"), // Number of employees
+    issuesInvoices: boolean("issues_invoices").default(false),
+    acceptsDigitalPayments: boolean("accepts_digital_payments").default(false),
+    
+    // Utilities & Connectivity
+    hasElectricity: boolean("has_electricity").default(false),
+    hasInternetAccess: boolean("has_internet_access").default(false),
+    hasSmartphone: boolean("has_smartphone").default(false),
+    
+    // Import Interest & Purchasing
+    revenueAllocationPercentage: integer("revenue_allocation_percentage"), // 0-100
+    estimatedMonthlyPurchaseAmount: decimal("estimated_monthly_purchase_amount", { precision: 12, scale: 2 }), // JMD
+    interestedImportProducts: jsonb("interested_import_products"), // Array of product category strings
+    
+    // Verification Photos
+    shopfrontPhotoUrl: text("shopfront_photo_url"),
+    documentPhotoUrl: text("document_photo_url"),
+    invoicePhotoUrl: text("invoice_photo_url"),
+    
+    // Consent & Agreement
+    consent: boolean("consent").default(false),
+    
+    // Additional Notes
+    notes: text("notes"),
+    
+    // Status tracking
+    verified: boolean("verified").default(false), // Admin verified merchants
+    status: text("status", {
+      enum: ["pending", "active", "inactive"],
+    })
+      .notNull()
+      .default("pending"),
+    
+    // Metadata
+    submittedBy: text("submitted_by").references(() => user.id), // User ID
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    parishIdIdx: index("merchants_parish_id_idx").on(table.parishId),
+    communityIdIdx: index("merchants_community_id_idx").on(table.communityId),
+    statusIdx: index("merchants_status_idx").on(table.status),
+    businessTypeIdx: index("merchants_business_type_idx").on(table.businessType),
+  })
+);

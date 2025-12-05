@@ -42,7 +42,8 @@ import {
   IconEye,
   IconX,
   IconSettings,
-  IconPlus
+  IconPlus,
+  IconBuilding
 } from '@tabler/icons-react';
 import PortalLayout from '@/components/portals/PortalLayout';
 import { usePermission, useRole } from '../../hooks/usePermissions';
@@ -71,6 +72,11 @@ const AidWorkerScheduleForm = dynamic(() => import('@/components/portals/AidWork
 });
 
 const AvailableAssetsForm = dynamic(() => import('@/components/portals/AvailableAssetsForm'), {
+  ssr: false,
+  loading: () => <Center py="xl"><Loader /></Center>,
+});
+
+const MerchantOnboardingForm = dynamic(() => import('@/components/portals/MerchantOnboardingForm'), {
   ssr: false,
   loading: () => <Center py="xl"><Loader /></Center>,
 });
@@ -191,6 +197,16 @@ export default function PortalPage() {
       component: AidWorkerScheduleForm,
       isPredefined: true,
       allowedRoles: ['admin', 'ops'], // Aid worker management for admin and ops only
+    },
+    {
+      id: 'merchant-onboarding',
+      name: 'MSME Merchant Onboarding',
+      description: 'Onboard MSME merchants for the Digital Jamaica ATLAS AI program. Register business information, location, and contact details.',
+      category: 'Merchants',
+      icon: <IconBuilding size={20} />,
+      component: MerchantOnboardingForm,
+      isPredefined: true,
+      allowedRoles: ['admin', 'ops', 'field'], // Merchant onboarding for admin, ops, and field workers
     },
   ];
 

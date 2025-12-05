@@ -309,7 +309,7 @@ export default function LocationMapPicker({
                 >
                   Open Map to Select Coordinates
                 </Button>
-                
+
                 <Modal
                   opened={mapModalOpened}
                   onClose={closeMapModal}
@@ -347,7 +347,7 @@ export default function LocationMapPicker({
                         border: '1px solid #e9ecef',
                       }}
                     />
-                    
+
                     {/* Coordinate Inputs in Modal */}
                     <Group grow>
                       <TextInput
@@ -418,77 +418,77 @@ export default function LocationMapPicker({
           </>
         )}
 
-              {/* Coordinate Inputs */}
-              {(!isMobile || !mapModalOpened) && (
-                <Group grow>
-                  <TextInput
-                    label="Latitude"
-                    placeholder="18.1096"
-                    value={latitude?.toString() || ''}
-                    onChange={(e) => handleLatitudeChange(e.target.value)}
-                    error={latitude !== null && (latitude < 17.7 || latitude > 18.5) ? 'Must be within Jamaica bounds' : undefined}
-                    rightSection={<IconMapPin size={isMobile ? 18 : 16} />}
-                    size={isMobile ? "md" : "sm"}
-                    styles={{
-                      input: {
-                        fontSize: isMobile ? '16px' : undefined, // Prevent zoom on iOS
-                        minHeight: isMobile ? '44px' : undefined,
-                      },
-                    }}
-                  />
-                  <TextInput
-                    label="Longitude"
-                    placeholder="-77.2975"
-                    value={longitude?.toString() || ''}
-                    onChange={(e) => handleLongitudeChange(e.target.value)}
-                    error={longitude !== null && (longitude < -78.5 || longitude > -76.2) ? 'Must be within Jamaica bounds' : undefined}
-                    rightSection={<IconMapPin size={isMobile ? 18 : 16} />}
-                    size={isMobile ? "md" : "sm"}
-                    styles={{
-                      input: {
-                        fontSize: isMobile ? '16px' : undefined, // Prevent zoom on iOS
-                        minHeight: isMobile ? '44px' : undefined,
-                      },
-                    }}
-                  />
-                </Group>
-              )}
-              
-              {/* Coordinate Inputs in Modal */}
-              {isMobile && mapModalOpened && (
-                <Group grow>
-                  <TextInput
-                    label="Latitude"
-                    placeholder="18.1096"
-                    value={latitude?.toString() || ''}
-                    onChange={(e) => handleLatitudeChange(e.target.value)}
-                    error={latitude !== null && (latitude < 17.7 || latitude > 18.5) ? 'Must be within Jamaica bounds' : undefined}
-                    rightSection={<IconMapPin size={18} />}
-                    size="md"
-                    styles={{
-                      input: {
-                        fontSize: '16px', // Prevent zoom on iOS
-                        minHeight: '44px',
-                      },
-                    }}
-                  />
-                  <TextInput
-                    label="Longitude"
-                    placeholder="-77.2975"
-                    value={longitude?.toString() || ''}
-                    onChange={(e) => handleLongitudeChange(e.target.value)}
-                    error={longitude !== null && (longitude < -78.5 || longitude > -76.2) ? 'Must be within Jamaica bounds' : undefined}
-                    rightSection={<IconMapPin size={18} />}
-                    size="md"
-                    styles={{
-                      input: {
-                        fontSize: '16px', // Prevent zoom on iOS
-                        minHeight: '44px',
-                      },
-                    }}
-                  />
-                </Group>
-              )}
+        {/* Coordinate Inputs */}
+        {(!isMobile || !mapModalOpened) && (
+          <Group grow>
+            <TextInput
+              label="Latitude"
+              placeholder="18.1096"
+              value={latitude?.toString() || ''}
+              onChange={(e) => handleLatitudeChange(e.target.value)}
+              error={latitude !== null && (latitude < 17.7 || latitude > 18.5) ? 'Must be within Jamaica bounds' : undefined}
+              rightSection={<IconMapPin size={isMobile ? 18 : 16} />}
+              size={isMobile ? "md" : "sm"}
+              styles={{
+                input: {
+                  fontSize: isMobile ? '16px' : undefined, // Prevent zoom on iOS
+                  minHeight: isMobile ? '44px' : undefined,
+                },
+              }}
+            />
+            <TextInput
+              label="Longitude"
+              placeholder="-77.2975"
+              value={longitude?.toString() || ''}
+              onChange={(e) => handleLongitudeChange(e.target.value)}
+              error={longitude !== null && (longitude < -78.5 || longitude > -76.2) ? 'Must be within Jamaica bounds' : undefined}
+              rightSection={<IconMapPin size={isMobile ? 18 : 16} />}
+              size={isMobile ? "md" : "sm"}
+              styles={{
+                input: {
+                  fontSize: isMobile ? '16px' : undefined, // Prevent zoom on iOS
+                  minHeight: isMobile ? '44px' : undefined,
+                },
+              }}
+            />
+          </Group>
+        )}
+
+        {/* Coordinate Inputs in Modal */}
+        {isMobile && mapModalOpened && (
+          <Group grow>
+            <TextInput
+              label="Latitude"
+              placeholder="18.1096"
+              value={latitude?.toString() || ''}
+              onChange={(e) => handleLatitudeChange(e.target.value)}
+              error={latitude !== null && (latitude < 17.7 || latitude > 18.5) ? 'Must be within Jamaica bounds' : undefined}
+              rightSection={<IconMapPin size={18} />}
+              size="md"
+              styles={{
+                input: {
+                  fontSize: '16px', // Prevent zoom on iOS
+                  minHeight: '44px',
+                },
+              }}
+            />
+            <TextInput
+              label="Longitude"
+              placeholder="-77.2975"
+              value={longitude?.toString() || ''}
+              onChange={(e) => handleLongitudeChange(e.target.value)}
+              error={longitude !== null && (longitude < -78.5 || longitude > -76.2) ? 'Must be within Jamaica bounds' : undefined}
+              rightSection={<IconMapPin size={18} />}
+              size="md"
+              styles={{
+                input: {
+                  fontSize: '16px', // Prevent zoom on iOS
+                  minHeight: '44px',
+                },
+              }}
+            />
+          </Group>
+        )}
 
         {/* Coordinate Inputs (when map is shown) */}
         {showMap && (
@@ -516,7 +516,7 @@ export default function LocationMapPicker({
                 />
               </Group>
             )}
-            
+
             {/* Status */}
             {latitude && longitude && (
               <Group gap="xs">
