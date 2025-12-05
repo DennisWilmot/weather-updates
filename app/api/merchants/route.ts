@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { merchants, parishes, communities } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
-import { assertPermission } from "@/lib/actions";
+import { assertPermission, PermissionError } from "@/lib/middleware";
 
 export const dynamic = "force-dynamic";
 
@@ -96,8 +96,8 @@ export async function GET(request: Request) {
  */
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication and permission
-    const user = await assertPermission("form_people_needs", false); // Using same permission for now
+    // Check authentication and permission (using middleware version for API routes)
+    const user = await assertPermission(request, "form_people_needs", false); // Using same permission for now
 
     const body = await request.json();
     const {
@@ -136,27 +136,31 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validate required fields
-    if (
-      !businessName ||
-      !businessType ||
-      !parishId ||
-      !communityId ||
-      !streetAddress ||
-      !ownerName ||
-      !phone ||
-      !submittedBy ||
-      consent !== true ||
-      issuesInvoices === undefined ||
-      acceptsDigitalPayments === undefined ||
-      hasElectricity === undefined ||
-      hasInternetAccess === undefined ||
-      hasSmartphone === undefined ||
-      !estimatedMonthlyPurchaseAmount
-    ) {
+    const missingFields: string[] = [];
+    if (!businessName) missingFields.push('businessName');
+    if (!businessType) missingFields.push('businessType');
+    if (!parishId) missingFields.push('parishId');
+    if (!communityId) missingFields.push('communityId');
+    if (!streetAddress) missingFields.push('streetAddress');
+    if (!ownerName) missingFields.push('ownerName');
+    if (!phone) missingFields.push('phone');
+    if (consent !== true) missingFields.push('consent');
+    if (issuesInvoices === undefined) missingFields.push('issuesInvoices');
+    if (acceptsDigitalPayments === undefined) missingFields.push('acceptsDigitalPayments');
+    if (hasElectricity === undefined) missingFields.push('hasElectricity');
+    if (hasInternetAccess === undefined) missingFields.push('hasInternetAccess');
+    if (hasSmartphone === undefined) missingFields.push('hasSmartphone');
+    if (!estimatedMonthlyPurchaseAmount) missingFields.push('estimatedMonthlyPurchaseAmount');
+    if (!submittedBy) missingFields.push('submittedBy');
+
+    if (missingFields.length > 0) {
+      const errorMsg = `Missing required fields: ${missingFields.join(', ')}`;
+      console.error('Validation error:', errorMsg, { body });
       return NextResponse.json(
         {
-          error:
-            "Missing required fields: businessName, businessType, parishId, communityId, streetAddress, ownerName, phone, consent, issuesInvoices, acceptsDigitalPayments, hasElectricity, hasInternetAccess, hasSmartphone, estimatedMonthlyPurchaseAmount, submittedBy",
+          error: errorMsg,
+          message: errorMsg,
+          missingFields,
         },
         { status: 400 }
       );
@@ -228,25 +232,63 @@ export async function POST(request: NextRequest) {
     );
   } catch (error: any) {
     console.error("Error creating merchant:", error);
+    console.error("Error details:", {
+      message: error?.message,
+      stack: error?.stack,
+      name: error?.name,
+      code: error?.code,
+    });
 
+    // Handle PermissionError from middleware
+    if (error instanceof PermissionError) {
+      if (error.code === "UNAUTHORIZED") {
+        return NextResponse.json(
+          { 
+            error: "Authentication required",
+            message: "Authentication required",
+          },
+          { status: 401 }
+        );
+      }
+      
+      if (error.code === "FORBIDDEN") {
+        return NextResponse.json(
+          { 
+            error: "Permission denied. You need form_people_needs permission.",
+            message: "Permission denied. You need form_people_needs permission.",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
+    // Handle legacy error format (from actions.ts)
     if (error.message?.includes("Authentication required")) {
       return NextResponse.json(
-        { error: "Authentication required" },
+        { 
+          error: "Authentication required",
+          message: "Authentication required",
+        },
         { status: 401 }
       );
     }
 
     if (error.message?.includes("Insufficient permissions")) {
       return NextResponse.json(
-        { error: "Permission denied. You need form_people_needs permission." },
+        { 
+          error: "Permission denied. You need form_people_needs permission.",
+          message: "Permission denied. You need form_people_needs permission.",
+        },
         { status: 403 }
       );
     }
 
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
       {
         error: "Failed to create merchant onboarding record",
-        details: error instanceof Error ? error.message : String(error),
+        message: errorMessage,
+        details: errorMessage,
       },
       { status: 500 }
     );

@@ -320,6 +320,7 @@ export default function MerchantOnboardingForm({
 
     const handleSubmit = async (values: typeof form.values) => {
         if (!user?.id) {
+            toast.error('You must be logged in to submit this form');
             onError?.('You must be logged in to submit this form');
             return;
         }
@@ -327,6 +328,8 @@ export default function MerchantOnboardingForm({
         setIsSubmitting(true);
         const toastId = toast.loading('Submitting merchant onboarding form...');
         try {
+            console.log('Submitting form with values:', { ...values, submittedBy: user.id });
+
             const response = await fetch('/api/merchants', {
                 method: 'POST',
                 headers: {
@@ -338,10 +341,26 @@ export default function MerchantOnboardingForm({
                 }),
             });
 
+            console.log('Response status:', response.status, response.statusText);
+
             if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.message || 'Failed to submit merchant onboarding form');
+                let errorData;
+                try {
+                    errorData = await response.json();
+                } catch (parseError) {
+                    // If JSON parsing fails, use status text
+                    const statusText = response.statusText || `HTTP ${response.status}`;
+                    throw new Error(`Failed to submit form: ${statusText}`);
+                }
+
+                // Handle both error.message and error.error formats
+                const errorMessage = errorData.message || errorData.error || `Failed to submit merchant onboarding form (${response.status})`;
+                console.error('API error:', errorMessage, errorData);
+                throw new Error(errorMessage);
             }
+
+            const result = await response.json();
+            console.log('Form submitted successfully:', result);
 
             toast.dismiss(toastId);
             toast.success('Merchant onboarding form submitted successfully!');
@@ -374,6 +393,7 @@ export default function MerchantOnboardingForm({
             setLocationImagePreviewUrl(null);
             onSuccess?.();
         } catch (err) {
+            console.error('Error submitting form:', err);
             toast.dismiss(toastId);
             const errorMessage = err instanceof Error ? err.message : 'An error occurred while submitting the form';
             toast.error(errorMessage);
