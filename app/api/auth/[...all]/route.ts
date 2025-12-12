@@ -8,13 +8,15 @@ export const runtime = "nodejs";
 // According to Better Auth docs: https://www.better-auth.com/docs/integrations/next
 export async function GET(
   request: NextRequest,
-  { params }: { params: { all: string[] } }
+  { params }: { params: Promise<{ all: string[] }> }
 ) {
   try {
+    // Await params as it's now a Promise in Next.js 15+
+    const resolvedParams = await params;
     // Log request details for debugging
     const pathname = request.nextUrl.pathname;
     const cookies = request.headers.get("cookie");
-    const allParams = params?.all || [];
+    const allParams = resolvedParams?.all || [];
     console.log("[Better Auth] GET request:", {
       pathname,
       allParams,
@@ -105,15 +107,17 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { all: string[] } }
+  { params }: { params: Promise<{ all: string[] }> }
 ) {
   try {
+    // Await params as it's now a Promise in Next.js 15+
+    const resolvedParams = await params;
     // Log request details for debugging
     const url = request.url;
     const origin = request.headers.get("origin");
     const referer = request.headers.get("referer");
     const pathname = request.nextUrl.pathname;
-    const allParams = params?.all || [];
+    const allParams = resolvedParams?.all || [];
     console.log("[Better Auth] POST request:", {
       url,
       origin,

@@ -6,10 +6,10 @@ import { eq, desc, gt } from 'drizzle-orm';
 // GET /api/parishes/:id - Get parish details with summary stats
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const parishId = params.id;
+    const { id: parishId } = await params;
 
     // Get parish details
     const [parish] = await db

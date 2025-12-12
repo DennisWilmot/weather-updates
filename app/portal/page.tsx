@@ -770,6 +770,12 @@ export default function PortalPage() {
 }
 
 function PortalPageSkeleton({ isMobile }: { isMobile: boolean }) {
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   return (
     <Container size="lg" py={isMobile ? "md" : "xl"}>
       <Stack gap="lg">
@@ -818,14 +824,22 @@ function PortalPageSkeleton({ isMobile }: { isMobile: boolean }) {
           </Stack>
         </Paper>
 
-        {/* Forms Grid Skeleton */}
-        <Grid gutter="md">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <Grid.Col key={index} span={{ base: 12, sm: 6, lg: 4 }}>
-              <FormCardSkeleton />
-            </Grid.Col>
-          ))}
-        </Grid>
+        {/* Forms Grid Skeleton - Only render on client to avoid hydration mismatch */}
+        {isMounted ? (
+          <Grid gutter="md">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Grid.Col key={index} span={{ base: 12, sm: 6, lg: 4 }}>
+                <FormCardSkeleton />
+              </Grid.Col>
+            ))}
+          </Grid>
+        ) : (
+          <Stack gap="md">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Skeleton key={index} height={200} radius="md" />
+            ))}
+          </Stack>
+        )}
 
         {/* Tips Section Skeleton */}
         <Stack gap="md">

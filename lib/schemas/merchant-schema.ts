@@ -1,17 +1,37 @@
 import { z } from 'zod';
 
-// Business type options from the HTML form
+// Business type options (legal structure)
 export const BUSINESS_TYPES = [
-  'Hardware',
-  'Roofing',
-  'Solar / Electrical',
-  'Livestock / Feed',
-  'Water Tanks',
-  'Food & Grocery',
-  'Construction Materials',
-  'Agriculture Supplies',
-  'Pharmacy',
-  'Other',
+  'Sole Proprietorship',
+  'Partnership',
+  'LLC',
+  'Corporation',
+] as const;
+
+// Business category/industry options
+export const BUSINESS_CATEGORIES = [
+  'Agriculture',
+  'Construction',
+  'Retail',
+  'Wholesale',
+  'Hospitality',
+  'Food Services',
+  'Transportation',
+  'Manufacturing',
+  'Health',
+  'Wellness',
+  'Beauty',
+  'Automotive',
+  'Technology',
+  'Communications',
+  'Education',
+  'Professional Services',
+  'Finance',
+  'Utilities',
+  'Infrastructure',
+  'Creative Industries',
+  'Entertainment',
+  'Community Services',
 ] as const;
 
 // TypeScript interface
@@ -20,6 +40,7 @@ export interface MerchantOnboardingFormSchema {
   businessName: string;
   tradingName?: string;
   businessType: string;
+  businessCategory: string;
   
   // Location
   parishId: string; // UUID reference to parishes.id
@@ -81,6 +102,7 @@ export const merchantOnboardingSchema = z.object({
   businessName: z.string().min(1, 'Business name is required'),
   tradingName: z.string().optional(),
   businessType: z.string().min(1, 'Business type is required'),
+  businessCategory: z.string().min(1, 'Business category is required'),
   
   // Location
   parishId: z.string().uuid('Invalid parish ID'),

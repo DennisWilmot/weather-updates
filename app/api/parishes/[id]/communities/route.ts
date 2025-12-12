@@ -6,10 +6,10 @@ import { eq } from 'drizzle-orm';
 // GET /api/parishes/:id/communities - Get all communities in a parish
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const parishId = params.id;
+    const { id: parishId } = await params;
 
     const parishCommunities = await db
       .select()

@@ -1012,6 +1012,7 @@ export const merchants = pgTable(
     businessName: text("business_name").notNull(),
     tradingName: text("trading_name"),
     businessType: text("business_type").notNull(),
+    businessCategory: text("business_category").notNull(),
     
     // Location
     parishId: uuid("parish_id")

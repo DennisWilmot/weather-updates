@@ -28,10 +28,49 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Extract GPS data using exifr
-    const data = await exifr.parse(buffer, { gps: true });
+    // Extract GPS data using exifr with comprehensive options
+    // Include all GPS-related tags and try multiple extraction methods
+    const data = await exifr.parse(buffer, {
+      gps: true,
+      exif: true,
+      translateKeys: false,
+      reviveValues: true,
+      sanitize: true,
+      mergeOutput: true,
+    });
 
-    if (!data || !data.latitude || !data.longitude) {
+    // Log for debugging (can be removed in production)
+    console.log('EXIF data extracted:', {
+      hasLatitude: !!data?.latitude,
+      hasLongitude: !!data?.longitude,
+      latitude: data?.latitude,
+      longitude: data?.longitude,
+      gps: data?.GPS,
+      exif: data?.Exif,
+    });
+
+    // Try to extract GPS from different possible locations
+    let latitude = data?.latitude;
+    let longitude = data?.longitude;
+    let altitude = data?.altitude ?? data?.GPSAltitude ?? null;
+
+    // If not found in main data, try GPS object
+    if (!latitude && data?.GPS?.GPSLatitude) {
+      latitude = data.GPS.GPSLatitude;
+    }
+    if (!longitude && data?.GPS?.GPSLongitude) {
+      longitude = data.GPS.GPSLongitude;
+    }
+
+    // Also check if GPS coordinates are in decimal format in GPS object
+    if (!latitude && data?.GPS?.Latitude) {
+      latitude = data.GPS.Latitude;
+    }
+    if (!longitude && data?.GPS?.Longitude) {
+      longitude = data.GPS.Longitude;
+    }
+
+    if (!latitude || !longitude) {
       return NextResponse.json(
         {
           error: "No GPS data found in image",
@@ -46,11 +85,11 @@ export async function POST(req: NextRequest) {
 
     // Format the response
     const response = {
-      latitude: data.latitude,
-      longitude: data.longitude,
-      altitude: data.altitude ?? null,
-      timestamp: data.DateTimeOriginal
-        ? new Date(data.DateTimeOriginal).toISOString()
+      latitude: latitude,
+      longitude: longitude,
+      altitude: altitude,
+      timestamp: data.DateTimeOriginal || data.CreateDate || data.ModifyDate
+        ? new Date(data.DateTimeOriginal || data.CreateDate || data.ModifyDate).toISOString()
         : null,
     };
 

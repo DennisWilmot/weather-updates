@@ -1,15 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { submissions } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { verifyAdminAuth, getAdminAuthError } from '@/lib/admin-auth';
 
 export async function DELETE(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    // Await params as it's now a Promise in Next.js 15+
+    const resolvedParams = await params;
+    const { id } = resolvedParams;
 
     if (!id) {
       return NextResponse.json(
@@ -51,11 +53,13 @@ export async function DELETE(
 
 // Optional: GET endpoint to fetch a single submission by ID
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params;
+    // Await params as it's now a Promise in Next.js 15+
+    const resolvedParams = await params;
+    const { id } = resolvedParams;
 
     if (!id) {
       return NextResponse.json(

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { communities } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
@@ -6,11 +6,13 @@ import { eq } from 'drizzle-orm';
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const communityId = params.id;
+    // Await params as it's now a Promise in Next.js 15+
+    const resolvedParams = await params;
+    const communityId = resolvedParams.id;
 
     const [community] = await db
       .select()

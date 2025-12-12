@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Select, Stack, Text, Loader, Group, Badge, TextInput, Combobox, useCombobox } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 
@@ -44,7 +44,9 @@ export default function HierarchicalLocationPicker({
   const [placeSearch, setPlaceSearch] = useState<string>(initialPlace || '');
   const [streetName, setStreetName] = useState<string>('');
   const [useCustomPlace, setUseCustomPlace] = useState<boolean>(false);
-  
+
+  const prevLocationRef = useRef<string>('');
+
   const combobox = useCombobox({
     onDropdownClose: () => combobox.resetSelectedOption(),
   });
@@ -88,7 +90,7 @@ export default function HierarchicalLocationPicker({
     if (initialParish !== undefined && initialParish !== selectedParishId) {
       setSelectedParishId(initialParish || null);
     }
-  }, [initialParish, selectedParishId]);
+  }, [initialParish]); // Removed selectedParishId to prevent loop
 
   // Sync community after parish is set and communities are loaded
   useEffect(() => {
@@ -118,14 +120,14 @@ export default function HierarchicalLocationPicker({
         setCommunitySearch(community.name);
       }
     }
-  }, [selectedCommunityId, communitiesData, communitiesLoading, communitySearch]);
+  }, [selectedCommunityId, communitiesData, communitiesLoading]); // Removed communitySearch to prevent loop
 
   // Update parent when selection changes
   useEffect(() => {
     const parish = parishesData?.parishes?.find((p: Parish) => p.id === selectedParishId);
     const community = communitiesData?.communities?.find((c: Community) => c.id === selectedCommunityId);
 
-    onLocationChange({
+    const location = {
       parishId: selectedParishId,
       parishName: parish?.name || null,
       communityId: selectedCommunityId,
@@ -134,9 +136,17 @@ export default function HierarchicalLocationPicker({
       locationId: selectedLocationId,
       placeName: useCustomPlace ? placeSearch : null,
       streetName: streetName || null
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedParishId, selectedCommunityId, communitySearch, selectedLocationId, placeSearch, streetName, useCustomPlace, parishesData, communitiesData]);
+    };
+
+    // Create a string representation to compare
+    const locationKey = JSON.stringify(location);
+
+    // Only call onLocationChange if the location actually changed
+    if (locationKey !== prevLocationRef.current) {
+      prevLocationRef.current = locationKey;
+      onLocationChange(location);
+    }
+  }, [selectedParishId, selectedCommunityId, communitySearch, selectedLocationId, placeSearch, streetName, useCustomPlace, parishesData, communitiesData, onLocationChange]);
 
   // Handle parish change
   const handleParishChange = (value: string | null) => {
@@ -203,8 +213,8 @@ export default function HierarchicalLocationPicker({
                 !selectedParishId
                   ? "Select parish first"
                   : communitiesLoading
-                  ? "Loading communities..."
-                  : "Type or select community"
+                    ? "Loading communities..."
+                    : "Type or select community"
               }
               value={communitySearch}
               onChange={(event) => {
@@ -227,14 +237,14 @@ export default function HierarchicalLocationPicker({
               }}
             />
           </Combobox.Target>
-          
+
           <Combobox.Dropdown>
             <Combobox.Options>
               {communitiesLoading ? (
                 <Combobox.Empty>Loading...</Combobox.Empty>
               ) : communitiesData?.communities?.length > 0 ? (
                 communitiesData.communities
-                  .filter((community: Community) => 
+                  .filter((community: Community) =>
                     community.name.toLowerCase().includes(communitySearch.toLowerCase())
                   )
                   .map((community: Community) => (

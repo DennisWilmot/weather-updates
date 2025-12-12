@@ -13,9 +13,11 @@ import {
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params as it's now a Promise in Next.js 15+
+    const resolvedParams = await params;
     // Get current user for audit logging
     const currentUser = await getUserWithRole(request);
 
@@ -32,7 +34,7 @@ export async function PUT(
       imageUrl,
     } = body;
 
-    const userId = params.id;
+    const userId = resolvedParams.id;
 
     if (!userId) {
       return NextResponse.json(
@@ -141,13 +143,15 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Await params as it's now a Promise in Next.js 15+
+    const resolvedParams = await params;
     // Get current user for audit logging
     const currentUser = await getUserWithRole(request);
 
-    const userId = params.id;
+    const userId = resolvedParams.id;
 
     if (!userId) {
       return NextResponse.json(

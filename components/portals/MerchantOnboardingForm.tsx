@@ -2,7 +2,7 @@
  * MerchantOnboardingForm - Form for MSME merchant onboarding
  */
 'use client';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useForm } from '@mantine/form';
 import { zodResolver } from 'mantine-form-zod-resolver';
 import {
@@ -30,7 +30,7 @@ import { Dropzone } from '@mantine/dropzone';
 import { useMediaQuery } from '@mantine/hooks';
 import { IconMapPin, IconUser, IconUpload, IconX, IconCheck, IconCamera, IconPlus, IconTrash } from '@tabler/icons-react';
 import { toast } from 'sonner';
-import { merchantOnboardingSchema, BUSINESS_TYPES } from '@/lib/schemas/merchant-schema';
+import { merchantOnboardingSchema, BUSINESS_TYPES, BUSINESS_CATEGORIES } from '@/lib/schemas/merchant-schema';
 import FormSection from '@/components/forms/FormSection';
 import FormField from '@/components/forms/FormField';
 import LocationMapPicker from '@/components/forms/LocationMapPicker';
@@ -45,6 +45,11 @@ interface MerchantOnboardingFormProps {
 const businessTypeOptions = BUSINESS_TYPES.map((type) => ({
     value: type,
     label: type,
+}));
+
+const businessCategoryOptions = BUSINESS_CATEGORIES.map((category) => ({
+    value: category,
+    label: category,
 }));
 
 // Product categories from page 2
@@ -94,50 +99,71 @@ export default function MerchantOnboardingForm({
     const { data: session } = useSession();
     const user = session?.user;
 
+    // Store initial values in a constant to reuse for reset
+    const getInitialValues = () => ({
+        businessName: '',
+        tradingName: '',
+        businessType: '',
+        businessCategory: '',
+        parishId: '',
+        communityId: '',
+        streetAddress: '',
+        gpsPin: '',
+        latitude: undefined as number | undefined,
+        longitude: undefined as number | undefined,
+        ownerName: '',
+        phone: '',
+        alternatePhone: '',
+        email: '',
+        productCategories: [] as string[],
+        topItems: [] as Array<{ itemName: string; unit: string; price: number }>,
+        wantsFullInventoryUpload: false,
+        monthlySalesVolume: undefined as number | undefined,
+        numberOfEmployees: undefined as number | undefined,
+        issuesInvoices: false,
+        acceptsDigitalPayments: false,
+        hasElectricity: false,
+        hasInternetAccess: false,
+        hasSmartphone: false,
+        revenueAllocationPercentage: 0,
+        estimatedMonthlyPurchaseAmount: 0,
+        interestedImportProducts: [] as string[],
+        shopfrontPhotoUrl: '',
+        documentPhotoUrl: '',
+        invoicePhotoUrl: '',
+        consent: false,
+        notes: '',
+        submittedBy: user?.id || '',
+    });
+
     const form = useForm({
-        initialValues: {
-            businessName: '',
-            tradingName: '',
-            businessType: '',
-            parishId: '',
-            communityId: '',
-            streetAddress: '',
-            gpsPin: '',
-            latitude: undefined as number | undefined,
-            longitude: undefined as number | undefined,
-            ownerName: '',
-            phone: '',
-            alternatePhone: '',
-            email: '',
-            productCategories: [] as string[],
-            topItems: [] as Array<{ itemName: string; unit: string; price: number }>,
-            wantsFullInventoryUpload: false,
-            monthlySalesVolume: undefined as number | undefined,
-            numberOfEmployees: undefined as number | undefined,
-            issuesInvoices: false,
-            acceptsDigitalPayments: false,
-            hasElectricity: false,
-            hasInternetAccess: false,
-            hasSmartphone: false,
-            revenueAllocationPercentage: 0,
-            estimatedMonthlyPurchaseAmount: 0,
-            interestedImportProducts: [] as string[],
-            shopfrontPhotoUrl: '',
-            documentPhotoUrl: '',
-            invoicePhotoUrl: '',
-            consent: false,
-            notes: '',
-            submittedBy: user?.id || '',
-        },
+        initialValues: getInitialValues(),
         validate: zodResolver(merchantOnboardingSchema),
     });
+
+    // Memoized onChange handlers for Select components to prevent infinite loops
+    const handleBusinessTypeChange = useCallback((value: string | null) => {
+        const newValue = value || '';
+        if (form.values.businessType !== newValue) {
+            form.setFieldValue('businessType', newValue);
+        }
+    }, [form.values.businessType]);
+
+    const handleBusinessCategoryChange = useCallback((value: string | null) => {
+        const newValue = value || '';
+        if (form.values.businessCategory !== newValue) {
+            form.setFieldValue('businessCategory', newValue);
+        }
+    }, [form.values.businessCategory]);
 
     // Cleanup preview URLs on unmount
     useEffect(() => {
         return () => {
-            Object.values(photoPreviews).forEach((url) => {
-                if (url) URL.revokeObjectURL(url);
-            });
+            if (photoPreviews) {
+                Object.values(photoPreviews).forEach((url) => {
+                    if (url) URL.revokeObjectURL(url);
+                });
+            }
             if (locationImagePreviewUrl) {
                 URL.revokeObjectURL(locationImagePreviewUrl);
             }
@@ -156,10 +182,29 @@ export default function MerchantOnboardingForm({
             setPhotoPreviews((prev) => ({ ...prev, [type]: previewUrl }));
 
             // Upload to Vercel Blob
-            const blob = await upload(file.name, file, {
-                access: 'public',
-                handleUploadUrl: '/api/upload',
-            });
+            let blob;
+            try {
+                blob = await upload(file.name, file, {
+                    access: 'public',
+                    handleUploadUrl: '/api/upload',
+                });
+            } catch (uploadError: any) {
+                // Check if the error is about the blob already existing
+                if (uploadError?.message?.includes('already exists') || uploadError?.message?.includes('blob already exists')) {
+                    toast.info(`File with this name already exists. Uploading with a unique name...`);
+                    // Generate a unique filename by adding a timestamp
+                    const fileExtension = file.name.split('.').pop();
+                    const fileNameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+                    const uniqueFileName = `${fileNameWithoutExt}_${Date.now()}.${fileExtension}`;
+                    // Retry with unique filename
+                    blob = await upload(uniqueFileName, file, {
+                        access: 'public',
+                        handleUploadUrl: '/api/upload',
+                    });
+                } else {
+                    throw uploadError;
+                }
+            }
 
             // Update form with photo URL
             const fieldName = `${type}PhotoUrl` as 'shopfrontPhotoUrl' | 'documentPhotoUrl' | 'invoicePhotoUrl';
@@ -194,11 +239,20 @@ export default function MerchantOnboardingForm({
         longitude: number | null;
         accuracy?: number;
     }) => {
-        form.setFieldValue('parishId', location.parishId || '');
-        form.setFieldValue('communityId', location.communityId || '');
-        form.setFieldValue('latitude', location.latitude ?? undefined);
-        form.setFieldValue('longitude', location.longitude ?? undefined);
-    }, [form]);
+        // Only update if values actually changed to prevent infinite loops
+        if (form.values.parishId !== (location.parishId || '')) {
+            form.setFieldValue('parishId', location.parishId || '');
+        }
+        if (form.values.communityId !== (location.communityId || '')) {
+            form.setFieldValue('communityId', location.communityId || '');
+        }
+        if (form.values.latitude !== (location.latitude ?? undefined)) {
+            form.setFieldValue('latitude', location.latitude ?? undefined);
+        }
+        if (form.values.longitude !== (location.longitude ?? undefined)) {
+            form.setFieldValue('longitude', location.longitude ?? undefined);
+        }
+    }, [form.values.parishId, form.values.communityId, form.values.latitude, form.values.longitude]);
 
     const handleLocationImageDrop = async (files: File[]) => {
         const file = files[0];
@@ -298,13 +352,105 @@ export default function MerchantOnboardingForm({
                     );
                 }
             } else {
-                toast.warning("No GPS data found in image. Please set location manually.");
+                // No GPS data found in image - offer to use device's current location as fallback
+                toast.warning("No GPS data found in image.");
+
+                // Ask user if they want to use their current location
+                if (navigator.geolocation) {
+                    const useCurrentLocation = window.confirm(
+                        "No GPS data found in the photo. Would you like to use your device's current location instead?"
+                    );
+
+                    if (useCurrentLocation) {
+                        navigator.geolocation.getCurrentPosition(
+                            async (position) => {
+                                const { latitude, longitude } = position.coords;
+
+                                try {
+                                    // Find parish and community from coordinates
+                                    const locationResponse = await fetch(
+                                        `/api/location/find?latitude=${latitude}&longitude=${longitude}`
+                                    );
+
+                                    let parishId: string | null = null;
+                                    let communityId: string | null = null;
+
+                                    if (locationResponse.ok) {
+                                        const locationData = await locationResponse.json();
+                                        if (locationData.parishId && locationData.communityId) {
+                                            parishId = locationData.parishId;
+                                            communityId = locationData.communityId;
+                                            toast.success(
+                                                `Using current location: ${locationData.communityName}, ${locationData.parishName}`
+                                            );
+                                        }
+                                    }
+
+                                    // Update form with device GPS coordinates
+                                    form.setFieldValue('latitude', latitude);
+                                    form.setFieldValue('longitude', longitude);
+
+                                    if (parishId) {
+                                        form.setFieldValue('parishId', parishId);
+                                    }
+                                    if (communityId) {
+                                        form.setFieldValue('communityId', communityId);
+                                    }
+
+                                    handleLocationChange({
+                                        parishId: parishId,
+                                        communityId: communityId,
+                                        latitude: latitude,
+                                        longitude: longitude,
+                                        accuracy: position.coords.accuracy,
+                                    });
+
+                                    if (!parishId || !communityId) {
+                                        toast.info(
+                                            `Location set: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}. Please select parish and community manually.`
+                                        );
+                                    }
+                                } catch (locationError) {
+                                    console.error("Error finding location:", locationError);
+                                    // Still set the coordinates
+                                    form.setFieldValue('latitude', latitude);
+                                    form.setFieldValue('longitude', longitude);
+                                    handleLocationChange({
+                                        parishId: null,
+                                        communityId: null,
+                                        latitude: latitude,
+                                        longitude: longitude,
+                                        accuracy: position.coords.accuracy,
+                                    });
+                                    toast.info(
+                                        `Location set: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}. Please select parish and community manually.`
+                                    );
+                                }
+                            },
+                            (error) => {
+                                console.error("Error getting current location:", error);
+                                toast.error("Could not get your current location. Please set location manually.");
+                            },
+                            {
+                                enableHighAccuracy: true,
+                                timeout: 10000,
+                                maximumAge: 0,
+                            }
+                        );
+                    } else {
+                        toast.info("Please set location manually on the map below.");
+                    }
+                } else {
+                    toast.info("Please set location manually on the map below.");
+                }
             }
         } catch (err) {
             console.error("Error extracting GPS from image:", err);
             const errorMessage = err instanceof Error ? err.message : 'Failed to extract GPS data from image';
             toast.error(errorMessage);
-            setLocationImage(null);
+
+            // Don't remove the image - user might still want to use it
+            // setLocationImage(null);
         } finally {
             setIsExtractingGPS(false);
         }
@@ -364,34 +510,51 @@ export default function MerchantOnboardingForm({
 
             toast.dismiss(toastId);
             toast.success('Merchant onboarding form submitted successfully!');
-            form.reset();
-            // Reset inventory fields
-            form.setFieldValue('productCategories', []);
-            form.setFieldValue('topItems', []);
-            form.setFieldValue('wantsFullInventoryUpload', false);
-            // Reset Step 3 fields
-            form.setFieldValue('monthlySalesVolume', undefined);
-            form.setFieldValue('numberOfEmployees', undefined);
-            form.setFieldValue('issuesInvoices', false);
-            form.setFieldValue('acceptsDigitalPayments', false);
-            form.setFieldValue('hasElectricity', false);
-            form.setFieldValue('hasInternetAccess', false);
-            form.setFieldValue('hasSmartphone', false);
-            form.setFieldValue('revenueAllocationPercentage', 0);
-            form.setFieldValue('estimatedMonthlyPurchaseAmount', 0);
-            form.setFieldValue('interestedImportProducts', []);
-            // Clear photo previews
-            Object.values(photoPreviews).forEach((url) => {
-                if (url) URL.revokeObjectURL(url);
-            });
-            setPhotoPreviews({ shopfront: null, document: null, invoice: null });
-            // Clear location image
-            if (locationImagePreviewUrl) {
-                URL.revokeObjectURL(locationImagePreviewUrl);
+
+            // Clear photo previews first (before form reset)
+            try {
+                if (photoPreviews) {
+                    Object.values(photoPreviews).forEach((url) => {
+                        if (url) URL.revokeObjectURL(url);
+                    });
+                }
+            } catch (e) {
+                console.error('Error clearing photo previews:', e);
             }
+
+            // Clear location image
+            try {
+                if (locationImagePreviewUrl) {
+                    URL.revokeObjectURL(locationImagePreviewUrl);
+                }
+            } catch (e) {
+                console.error('Error clearing location image:', e);
+            }
+
+            // Reset state first
+            setPhotoPreviews({ shopfront: null, document: null, invoice: null });
             setLocationImage(null);
             setLocationImagePreviewUrl(null);
+
+            // Call onSuccess first, then reset form asynchronously to avoid validation issues
             onSuccess?.();
+
+            // Reset form asynchronously to avoid triggering validation during state updates
+            setTimeout(() => {
+                try {
+                    const initialVals = getInitialValues();
+                    // Reset form by setting each field individually to avoid validation issues
+                    Object.keys(initialVals).forEach((key) => {
+                        try {
+                            form.setFieldValue(key as any, (initialVals as any)[key]);
+                        } catch (e) {
+                            // Ignore individual field errors
+                        }
+                    });
+                } catch (resetError) {
+                    console.error('Error resetting form:', resetError);
+                }
+            }, 100);
         } catch (err) {
             console.error('Error submitting form:', err);
             toast.dismiss(toastId);
@@ -446,14 +609,40 @@ export default function MerchantOnboardingForm({
                             </FormField>
 
                             <FormField
-                                label="Business Type / Category"
+                                label="Business Type"
+                                description="Legal structure of your business"
                                 required
                                 error={form.errors.businessType as string | undefined}
                             >
                                 <Select
                                     data={businessTypeOptions}
                                     placeholder="Select business type"
-                                    {...form.getInputProps('businessType')}
+                                    value={form.values.businessType || null}
+                                    onChange={handleBusinessTypeChange}
+                                    error={form.errors.businessType as string | undefined}
+                                    size={isMobile ? "md" : "sm"}
+                                    searchable
+                                    clearable
+                                    styles={{
+                                        input: {
+                                            fontSize: isMobile ? '16px' : undefined,
+                                            minHeight: isMobile ? '44px' : undefined,
+                                        },
+                                    }}
+                                />
+                            </FormField>
+
+                            <FormField
+                                label="Business Category / Industry"
+                                required
+                                error={form.errors.businessCategory as string | undefined}
+                            >
+                                <Select
+                                    data={businessCategoryOptions}
+                                    placeholder="Select business category"
+                                    value={form.values.businessCategory || null}
+                                    onChange={handleBusinessCategoryChange}
+                                    error={form.errors.businessCategory as string | undefined}
                                     size={isMobile ? "md" : "sm"}
                                     searchable
                                     styles={{

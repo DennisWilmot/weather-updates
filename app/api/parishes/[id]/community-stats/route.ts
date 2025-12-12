@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { parishes, communities, submissions } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
@@ -54,11 +54,13 @@ function calculateSeverity(stats: Omit<CommunityStats, 'severity'>): 'low' | 'me
 }
 
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const parishId = params.id;
+    // Await params as it's now a Promise in Next.js 15+
+    const resolvedParams = await params;
+    const parishId = resolvedParams.id;
 
     // Verify parish exists
     const [parish] = await db

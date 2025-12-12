@@ -1,15 +1,17 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { locations, communities, parishes, submissions } from '@/lib/db/schema';
 import { eq, desc } from 'drizzle-orm';
 
 // GET /api/locations/:id - Get location details with submission history
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const locationId = params.id;
+    // Await params as it's now a Promise in Next.js 15+
+    const resolvedParams = await params;
+    const locationId = resolvedParams.id;
 
     // Get location with community and parish info
     const [location] = await db

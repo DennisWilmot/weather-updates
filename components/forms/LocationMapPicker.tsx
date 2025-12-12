@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Stack,
   Group,
@@ -72,20 +72,36 @@ export default function LocationMapPicker({
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const marker = useRef<maplibregl.Marker | null>(null);
+  const isSyncingFromProps = useRef(false);
+  const prevPropsRef = useRef({ initialParishId, initialCommunityId, initialLatitude, initialLongitude });
 
   // Sync props to internal state when they change
   useEffect(() => {
-    if (initialParishId !== undefined) {
-      setParishId(initialParishId || null);
-    }
-    if (initialCommunityId !== undefined) {
-      setCommunityId(initialCommunityId || null);
-    }
-    if (initialLatitude !== undefined) {
-      setLatitude(initialLatitude || null);
-    }
-    if (initialLongitude !== undefined) {
-      setLongitude(initialLongitude || null);
+    const propsChanged = 
+      prevPropsRef.current.initialParishId !== initialParishId ||
+      prevPropsRef.current.initialCommunityId !== initialCommunityId ||
+      prevPropsRef.current.initialLatitude !== initialLatitude ||
+      prevPropsRef.current.initialLongitude !== initialLongitude;
+
+    if (propsChanged) {
+      isSyncingFromProps.current = true;
+      if (initialParishId !== undefined) {
+        setParishId(initialParishId || null);
+      }
+      if (initialCommunityId !== undefined) {
+        setCommunityId(initialCommunityId || null);
+      }
+      if (initialLatitude !== undefined) {
+        setLatitude(initialLatitude || null);
+      }
+      if (initialLongitude !== undefined) {
+        setLongitude(initialLongitude || null);
+      }
+      prevPropsRef.current = { initialParishId, initialCommunityId, initialLatitude, initialLongitude };
+      // Reset flag after state updates
+      setTimeout(() => {
+        isSyncingFromProps.current = false;
+      }, 0);
     }
   }, [initialParishId, initialCommunityId, initialLatitude, initialLongitude]);
 
@@ -228,8 +244,12 @@ export default function LocationMapPicker({
     // User must select on map or use current location
   };
 
-  // Notify parent of changes (only when values actually change, not on every render)
+  // Notify parent of changes (only when values actually change from user interaction, not from prop sync)
   useEffect(() => {
+    // Don't call onLocationChange if we're just syncing from props
+    if (isSyncingFromProps.current) {
+      return;
+    }
     onLocationChange({
       parishId,
       communityId,

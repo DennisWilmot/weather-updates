@@ -82,6 +82,7 @@ export async function GET(request: Request) {
  *   - businessName: string (required)
  *   - tradingName: string (optional)
  *   - businessType: string (required)
+ *   - businessCategory: string (required)
  *   - parishId: string (required) - UUID
  *   - communityId: string (required) - UUID
  *   - streetAddress: string (required)
@@ -104,6 +105,7 @@ export async function POST(request: NextRequest) {
       businessName,
       tradingName,
       businessType,
+      businessCategory,
       parishId,
       communityId,
       streetAddress,
@@ -139,6 +141,7 @@ export async function POST(request: NextRequest) {
     const missingFields: string[] = [];
     if (!businessName) missingFields.push('businessName');
     if (!businessType) missingFields.push('businessType');
+    if (!businessCategory) missingFields.push('businessCategory');
     if (!parishId) missingFields.push('parishId');
     if (!communityId) missingFields.push('communityId');
     if (!streetAddress) missingFields.push('streetAddress');
@@ -173,6 +176,7 @@ export async function POST(request: NextRequest) {
         businessName: businessName.trim(),
         tradingName: tradingName?.trim() || null,
         businessType: businessType.trim(),
+        businessCategory: businessCategory.trim(),
         parishId,
         communityId,
         streetAddress: streetAddress.trim(),

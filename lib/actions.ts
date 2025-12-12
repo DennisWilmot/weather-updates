@@ -24,8 +24,9 @@ import {
  */
 export async function getCurrentUser(): Promise<UserWithRole | null> {
   try {
+    const headersList = await headers();
     const session = await auth.api.getSession({
-      headers: headers(),
+      headers: headersList,
     });
 
     if (!session?.user) {
