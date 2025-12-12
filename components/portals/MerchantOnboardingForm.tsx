@@ -99,8 +99,8 @@ export default function MerchantOnboardingForm({
     const { data: session } = useSession();
     const user = session?.user;
 
-    // Store initial values in a constant to reuse for reset
-    const getInitialValues = () => ({
+    // Store initial values in a memoized constant to reuse for reset
+    const initialValues = useMemo(() => ({
         businessName: '',
         tradingName: '',
         businessType: '',
@@ -133,11 +133,11 @@ export default function MerchantOnboardingForm({
         invoicePhotoUrl: '',
         consent: false,
         notes: '',
-        submittedBy: user?.id || '',
-    });
+        submittedBy: user?.id || undefined,
+    }), [user?.id]);
 
     const form = useForm({
-        initialValues: getInitialValues(),
+        initialValues,
         validate: zodResolver(merchantOnboardingSchema),
     });
 
@@ -465,16 +465,10 @@ export default function MerchantOnboardingForm({
     };
 
     const handleSubmit = async (values: typeof form.values) => {
-        if (!user?.id) {
-            toast.error('You must be logged in to submit this form');
-            onError?.('You must be logged in to submit this form');
-            return;
-        }
-
         setIsSubmitting(true);
         const toastId = toast.loading('Submitting merchant onboarding form...');
         try {
-            console.log('Submitting form with values:', { ...values, submittedBy: user.id });
+            console.log('Submitting form with values:', { ...values, submittedBy: user?.id || null });
 
             const response = await fetch('/api/merchants', {
                 method: 'POST',
@@ -483,7 +477,7 @@ export default function MerchantOnboardingForm({
                 },
                 body: JSON.stringify({
                     ...values,
-                    submittedBy: user.id,
+                    submittedBy: user?.id || null,
                 }),
             });
 
@@ -542,11 +536,10 @@ export default function MerchantOnboardingForm({
             // Reset form asynchronously to avoid triggering validation during state updates
             setTimeout(() => {
                 try {
-                    const initialVals = getInitialValues();
                     // Reset form by setting each field individually to avoid validation issues
-                    Object.keys(initialVals).forEach((key) => {
+                    Object.keys(initialValues).forEach((key) => {
                         try {
-                            form.setFieldValue(key as any, (initialVals as any)[key]);
+                            form.setFieldValue(key as any, (initialValues as any)[key]);
                         } catch (e) {
                             // Ignore individual field errors
                         }
@@ -1063,7 +1056,7 @@ export default function MerchantOnboardingForm({
                                                 </Grid.Col>
                                                 <Grid.Col span={{ base: 12, md: 3 }}>
                                                     <NumberInput
-                                                        label="Price (JMD)"
+                                                        label="Unit Price (JMD)"
                                                         placeholder="e.g., 2500"
                                                         value={item.price}
                                                         onChange={(value) => {
@@ -1784,7 +1777,6 @@ export default function MerchantOnboardingForm({
                             type="submit"
                             size={isMobile ? "md" : "lg"}
                             loading={isSubmitting}
-                            disabled={!user?.id}
                             style={{
                                 minHeight: isMobile ? '44px' : undefined,
                                 minWidth: isMobile ? '120px' : undefined,
@@ -1793,12 +1785,6 @@ export default function MerchantOnboardingForm({
                             {isSubmitting ? 'Submitting...' : 'Submit'}
                         </Button>
                     </Group>
-
-                    {!user?.id && (
-                        <Text size="xs" c="red" ta="center">
-                            You must be logged in to submit this form
-                        </Text>
-                    )}
                 </Stack>
             </form>
         </Paper>

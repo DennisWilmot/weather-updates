@@ -6,6 +6,12 @@ export async function proxy(req: NextRequest) {
   const isAuthPage =
     path.startsWith("/auth") || path.startsWith("/reset-password");
   const isApiRoute = path.startsWith("/api/");
+  const isPublicRoute = path.startsWith("/merchant-onboarding");
+
+  // Allow public routes without authentication
+  if (isPublicRoute) {
+    return NextResponse.next();
+  }
 
   // API routes should handle their own authentication and return JSON errors
   // Don't redirect API routes to login page

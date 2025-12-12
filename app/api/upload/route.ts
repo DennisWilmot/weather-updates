@@ -7,15 +7,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   console.log("Upload request received:", body);
 
   try {
-    // Check authentication
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 }
-      );
-    }
-
     // Check for BLOB_READ_WRITE_TOKEN
     const token = process.env.BLOBS_READ_WRITE_TOKEN;
     if (!token) {

@@ -166,7 +166,7 @@ export const merchantOnboardingSchema = z.object({
   notes: z.string().optional(),
   
   // Metadata
-  submittedBy: z.string().min(1, 'Submitted by is required'),
+  submittedBy: z.string().optional(), // Optional for public submissions
 });
 
 // Type inference from Zod schema

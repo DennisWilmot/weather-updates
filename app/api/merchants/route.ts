@@ -93,13 +93,12 @@ export async function GET(request: Request) {
  *   - phone: string (required)
  *   - alternatePhone: string (optional)
  *   - email: string (optional)
- *   - submittedBy: string (required) - User ID
+ *   - submittedBy: string (optional) - User ID, can be null for public submissions
  */
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication and permission (using middleware version for API routes)
-    const user = await assertPermission(request, "form_people_needs", false); // Using same permission for now
-
+    // Allow public submissions for merchant onboarding form
+    // Authentication is optional - if user is logged in, their ID will be used
     const body = await request.json();
     const {
       businessName,
@@ -154,7 +153,7 @@ export async function POST(request: NextRequest) {
     if (hasInternetAccess === undefined) missingFields.push('hasInternetAccess');
     if (hasSmartphone === undefined) missingFields.push('hasSmartphone');
     if (!estimatedMonthlyPurchaseAmount) missingFields.push('estimatedMonthlyPurchaseAmount');
-    if (!submittedBy) missingFields.push('submittedBy');
+    // submittedBy is optional for public submissions
 
     if (missingFields.length > 0) {
       const errorMsg = `Missing required fields: ${missingFields.join(', ')}`;
@@ -205,7 +204,7 @@ export async function POST(request: NextRequest) {
         invoicePhotoUrl: invoicePhotoUrl?.trim() || null,
         consent: consent === true,
         notes: notes?.trim() || null,
-        submittedBy: submittedBy || user.id,
+        submittedBy: submittedBy || null, // Can be null for public submissions
         status: "pending",
         verified: false,
       })
